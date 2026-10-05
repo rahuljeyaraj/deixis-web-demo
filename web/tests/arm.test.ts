@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { Arm, BLOCK_IDS, type BlockId } from '../src/sim/arm';
+import { Arm, BLOCK_IDS, type BlockId, HOME } from '../src/sim/arm';
 import { BASE_MM, REACH_MM, onMat } from '../src/sim/table';
 import { nodeScene } from './scene';
 
@@ -98,6 +98,46 @@ describe('pick and place', () => {
     const r = arm.block('red');
     expect(r.heightMm).toBeCloseTo(60, 0);
     expect(Math.hypot(r.tableMm[0] - g.tableMm[0], r.tableMm[1] - g.tableMm[1])).toBeLessThan(3);
+  }, 120_000);
+
+  test('stop mid-move: the arm freezes; home lets the block go', async () => {
+    const { mj, model, data, arm, step } = await setup();
+    arm.goHomeNow();
+    arm.putBlock('red', 200, 100, 0.3);
+    arm.putBlock('green', 330, 80);
+    arm.putBlock('yellow', 120, 200);
+    arm.putBlock('blue', 380, 200);
+    step(0.3);
+    const moving = arm.move('red', { xMm: 300, yMm: 120, zMm: 0 });
+    for (let t = 0; arm.holding === null && t < 10; t += 0.05) step(0.05);
+    expect(arm.holding).toBe('red');
+    step(0.3); // carrying it
+    arm.stop();
+    expect(await moving).toEqual({ ok: false, reason: 'stopped' });
+    expect(arm.busy).toBe(false);
+
+    const site = () => {
+      mj.mj_forward(model, data);
+      const s = arm.ik.siteId;
+      const p = data.site_xpos as Float64Array;
+      return [p[3 * s], p[3 * s + 1], p[3 * s + 2]];
+    };
+    step(0.3); // the actuators settle on the held targets
+    const before = site();
+    step(1.0);
+    const after = site();
+    const drift = Math.hypot(...before.map((v, i) => (v - after[i]) * 1000));
+    expect(drift, `the gripper drifted ${drift.toFixed(1)} mm after the stop`).toBeLessThan(2);
+    expect(arm.holding).toBe('red'); // still held, not dropped
+
+    const homing = arm.home();
+    for (let t = 0; arm.busy && t < 10; t += 0.1) step(0.1);
+    step(0.5);
+    expect(await homing).toEqual({ ok: true });
+    expect(arm.holding).toBeNull();
+    expect(arm.block('red').heightMm).toBeLessThan(31); // let go: it lies on the table
+    const q = arm.armQ();
+    expect(Math.max(...q.map((v, j) => Math.abs(v - HOME[j])))).toBeLessThan(0.05);
   }, 120_000);
 
   test('out of reach: refuses before moving', async () => {
