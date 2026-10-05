@@ -7,7 +7,7 @@
  */
 
 import { fromCanvas } from './hand/cursor';
-import { HandOverlay } from './hand/overlay';
+import { CameraInset, HandOverlay } from './hand/overlay';
 import { FingerPointer } from './hand/pointer';
 import { syntheticFrame } from './hand/synthetic';
 import { HandTracker } from './hand/tracker';
@@ -36,6 +36,8 @@ async function start(): Promise<void> {
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const handCanvas = document.getElementById('hand') as HTMLCanvasElement;
   const video = document.getElementById('cam') as HTMLVideoElement;
+  const camBox = document.getElementById('cam-box')!;
+  const camDots = document.getElementById('cam-dots') as HTMLCanvasElement;
   const cameraBtn = document.getElementById('camera-btn') as HTMLButtonElement;
   const say = (text: string) => (status.textContent = text);
   const [mj, files] = await Promise.all([
@@ -44,8 +46,7 @@ async function start(): Promise<void> {
   ]);
   const { model, data } = loadScene(mj, files);
   const arm = new Arm(mj, model, data);
-  // Transparent, so the webcam shows through behind the table.
-  const view = new TableView(canvas, mj, model, { transparent: true });
+  const view = new TableView(canvas, mj, model);
   const blockOfGeom = new Map<number, BlockId>([...arm.blocks.values()].map((b) => [b.geom, b.id]));
 
   const reset = () => {
@@ -58,10 +59,13 @@ async function start(): Promise<void> {
 
   const overlay = new HandOverlay(handCanvas);
   const pointer = new FingerPointer(view, overlay, blockOfGeom);
+  const inset = new CameraInset(camDots);
   const fit = () => {
     view.resize(canvas.clientWidth, canvas.clientHeight);
-    overlay.resize(canvas.clientWidth, canvas.clientHeight);
+    overlay.resize();
+    inset.resize();
   };
+  new ResizeObserver(() => inset.resize()).observe(camDots);
   new ResizeObserver(fit).observe(canvas);
   fit();
 
@@ -107,7 +111,7 @@ async function start(): Promise<void> {
     );
   });
   // The finger (plan W4).
-  const fingerHelp = 'Point with one finger: the pink dot follows it. Keys: L record, V camera look, [ ] gain.';
+  const fingerHelp = 'Point with one finger: the pink dot follows it. Keys: L record, [ ] gain.';
   let tracker: HandTracker | null = null;
   cameraBtn.addEventListener('click', async () => {
     cameraBtn.disabled = true;
@@ -115,6 +119,8 @@ async function start(): Promise<void> {
     try {
       tracker = await HandTracker.start(video);
       tracker.onFrame = (f) => pointer.onFrame(f);
+      camBox.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+      pointer.inset = inset;
       stage.classList.add('camera-on');
       say(fingerHelp);
     } catch (e) {
@@ -125,14 +131,17 @@ async function start(): Promise<void> {
     }
   });
   if (new URLSearchParams(location.search).get('hands') === 'demo') {
+    // No video: the small window shows the made-up hand itself, labelled.
+    inset.drawHand = true;
+    pointer.inset = inset;
+    camBox.classList.add('synthetic');
+    stage.classList.add('camera-on');
     startSyntheticHand(view, arm, pointer);
-    cameraBtn.hidden = true;
   }
 
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') arm.stop();
     if (e.key === 'r' && !arm.busy) reset();
-    if (e.key === 'v') stage.classList.toggle('cam-on-top');
     if (e.key === '[' || e.key === ']') {
       const w = pointer.box.width + (e.key === '[' ? -0.05 : 0.05);
       pointer.box.width = Math.min(1, Math.max(0.3, Math.round(w * 100) / 100));

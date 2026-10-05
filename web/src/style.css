@@ -11,16 +11,21 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
 #app { max-width: 1280px; margin: 0 auto; padding: 16px; }
 #stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--stage);
   border-radius: 12px; overflow: hidden; }
-#scene, #hand, #cam { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#scene, #hand { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #hand { pointer-events: none; }
 
-/* The webcam: mirrored like a mirror, faded behind the scene (plan 4.6). The second look
-   (key V) puts it on top of the scene at about 30 %. */
-#cam { object-fit: cover; transform: scaleX(-1); opacity: 0; transition: opacity 0.6s;
-  filter: saturate(0.55) brightness(1.1); pointer-events: none; }
-#stage.camera-on #cam { opacity: 0.4; }
-#stage.camera-on.cam-on-top #cam { opacity: 0.28; z-index: 1; }
-#stage.cam-on-top #hand { z-index: 2; }
+/* Your camera: a small mirrored window in a corner, with the same pink dot (rahul, 5 Oct).
+   The dashed frame is the part of the camera that covers the table. */
+#cam-box { position: absolute; top: 12px; right: 12px; z-index: 3; width: 24%;
+  aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #2a2f3a;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); border: 2px solid rgb(255 255 255 / 0.9);
+  display: none; pointer-events: none; }
+#stage.camera-on #cam-box { display: block; }
+#cam, #cam-dots { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#cam { object-fit: cover; transform: scaleX(-1); }
+#cam-label { position: absolute; left: 6px; bottom: 4px; font-size: 11px;
+  color: rgb(255 255 255 / 0.75); display: none; }
+#cam-box.synthetic #cam-label { display: block; }
 
 #camera-btn { position: absolute; top: 12px; right: 12px; z-index: 3; padding: 8px 14px;
   border: 0; border-radius: 999px; background: var(--ink); color: white; font: inherit;

@@ -10,9 +10,13 @@
   <body>
     <main id="app">
       <div id="stage">
-        <video id="cam" muted playsinline></video>
         <canvas id="scene"></canvas>
         <canvas id="hand"></canvas>
+        <div id="cam-box" aria-label="Your camera">
+          <video id="cam" muted playsinline></video>
+          <canvas id="cam-dots"></canvas>
+          <span id="cam-label">made-up hand</span>
+        </div>
         <button id="camera-btn" type="button">Use my camera</button>
         <div id="status">Loading the arm…</div>
       </div>

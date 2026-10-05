@@ -8,7 +8,7 @@ import type { BlockId } from '../sim/arm';
 import { type Hit, pointAt } from '../sim/pick';
 import type { TableView } from '../sim/render';
 import { type ActiveBox, DEFAULT_BOX, onCanvas, toCanvas } from './cursor';
-import type { HandOverlay } from './overlay';
+import type { CameraInset, HandOverlay } from './overlay';
 import { INDEX_TIP } from './pose';
 import { HandRecorder } from './recorder';
 import { SampleBuffer } from './samples';
@@ -22,6 +22,8 @@ export class FingerPointer {
   hit: Hit | null = null;
   pointing = false;
   frames = 0;
+  /** The small camera window's dot and frame, once the camera (or the made-up hand) runs. */
+  inset: CameraInset | null = null;
 
   constructor(
     private readonly view: TableView,
@@ -34,13 +36,14 @@ export class FingerPointer {
     this.recorder.add(f);
     const hand = chooseHand(f.hands);
     const camAspect = f.width / f.height;
+    const c = this.view.canvas;
+    const canvasAspect = c ? c.clientWidth / c.clientHeight : 16 / 9;
     this.overlay.draw(hand, f.t, this.box, camAspect);
+    this.inset?.draw(hand, this.box, camAspect, canvasAspect);
     this.hit = null;
     this.pointing = !!hand?.pose.pointing;
     if (hand) {
       const [x, y] = hand.image[INDEX_TIP];
-      const c = this.view.canvas;
-      const canvasAspect = c ? c.clientWidth / c.clientHeight : 16 / 9;
       const at = toCanvas(x, y, this.box, camAspect, canvasAspect);
       if (onCanvas(at)) this.hit = pointAt(this.view, at[0], at[1], this.blockOfGeom);
     }
