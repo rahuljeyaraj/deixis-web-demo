@@ -70,7 +70,9 @@ async function start(): Promise<void> {
   showInfo();
   const [mj, files] = await Promise.all([
     mujoco(),
-    fetchPack('/so101.pack', (f) => say(`Loading the arm… ${Math.round(f * 100)} %`)),
+    fetchPack('/so101.pack', (f) =>
+      say(f < 1 ? `Loading the arm… ${Math.round(f * 100)} %` : 'Starting the arm…'),
+    ),
   ]);
   const { model, data } = loadScene(mj, files);
   const arm = new Arm(mj, model, data);
@@ -520,7 +522,8 @@ function startSyntheticHand(view: TableView, arm: Arm, pointer: FingerPointer): 
 }
 
 start().catch((e) => {
-  document.getElementById('status')!.textContent =
-    `Could not start: ${e instanceof Error ? e.message : e}`;
+  const text = `Could not start: ${e instanceof Error ? e.message : e}`;
+  document.getElementById('status')!.textContent = text;
+  document.getElementById('start-loading')!.textContent = text; // the start card hides #status
   console.error(e);
 });

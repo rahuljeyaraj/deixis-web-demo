@@ -49,18 +49,27 @@ a { color: var(--blue); }
 #start { position: absolute; inset: 0; z-index: 5; display: none; place-items: center;
   background: rgb(223 229 238 / 0.55); backdrop-filter: blur(3px); }
 #stage.starting #start { display: grid; }
-#start .card { width: min(620px, 90%); padding: 26px 32px 18px; border-radius: 16px;
-  background: rgb(255 255 255 / 0.96); box-shadow: 0 10px 40px rgb(0 0 0 / 0.18); text-align: center; }
-#start h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: 0.01em; }
-#start .lead { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
-#start .how { margin: 0 0 18px; color: var(--muted); }
+#start .card { width: min(560px, 90%); padding: 30px 36px 22px; border-radius: 18px;
+  background: white; box-shadow: 0 10px 40px rgb(0 0 0 / 0.16); text-align: center; }
+#start h1 { margin: 0 0 18px; font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); }
+#start .lead { margin: 0 0 26px; font-size: 26px; line-height: 1.25; font-weight: 700; text-wrap: balance; }
+#start .ask { margin: 0 0 12px; font-size: 16px; color: var(--muted); }
 #start q, #chips q { quotes: "“" "”"; }
-#start .choices { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
-button.big { padding: 13px 22px; border-radius: 12px; border: 2px solid #9aa3b2; background: white;
-  color: var(--ink); font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; }
+#start .choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+button.big { min-width: 170px; padding: 13px 22px; border-radius: 12px; border: 2px solid #9aa3b2;
+  background: white; color: var(--ink); font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; }
+button.big small { font-weight: 400; opacity: 0.8; }
 button.big.primary { border-color: var(--blue); background: var(--blue); color: white; }
 button.big:disabled { opacity: 0.5; cursor: default; }
+#start .loading { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+#start .loading:empty { display: none; }
+#start .small { margin-top: 22px; text-wrap: balance; }
+#start .small a { white-space: nowrap; }
 .small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
+/* While the start card shows, only the scene and the footer: no buttons or panels yet. */
+#stage.starting ~ #controls, #stage.starting ~ #strip, #stage.starting ~ #details,
+#stage.starting ~ #chips { display: none; }
 
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
 #controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
