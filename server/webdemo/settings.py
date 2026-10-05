@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     nebius_api_key: SecretStr | None = None
     nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
     nemotron_model: str = "nvidia/Nemotron-3_5-Lightning"
+    # "rules": the rule parser only (tests, simple mode); "nemotron": Nemotron, rules if it fails.
+    ai: Literal["nemotron", "rules"] = "nemotron"
 
     # How the server reaches the core: over MCP (a `deixis-mcp` child process) or in-process.
     deixis_mode: Literal["mcp", "direct"] = "mcp"

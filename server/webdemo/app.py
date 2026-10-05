@@ -6,18 +6,23 @@ In development Vite serves the page on :5173 and proxies /api and /healthz to th
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, ValidationError
 
 from deixis.mcp import DeixisClient
+from deixis.profile import load_profile
 from webdemo import __version__
+from webdemo.agent import AgentResult, ArmAgent, Context
+from webdemo.command import Meta, Sessions, say_for, typed_words
 from webdemo.models import NOT_USED, models_in_use
 from webdemo.settings import Settings
 from webdemo.speech import ClipError, Speech
@@ -45,14 +50,25 @@ def load_speech(settings: Settings) -> Speech | None:
         return None
 
 
+class AnswerBody(BaseModel):
+    """`POST /api/answer`: the person chose one of the last question's candidates."""
+
+    candidate: int
+    thing: str | None = None
+
+
 def create_app(
     settings: Settings | None = None,
     client: DeixisClient | None = None,
     speech: Speech | None = None,
+    llm_factory: Callable[[str], Any] | None = None,
 ) -> FastAPI:
     """The app. Tests pass their own `client` (over MCP, `fallback=None`) and `speech` (loaded
-    once per test session), and keep them."""
+    once per test session), and keep them; `llm_factory(key)` makes the OpenAI-like client for
+    Nemotron (tests pass a fake)."""
     settings = settings or Settings()
+    profile = load_profile(settings.profile)
+    sessions = Sessions()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -62,6 +78,11 @@ def create_app(
         app.state.speech = speech if speech is not None else load_speech(settings)
         core: DeixisClient = app.state.deixis
         log.info("deixis core: mode=%s over_mcp=%s", core.mode, core.over_mcp)
+        # The tools come from the core, over MCP, as every robot gets them.
+        app.state.agent = ArmAgent(
+            profile, core.tools_for_agent(), settings.nebius_base_url,
+            model=settings.nemotron_model, client_factory=llm_factory,
+        )  # fmt: skip
         try:
             yield
         finally:
@@ -72,6 +93,7 @@ def create_app(
 
     app = FastAPI(title="deixis web demo", version=__version__, lifespan=lifespan)
     app.state.settings = settings
+    app.state.sessions = sessions
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
@@ -103,42 +125,136 @@ def create_app(
             "not_used": NOT_USED,
         }  # fmt: skip
 
+    def visitor(response: Response, sid: str | None) -> str:
+        """The visitor's random id (a cookie), made on the first command."""
+        if not sid or len(sid) > 64:
+            sid = Sessions.new_id()
+            response.set_cookie("sid", sid, httponly=True, samesite="strict", max_age=86400)
+        return sid
+
+    async def resolve(request: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+        """The core's answer over MCP, as JSON; or why it refused the request."""
+        core: DeixisClient = app.state.deixis
+        try:
+            r = await run_in_threadpool(core.resolve, request)
+        except (ValidationError, ValueError) as e:
+            log.warning("the core refused the request: %s", e)
+            return None, str(e).splitlines()[0]
+        return r.model_dump(mode="json"), None
+
+    def remember(sid: str, request: dict[str, Any], result: dict[str, Any] | None) -> None:
+        if result and result["status"] == "ask":
+            sessions.put(sid, request, result)
+        else:
+            sessions.drop(sid)
+
     @app.post("/api/command")
     async def command(
+        response: Response,
         meta: Annotated[str, Form()],
         audio: Annotated[UploadFile | None, File()] = None,
+        x_nebius_key: Annotated[str | None, Header()] = None,
+        sid: Annotated[str | None, Cookie()] = None,
     ) -> dict[str, Any]:
-        """One command (plan 4.2, 7.2). So far: the clip's words on the browser clock (W6);
-        the agent and the core follow in W8."""
+        """One command (plan 4.2, 7.2): words (from the clip, or typed), the agent's tool
+        calls, the core's places over MCP. A visitor's own key (`X-Nebius-Key`) is used for
+        this request's Nemotron call only; it is never stored, logged or sent back."""
         t_start = time.perf_counter()
+        sid = visitor(response, sid)
         if len(meta) > MAX_META_BYTES:
             raise HTTPException(413, "meta is over 1 MB")
         try:
-            m = json.loads(meta)
-        except json.JSONDecodeError as e:
-            raise HTTPException(400, f"meta is not JSON: {e}") from e
+            m = Meta.model_validate_json(meta)
+        except ValidationError as e:
+            raise HTTPException(400, f"meta: {e.errors()[0]['msg']}") from None
         timings: dict[str, float] = {}
-        words: list[dict[str, Any]] = []
         if audio is not None:
             speech: Speech | None = app.state.speech
             if speech is None:
                 raise HTTPException(503, "speech recognition is not loaded on this server")
-            if not isinstance(m.get("audio_t0"), int | float):
+            if m.audio_t0 is None:
                 raise HTTPException(400, "meta.audio_t0 is needed (the clip's first sample)")
             data = await audio.read(MAX_AUDIO_BYTES + 1)
             if len(data) > MAX_AUDIO_BYTES:
                 raise HTTPException(413, "the clip is over 12 s")
             t = time.perf_counter()
             try:
-                heard = await speech.transcribe_async(data, float(m["audio_t0"]))
+                heard = await speech.transcribe_async(data, m.audio_t0)
             except ClipError as e:
                 raise HTTPException(400, str(e)) from e
             timings["asr_s"] = round(time.perf_counter() - t, 3)
             words = [{"text": w.text, "t0": round(w.t0, 4), "t1": round(w.t1, 4)} for w in heard]
-        elif not m.get("text"):
+        elif m.text and m.text.strip():
+            words = typed_words(m.text, m.holds, m.t)
+        else:
             raise HTTPException(400, "send a clip (audio) or a typed sentence (meta.text)")
+
+        # The agent: Nemotron with the visitor's key or ours, else the rule parser.
+        texts = [w["text"] for w in words]
+        agent: ArmAgent = app.state.agent
+        ours = settings.nebius_api_key.get_secret_value() if settings.nebius_api_key else None
+        key = None if settings.ai == "rules" else (x_nebius_key or ours)
+        context = Context(previewing=m.state.previewing, question=m.state.question)
+        t = time.perf_counter()
+        if texts:
+            loop = asyncio.get_running_loop()
+            agent_res = await loop.run_in_executor(None, agent.understand, texts, key, context)
+        else:
+            agent_res = AgentResult([], source="rules", model="rules", errors=["no words"])
+        key = ours = None
+        timings["agent_s"] = round(time.perf_counter() - t, 3)
+
+        # The core: every reference to a place or a block, over MCP.
+        calls = [c.to_dict() for c in agent_res.calls]
+        result = error = None
+        request: dict[str, Any] = {}
+        if calls:
+            request = {"words": words, "samples": m.samples, "holds": m.holds,
+                       "things": m.things, "calls": calls, "context": m.context,
+                       "answers": m.answers}  # fmt: skip
+            t = time.perf_counter()
+            result, error = await resolve(request)
+            timings["core_s"] = round(time.perf_counter() - t, 3)
+        remember(sid, request, result)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
-        return {"words": words, "timings": timings}
+        return {
+            "words": words,
+            "agent": agent_res.summary(),
+            "result": result,
+            "error": error,
+            "say": "Sorry, something went wrong." if error else say_for(result, calls),
+            "timings": timings,
+        }
+
+    @app.post("/api/answer")
+    async def answer(
+        body: AnswerBody, response: Response, sid: Annotated[str | None, Cookie()] = None
+    ) -> dict[str, Any]:
+        """The person picked a candidate of the last question (clicked it): resolve the same
+        request again with that answer and what was already resolved (as C18's last test)."""
+        t_start = time.perf_counter()
+        sid = visitor(response, sid)
+        open_ask = sessions.get(sid)
+        if open_ask is None:
+            raise HTTPException(409, "there is no open question (it may have expired)")
+        ask = open_ask.response["ask"]
+        if not 0 <= body.candidate < len(ask["candidates"]):
+            raise HTTPException(400, "no such candidate")
+        back: dict[str, Any] = {"call": ask.get("call") or 0, "arg": ask["arg"],
+                                "candidate": body.candidate}  # fmt: skip
+        thing = body.thing or ask["candidates"][body.candidate].get("thing")
+        if thing:
+            back["thing"] = thing
+        else:
+            back["where"] = ask["candidates"][body.candidate]
+        request = {**open_ask.request, "answers": [back, *open_ask.response["partial"]]}
+        t = time.perf_counter()
+        result, error = await resolve(request)
+        timings = {"core_s": round(time.perf_counter() - t, 3)}
+        remember(sid, request, result)
+        timings["total_s"] = round(time.perf_counter() - t_start, 3)
+        say = result["ask"]["question"] if result and result["status"] == "ask" else None
+        return {"result": result, "error": error, "say": say, "timings": timings}
 
     if settings.web_dist.is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dist, html=True), name="page")
