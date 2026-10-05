@@ -9,6 +9,16 @@
   </head>
   <body>
     <main id="app">
+      <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). -->
+      <div id="chips" aria-label="Try saying">
+        <span class="chips-label">Try saying:</span>
+        <button type="button" class="chip">put that here</button>
+        <button type="button" class="chip">put the blue one next to that</button>
+        <button type="button" class="chip">put that on that</button>
+        <button type="button" class="chip">a bit left</button>
+        <button type="button" class="chip">yes</button>
+        <button type="button" class="chip">go home</button>
+      </div>
       <div id="bubble" aria-live="polite"></div>
       <div id="stage" class="starting">
         <canvas id="scene"></canvas>
@@ -59,16 +69,6 @@
         <summary>Details: the tool calls, the core’s answer, the timings</summary>
         <div id="details-body"><p>Nothing yet. Say or type a command first.</p></div>
       </details>
-
-      <div id="chips" aria-label="Try saying">
-        <span class="chips-label">Try saying:</span>
-        <button type="button" class="chip">put that here</button>
-        <button type="button" class="chip">put the blue one next to that</button>
-        <button type="button" class="chip">put that on that</button>
-        <button type="button" class="chip">a bit left</button>
-        <button type="button" class="chip">yes</button>
-        <button type="button" class="chip">go home</button>
-      </div>
 
       <footer>
         <details id="models">

@@ -14,7 +14,7 @@
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 /* The scene, the buttons and the strip fit one screen: the width follows the window's height. */
-#app { max-width: min(1280px, max(640px, calc((100vh - 290px) * 16 / 9))); margin: 0 auto;
+#app { max-width: min(1280px, max(640px, calc((100vh - 330px) * 16 / 9))); margin: 0 auto;
   padding: 12px 16px 24px; }
 a { color: var(--blue); }
 #stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--stage);
@@ -69,7 +69,7 @@ button.big:disabled { opacity: 0.5; cursor: default; }
 .small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 /* While the start card shows, only the scene and the footer: no buttons or panels yet. */
 #stage.starting ~ #controls, #stage.starting ~ #strip, #stage.starting ~ #details,
-#stage.starting ~ #chips { display: none; }
+#app:has(#stage.starting) #chips { display: none; }
 
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
 #controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -135,7 +135,8 @@ details[open] > summary { border-bottom: 1px solid var(--line); }
   background: #f3f4f6; border-radius: 8px; font-size: 12.5px; line-height: 1.35; }
 
 /* Try saying (plan 5.2): a chip only shows the words; it doesn't run them. */
-#chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+#chips { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
+  margin-bottom: 10px; }
 .chips-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
 .chip { padding: 5px 12px; border: 1.5px solid #8b91f0; border-radius: 9px; background: #eef0ff;
   color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
