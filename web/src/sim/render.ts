@@ -21,6 +21,9 @@ export class TableView {
   /** Meshes the raycast may hit, with the geom id each one draws. */
   readonly pickable: THREE.Object3D[] = [];
   private readonly geoms: { id: number; obj: THREE.Object3D }[] = [];
+  private readonly meshOfGeom = new Map<number, THREE.Mesh>();
+  private readonly tableGeom: number;
+  private readonly ghost: THREE.Mesh;
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -40,17 +43,66 @@ export class TableView {
     this.camera.up.set(0, 0, 1);
     this.seatedView();
 
+    this.tableGeom = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, 'table');
     this.addLights();
     this.addGeoms(mj);
     this.addMat();
+    this.ghost = this.makeGhost();
+  }
+
+  isTable(geom: number): boolean {
+    return geom === this.tableGeom;
+  }
+
+  /** Make a geom glow (the block "that" means) or stop glowing. */
+  glow(geom: number, on: boolean): void {
+    const mesh = this.meshOfGeom.get(geom);
+    if (!mesh) return;
+    // Lit from inside in its own colour, so a chosen block reads as brighter, not paler.
+    const m = mesh.material as THREE.MeshStandardMaterial;
+    m.emissive.copy(on ? m.color : new THREE.Color(0x000000));
+    m.emissiveIntensity = on ? 0.55 : 0;
+  }
+
+  /**
+   * Show the ghost block (where the block will go) in a block's colour, centred at a world
+   * point, or hide it.
+   */
+  showGhost(at: [number, number, number] | null, colorOfGeom?: number): void {
+    this.ghost.visible = at !== null;
+    if (!at) return;
+    this.ghost.position.set(at[0], at[1], at[2]);
+    const src = colorOfGeom === undefined ? null : this.meshOfGeom.get(colorOfGeom);
+    const color = src ? (src.material as THREE.MeshStandardMaterial).color : new THREE.Color(0xffffff);
+    const mats = this.ghost.material as THREE.MeshBasicMaterial;
+    mats.color.copy(color);
+    (this.ghost.children[0] as THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>).material.color.copy(color);
+  }
+
+  private makeGhost(): THREE.Mesh {
+    const size = 0.03;
+    const geo = new THREE.BoxGeometry(size, size, size);
+    const ghost = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false }),
+    );
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({ transparent: true, opacity: 0.9 }),
+    );
+    ghost.add(edges);
+    ghost.visible = false;
+    ghost.renderOrder = 2;
+    this.scene.add(ghost);
+    return ghost;
   }
 
   /** The camera where a seated person's eyes would be, looking at the work area. */
   seatedView(): void {
-    const [ex, ey] = tableToWorld(BASE_MM.x, -260);
-    const [lx, ly] = tableToWorld(BASE_MM.x, 125);
-    this.camera.position.set(ex, ey, 0.36);
-    this.camera.lookAt(lx, ly, 0.0);
+    const [ex, ey] = tableToWorld(BASE_MM.x, -360);
+    const [lx, ly] = tableToWorld(BASE_MM.x, 150);
+    this.camera.position.set(ex, ey, 0.44);
+    this.camera.lookAt(lx, ly, 0.085);
   }
 
   resize(width: number, height: number): void {
@@ -147,6 +199,7 @@ export class TableView {
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       mesh.userData.geom = i;
+      this.meshOfGeom.set(i, mesh);
       this.scene.add(mesh);
       this.geoms.push({ id: i, obj: mesh });
       this.pickable.push(mesh);

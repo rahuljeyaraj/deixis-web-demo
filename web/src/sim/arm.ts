@@ -23,8 +23,8 @@ export type BlockId = (typeof BLOCK_IDS)[number];
 
 export const GRIPPER_OPEN = 0.6; // about 60 mm between the jaws
 export const GRIPPER_SHUT = 0.0; // pushes on a 30 mm block (the jaws touch it near 0.18)
-/** Arm up and folded, out of the way of the blocks: the 5 arm joints and the gripper. */
-export const HOME = [0, -1.75, 1.55, 0.75, 0, 0.2];
+/** Arm up, the gripper high and facing the person, off the work area: 5 joints and gripper. */
+export const HOME = [0, -1.45, 0.75, 1.45, 0, 0.2];
 
 const Z_GRASP = 0.007; // fingertips about 4 mm above the table
 const LIFTS = [0.07, 0.058, 0.048]; // the highest that works: 0.07 clears a 30 mm block by 3 cm
