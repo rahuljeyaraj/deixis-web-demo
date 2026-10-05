@@ -101,10 +101,17 @@ async function start(): Promise<void> {
 
   // The flow (plan 5.4, W9): what the server resolved, checked robot-side, shown, then done.
   const glowing = new Set<BlockId>();
+  // The bubble floats over the scene, so it fades after a while, except while the robot waits
+  // for an answer (a preview or a question).
+  let quiet = 0;
   const robotSays = (text: string) => {
     bubble.textContent = text;
     bubble.classList.add('on');
     speak(text);
+    clearTimeout(quiet);
+    quiet = window.setTimeout(() => {
+      if (flow.state.kind !== 'preview' && flow.state.kind !== 'asking') bubble.classList.remove('on');
+    }, 6000);
   };
   const flow = new Flow(arm, {
     speak: robotSays,
