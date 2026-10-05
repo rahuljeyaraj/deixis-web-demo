@@ -2,7 +2,7 @@
 // only). Start the server with no budget left, so the banner shows without spending anything:
 //   $env:CAP_TOTAL_PER_DAY=0; uv run webdemo        (and `npm run dev`)
 //   node scripts/key-shots.mjs [url] [--real-key]
-// Pictures: docs/pictures/14-simple-mode.png, 15-own-key.png, 16-bad-key.png (and with
+// Pictures: out/pictures/14-simple-mode.png, 15-own-key.png, 16-bad-key.png (and with
 // `--real-key`, 17-own-key-saved.png).
 // `--real-key` also pastes the key from ../.env as a visitor's own key (one Nemotron call,
 // about $0.0005) and checks that the page says it works. The key is never printed.
@@ -13,7 +13,7 @@ import { chromium } from '@playwright/test';
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173/';
 const realKey = args.includes('--real-key');
-const pictures = path.resolve(import.meta.dirname, '..', '..', 'docs', 'pictures');
+const pictures = path.resolve(import.meta.dirname, '..', '..', 'out', 'pictures');
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const context = await browser.newContext({ viewport: { width: 1312, height: 940 } }); // no mic: typing

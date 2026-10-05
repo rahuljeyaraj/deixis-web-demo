@@ -2,7 +2,7 @@
 // run): a fake microphone says "put that ... here" (a test voice), the mouse points at the red
 // block during "that" and at an empty spot during "here", Talk is held with the space bar.
 // Then the preview ("This one, here?", the glow, the ghost), Go, and the block at the spot.
-// Screenshots: docs/pictures/07-preview.png and 08-moved.png.
+// Screenshots: out/pictures/07-preview.png and 08-moved.png.
 //   node scripts/flow-check.mjs [url]
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import { chromium } from '@playwright/test';
 const url = process.argv[2] ?? 'http://localhost:5173/';
 const root = path.resolve(import.meta.dirname, '..', '..');
 const out = path.join(root, 'out');
-const pictures = path.join(root, 'docs', 'pictures');
+const pictures = path.join(root, 'out', 'pictures');
 fs.mkdirSync(out, { recursive: true });
 
 // --- the fake microphone: 1 s, "put that", 1.4 s, "here", 3.2 s (Chrome loops it) ---

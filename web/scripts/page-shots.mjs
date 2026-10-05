@@ -2,13 +2,13 @@
 // `uv run webdemo` must run). No microphone allowed first (so the page offers typing), then
 // the microphone but no camera (so the mouse points).
 //   node scripts/page-shots.mjs [url]
-// Pictures: docs/pictures/09-start.png, 10-typed-preview.png, 11-question.png,
+// Pictures: out/pictures/09-start.png, 10-typed-preview.png, 11-question.png,
 // 12-models.png, 13-no-camera.png.
 import path from 'node:path';
 import { chromium } from '@playwright/test';
 
 const url = process.argv[2] ?? 'http://localhost:5173/';
-const pictures = path.resolve(import.meta.dirname, '..', '..', 'docs', 'pictures');
+const pictures = path.resolve(import.meta.dirname, '..', '..', 'out', 'pictures');
 const shot = (page, name, fullPage = false) => page.screenshot({ path: path.join(pictures, name), fullPage });
 
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-fake-device-for-media-stream'] });

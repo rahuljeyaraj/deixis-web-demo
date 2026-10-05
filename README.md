@@ -16,10 +16,7 @@ Point at a block and say "put that here": a virtual SO-101 robot arm in your bro
 *where* by your finger and your voice, through the [`deixis`](https://github.com/rahuljeyaraj/deixis) core.
 
 **Status (5 Oct 2026):** being built. The arm runs in the browser (MuJoCo WebAssembly and
-three.js) with a mouse test; the finger, speech and the core come next. The plan is
-[docs/plan.md](docs/plan.md); the page layout is
-[docs/pictures/01-page-layout.png](docs/pictures/01-page-layout.png). What the demo can't do
-is in [LIMITATIONS.md](LIMITATIONS.md); third-party licences are in [NOTICE.md](NOTICE.md).
+three.js) with a mouse test; the finger, speech and the core come next. What the demo can't do is in [LIMITATIONS.md](LIMITATIONS.md); third-party licences are in [NOTICE.md](NOTICE.md).
 
 ## Run it on your computer
 
