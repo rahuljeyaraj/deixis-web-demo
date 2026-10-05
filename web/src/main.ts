@@ -1,12 +1,14 @@
 /**
  * The page. For now: the arm, the table and the blocks; a mouse test of the arm (click a
  * block, then click a spot); the finger as a pointer (plan W4: the webcam, the fingertip dot,
- * samples in table mm); and the voice (plan W5: push-to-talk, the clip on the page clock).
- * The words and the deixis core come next (plan W6 on).
+ * samples in table mm); the voice (plan W5: push-to-talk, the clip on the page clock); and
+ * the words the server heard, on the page clock (W6). The agent and the deixis core come
+ * next (plan W7 on).
  *
  * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests).
  */
 
+import { type CommandReply, sendCommand } from './api';
 import { MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
@@ -148,6 +150,7 @@ async function start(): Promise<void> {
   let mic: MicCapture | null = null;
   let micStarting: Promise<string> | null = null;
   let lastClip: Clip | null = null;
+  let lastReply: CommandReply | null = null;
   const startMic = (): Promise<string> =>
     (micStarting ??= MicCapture.start().then(
       (m) => {
@@ -176,11 +179,21 @@ async function start(): Promise<void> {
         say('Stopped listening.');
         return;
       }
-      void mic.end(t).then((clip) => {
-        lastClip = clip;
-        const long = clip.cut || reason === 'long' ? ' That was long, so I stopped listening.' : '';
-        say(`Heard ${clip.duration.toFixed(1)} s of sound (loudest ${clip.peakDb.toFixed(0)} dB).${long}`);
-      });
+      const long = reason === 'long' ? 'That was long, so I stopped listening. ' : '';
+      void mic
+        .end(t)
+        .then(async (clip) => {
+          lastClip = clip;
+          say(`${long}Thinking…`);
+          const reply = await sendCommand({ audio_t0: clip.t0 }, clip.wav);
+          lastReply = reply;
+          const heard = reply.words.map((w) => w.text).join(' ');
+          say(heard ? `${long}I heard: “${heard}”.` : `${long}I didn't hear any words. Try again?`);
+        })
+        .catch((e) => {
+          console.error(e);
+          say(`Sorry, that didn't work (${e instanceof Error ? e.message : e}).`);
+        });
     },
   });
   /** A Talk press with no microphone yet asks for it; that press doesn't record. */
@@ -272,6 +285,7 @@ async function start(): Promise<void> {
       tracker: () => tracker,
       mic: () => mic,
       lastClip: () => lastClip,
+      lastReply: () => lastReply,
       startMic,
     },
   });

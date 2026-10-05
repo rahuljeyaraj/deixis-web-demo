@@ -118,6 +118,17 @@ const clip = await page.evaluate(() => {
 });
 fs.writeFileSync(path.join(out, 'audio-check-clip.wav'), Buffer.from(clip.wav));
 console.log(`clip: ${clip.duration.toFixed(2)} s, peak ${clip.peakDb.toFixed(1)} dB, rms ${clip.rmsDb.toFixed(1)} dB -> out/audio-check-clip.wav`);
+// The server's words (W6), if the server runs: times as seconds into the clip.
+const reply = await page
+  .waitForFunction(() => window.__sim.lastReply(), null, { timeout: 10000 })
+  .then((h) => h.jsonValue())
+  .catch(() => null);
+if (reply) {
+  const words = reply.words.map((w) => `${w.text}@${(w.t0 - clip.t0).toFixed(2)}`).join(' ');
+  console.log(`words (s into the clip): ${words}; speech ${reply.timings.asr_s} s, total ${reply.timings.total_s} s`);
+} else {
+  console.log('no words: is the server running (uv run webdemo)?');
+}
 console.log('status:', await page.locator('#status').textContent());
 
 if (minute) {

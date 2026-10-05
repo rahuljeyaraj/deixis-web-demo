@@ -60,7 +60,9 @@ def read_wav(path: Path) -> tuple[np.ndarray, int]:
     return pcm.astype(np.float32) / 32768.0, sr
 
 
-def sound_span(x: np.ndarray, sr: int, rel_db: float = -35.0, frame_s: float = 0.005) -> tuple[float, float]:
+def sound_span(
+    x: np.ndarray, sr: int, rel_db: float = -35.0, frame_s: float = 0.005
+) -> tuple[float, float]:
     """First and last 5 ms frame within `rel_db` of the loudest frame."""
     n = int(round(frame_s * sr))
     k = len(x) // n

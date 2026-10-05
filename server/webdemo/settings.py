@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     deixis_fallback: Literal["direct", "none"] = "direct"
     profile: Path = ROOT / "profiles" / "so101-table.json"
 
+    # Parakeet (plan 7.3): where the sherpa-onnx export lives (`scripts/fetch_models.py`
+    # downloads it; in development it can point at deixis-doodle's copy). Off: no speech.
+    asr_models_dir: Path = ROOT / ".cache" / "models"
+    asr_enabled: bool = True
+    asr_workers: int = 2  # decodes at the same time; more requests wait
+    asr_threads: int = 4  # ONNX Runtime threads per decode (4 was fastest on rahul's PC)
+
     # The page's name (open decision D6) is read from here, so it changes in one place.
     title: str = "deixis"
     # The built front end; served at / when it exists (in development Vite serves the page).
