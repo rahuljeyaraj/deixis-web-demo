@@ -39,9 +39,9 @@ def scenes(api) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     out["put that here"] = [command(api, "put that here", [CENTRES["red"], HERE]), "yes"]
     out["put the blue one next to that"] = [
-        command(api, "put the blue one next to that", [CENTRES["green"]]), "yes"]
+        command(api, "put the blue one next to that", [CENTRES["yellow"]]), "yes"]
     out["put that on that"] = [
-        command(api, "put that on that", [CENTRES["red"], CENTRES["green"]]), "yes"]
+        command(api, "put that on that", [CENTRES["red"], CENTRES["blue"]]), "yes"]
     first = command(api, "put that here", [CENTRES["red"], HERE])
     where = first["reply"]["result"]["calls"][0]["args"]["place"]
     out["a bit left"] = [first, command(api, "a bit left", state={"previewing": True},

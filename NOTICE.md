@@ -7,8 +7,11 @@ of others under their own licences.
 
 - **SO-101 arm model** from [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie/tree/main/robotstudio_so101)
   (`robotstudio_so101`, by The Robot Studio and Google DeepMind), Apache License 2.0.
-  Copied unchanged into `web/model/so101/` at the commit in `web/model/so101/MENAGERIE_COMMIT`,
-  with its `LICENSE` file. `web/model/table_scene.xml` (ours) includes it.
+  Copied into `web/model/so101/` at the commit in `web/model/so101/MENAGERIE_COMMIT`, with its
+  `LICENSE` file. `web/model/table_scene.xml` (ours) includes it. **One change** (6 Oct 2026):
+  the wrist camera mount (`camera_mount` body, its wrist camera and its collision boxes) is
+  removed from `so101.xml`, because the demo has no wrist camera and the mount hit the arm's
+  shoulder near the base.
 
 ## Used, not included
 

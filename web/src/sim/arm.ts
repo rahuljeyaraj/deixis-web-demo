@@ -18,7 +18,9 @@ import { ArmKinematics, type IkTarget } from './ik';
 import type { MjData, MjModel, Mujoco } from './mujoco';
 import { BLOCK_MM, type Vec3, tableToWorld, worldToTable } from './table';
 
-export const BLOCK_IDS = ['red', 'yellow', 'green', 'blue'] as const;
+// Three blocks (rahul, 6 Oct): less clutter on the mat, and a stack of all three is the
+// highest the arm can build. No green: red and green look alike to colour-blind viewers.
+export const BLOCK_IDS = ['red', 'yellow', 'blue'] as const;
 export type BlockId = (typeof BLOCK_IDS)[number];
 
 export const GRIPPER_OPEN = 0.6; // about 60 mm between the jaws
@@ -413,6 +415,10 @@ export class Arm {
     qBottom: number[],
     yawExact = false,
   ): number[][] | null {
+    // The jaws keep facing one way all the way up: without a yaw the hand once turned a
+    // quarter circle on the way down with a block, which then landed 10 mm off.
+    const keep = yaw ?? yawOf(this.ik.fk(qBottom).open);
+    const exact = yawExact || yaw === null;
     for (const lift of LIFTS) {
       const zTop = Math.max(lift, zBottom + (lift - Z_GRASP));
       const qs = [qBottom];
@@ -420,7 +426,7 @@ export class Arm {
       for (let k = 1; k <= STEPS; k++) {
         const f = k / STEPS;
         const z = zBottom + f * (zTop - zBottom);
-        const r = this.ik.solve({ pos: [xy[0], xy[1], z], yaw, yawExact, maxTiltDeg: 4 + 31 * f }, q);
+        const r = this.ik.solve({ pos: [xy[0], xy[1], z], yaw: keep, yawExact: exact, maxTiltDeg: 4 + 31 * f }, q);
         if (!r.ok) break;
         q = r.q;
         qs.push(q);

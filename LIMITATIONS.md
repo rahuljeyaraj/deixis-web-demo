@@ -20,8 +20,9 @@ picked, and it is switched with the global "equality" disable flag.
 ## L2. The arm reaches a half ring only
 
 The SO-101 is small (upper arm about 113 mm, lower arm about 135 mm). It can pick a block up
-and put it down from **130 to 280 mm** around its base, measured with the real planner
-(`web/tests/probes/reach2.probe.test.ts`). The lighter half ring on the table shows this. The
+and put it down from **140 to 280 mm** around its base, measured with the real planner
+(`web/tests/probes/reach2.probe.test.ts`; closer than 140 mm the gripper can touch the arm's own
+shoulder, `inner.probe.test.ts`). It stacks all three blocks anywhere on that ring. The lighter half ring on the table shows this. The
 core knows a rectangle (500 × 250 mm); the half ring is the robot's own knowledge, checked in
 the browser before anything moves, as a real robot would. A point outside it gets "I can't
 reach there. Please point somewhere closer."

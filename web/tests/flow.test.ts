@@ -83,22 +83,22 @@ describe('the flow on the server replies', async () => {
     expect(flow.lastThing).toBe('red');
   });
 
-  test('put the blue one next to that: to the right of the green block', async () => {
+  test('put the blue one next to that: to the right of the yellow block', async () => {
     await play('put the blue one next to that');
     const blue = at('blue');
-    const green = at('green');
-    expect(blue.tableMm[0] - green.tableMm[0]).toBeGreaterThan(30 + 5);
-    expect(Math.abs(blue.tableMm[1] - green.tableMm[1])).toBeLessThan(3);
+    const yellow = at('yellow');
+    expect(blue.tableMm[0] - yellow.tableMm[0]).toBeGreaterThan(30 + 5);
+    expect(Math.abs(blue.tableMm[1] - yellow.tableMm[1])).toBeLessThan(3);
   });
 
-  test('put that on that: stacked on the green block, flat', async () => {
+  test('put that on that: stacked on the blue block, flat', async () => {
     const { flow } = await play('put that on that');
     const red = at('red');
-    expect(near(red, ...at('green').tableMm)).toBeLessThan(4);
+    expect(near(red, ...at('blue').tableMm)).toBeLessThan(4);
     expect(red.heightMm).toBeCloseTo(60, 0);
-    // The green block now has one on top: it can't be picked.
+    // The blue block now has one on top: it can't be picked.
     const things = flow.things();
-    expect(things.find((t) => t.id === 'green')!.selectable).toBe(false);
+    expect(things.find((t) => t.id === 'blue')!.selectable).toBe(false);
     expect(things.find((t) => t.id === 'red')!.height_mm).toBeCloseTo(60, 0);
   });
 
@@ -182,10 +182,9 @@ describe('robot-side checks before a preview', async () => {
 
   async function fresh() {
     arm.goHomeNow();
-    arm.putBlock('red', 180, 120, 0);
-    arm.putBlock('yellow', 225, 120, 0);
-    arm.putBlock('green', 300, 90, 0);
-    arm.putBlock('blue', 360, 150, 0);
+    arm.putBlock('red', 180, 100, 0);
+    arm.putBlock('yellow', 225, 100, 0);
+    arm.putBlock('blue', 300, 90, 0);
     for (let i = 0; i < 100; i++) mj.mj_step(model, data);
     const view = new Recorder();
     return { view, flow: new Flow(arm, view, { confirmFirst: true, now: () => 1 }) };
@@ -201,7 +200,7 @@ describe('robot-side checks before a preview', async () => {
   test('a block in the way, named', async () => {
     const { view, flow } = await fresh();
     await flow.handle(reply({ object: thing('red'), place: spot(305, 95) }));
-    expect(view.said).toEqual(['The green block is in the way there.']);
+    expect(view.said).toEqual(['The blue block is in the way there.']);
   });
 
   test('next to a block is fine; a turned block counts with its real corners', () => {
@@ -212,9 +211,9 @@ describe('robot-side checks before a preview', async () => {
     expect(distanceToBlock(135, 100, turned)).toBeCloseTo(35 - 15 * Math.SQRT2, 6); // its corner
     // 32 mm centre to centre, side by side: 2 mm apart, not in the way.
     const blocks = BLOCK_IDS.map((id) => arm.block(id));
-    const green = arm.block('green').tableMm;
-    expect(blockedBy(green[0] + 32, green[1], blocks, [])).toBeNull();
-    expect(blockedBy(green[0] + 25, green[1], blocks, [])?.id).toBe('green');
+    const blue = arm.block('blue').tableMm;
+    expect(blockedBy(blue[0] + 32, blue[1], blocks, [])).toBeNull();
+    expect(blockedBy(blue[0] + 25, blue[1], blocks, [])?.id).toBe('blue');
   });
 
   test('three high: done right where the arm reaches, else refused before moving', async () => {
@@ -232,15 +231,14 @@ describe('robot-side checks before a preview', async () => {
     let refused = 0;
     for (const [gx, gy] of [[300, 90], [250, 30], [330, 60], [360, 110]] as [number, number][]) {
       const { view, flow } = await fresh();
-      arm.putBlock('green', gx, gy, 0);
+      arm.putBlock('yellow', gx, gy, 0);
       arm.putBlock('red', 180, 120, 0);
       arm.putBlock('blue', 360, 160, 0);
-      arm.putBlock('yellow', 470, 240, 0);
       for (let i = 0; i < 100; i++) mj.mj_step(model, data);
-      await flow.handle(reply({ object: thing('red'), place: spot(gx, gy, 30, 'green') }));
+      await flow.handle(reply({ object: thing('red'), place: spot(gx, gy, 30, 'yellow') }));
       if (flow.state.kind !== 'preview') continue;
       const first = await settle(flow.go());
-      expect(first?.ok, `red onto green at ${gx}, ${gy}: ${first?.reason}`).toBe(true);
+      expect(first?.ok, `red onto yellow at ${gx}, ${gy}: ${first?.reason}`).toBe(true);
       const red = arm.block('red');
       expect(red.heightMm).toBeCloseTo(60, 0);
       await flow.handle(reply({ object: thing('blue'), place: spot(red.tableMm[0], red.tableMm[1], 60, 'red') }));
@@ -254,7 +252,7 @@ describe('robot-side checks before a preview', async () => {
       // Never knocked off: on top of the stack, 90 mm up.
       expect(arm.block('blue').heightMm).toBeCloseTo(90, 0);
       expect(Math.hypot(arm.block('blue').tableMm[0] - gx, arm.block('blue').tableMm[1] - gy)).toBeLessThan(6);
-      expect(flow.things().filter((t) => t.selectable).map((t) => t.id).sort()).toEqual(['blue', 'yellow']);
+      expect(flow.things().filter((t) => t.selectable).map((t) => t.id)).toEqual(['blue']);
       stacked++;
     }
     console.log(`three high: ${stacked} stacked, ${refused} refused`);
@@ -263,20 +261,9 @@ describe('robot-side checks before a preview', async () => {
     expect(stacked).toBe(4);
   });
 
-  test('four high: says it can only stack three, before moving', async () => {
-    const { view, flow } = await fresh();
-    arm.putBlock('green', 300, 90, 0);
-    arm.putBlock('red', 300, 90, 0, 30);
-    arm.putBlock('yellow', 300, 90, 0, 60);
-    for (let i = 0; i < 100; i++) mj.mj_step(model, data);
-    await flow.handle(reply({ object: thing('blue'), place: spot(300, 90, 90, 'yellow') }));
-    expect(flow.state.kind).toBe('idle');
-    expect(view.said.at(-1)).toBe(SAY.fourHigh);
-  });
-
   test('on itself', async () => {
     const { view, flow } = await fresh();
-    await flow.handle(reply({ object: thing('red'), place: spot(180, 120, 30, 'red') }));
+    await flow.handle(reply({ object: thing('red'), place: spot(180, 100, 30, 'red') }));
     expect(view.said).toEqual([SAY.onItself]);
   });
 

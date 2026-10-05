@@ -134,7 +134,6 @@ describe('raycast (plan 4.3)', async () => {
     // Blocks parked far out of the way, so every ray below reaches the table (or the arm).
     arm.putBlock('red', 480, 240);
     arm.putBlock('yellow', 470, 240);
-    arm.putBlock('green', 20, 240);
     arm.putBlock('blue', 30, 240);
     view.sync(data);
     const corners: [number, number][] = [
@@ -187,10 +186,9 @@ describe('raycast (plan 4.3)', async () => {
     // camera and raycast it the same way. This fixture pins the camera and a grid of real
     // raycasts; run with UPDATE_FIXTURES=1 after changing the camera to write it again.
     const blocks: [BlockId, number, number][] = [
-      ['red', 180, 120],
-      ['yellow', 225, 120],
-      ['green', 300, 90],
-      ['blue', 360, 150],
+      ['red', 180, 100],
+      ['yellow', 225, 100],
+      ['blue', 300, 90],
     ];
     for (const [id, x, y] of blocks) arm.putBlock(id, x, y, 0);
     for (let i = 0; i < 200; i++) mj.mj_step(model, data); // let them settle on the table
@@ -209,7 +207,7 @@ describe('raycast (plan 4.3)', async () => {
     const [ex, ey] = worldToTable(view.camera.position.x, view.camera.position.y);
     const fwd = view.camera.getWorldDirection(new THREE.Vector3());
     const view_ = {
-      about: 'The page camera in table mm, and real raycasts with 4 blocks (yaw 0). Written by web/tests/hand.test.ts.',
+      about: 'The page camera in table mm, and real raycasts with 3 blocks (yaw 0). Written by web/tests/hand.test.ts.',
       eye_mm: [ex, ey, view.camera.position.z * 1000].map((v) => Math.round(v * 1e4) / 1e4),
       // The direction in table axes: world X is table -y, world Y is table +x.
       forward: [fwd.y, -fwd.x, fwd.z].map((v) => Math.round(v * 1e8) / 1e8),

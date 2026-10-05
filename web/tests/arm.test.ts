@@ -63,7 +63,7 @@ describe('pick and place', () => {
         arm.putBlock(id, x, y, rand() * Math.PI);
       }
       step(0.3);
-      const id: BlockId = BLOCK_IDS[Math.floor(rand() * 4)];
+      const id: BlockId = BLOCK_IDS[Math.floor(rand() * BLOCK_IDS.length)];
       const [px, py] = spot(rand, taken);
       const res = (await run(arm.move(id, { xMm: px, yMm: py, zMm: 0 }))) as {
         ok: boolean;
@@ -88,11 +88,10 @@ describe('pick and place', () => {
     const { arm, step, run } = await setup();
     arm.goHomeNow();
     arm.putBlock('red', 150, 120, 0.4);
-    arm.putBlock('green', 320, 110, 0.2);
+    arm.putBlock('blue', 320, 110, 0.2);
     arm.putBlock('yellow', 250, 40);
-    arm.putBlock('blue', 400, 200);
     step(0.3);
-    const g = arm.block('green');
+    const g = arm.block('blue');
     const res = await run(arm.move('red', { xMm: g.tableMm[0], yMm: g.tableMm[1], zMm: 30 }));
     expect(res).toMatchObject({ ok: true });
     const r = arm.block('red');
@@ -104,9 +103,8 @@ describe('pick and place', () => {
     const { mj, model, data, arm, step } = await setup();
     arm.goHomeNow();
     arm.putBlock('red', 200, 100, 0.3);
-    arm.putBlock('green', 330, 80);
+    arm.putBlock('blue', 330, 80);
     arm.putBlock('yellow', 120, 200);
-    arm.putBlock('blue', 380, 200);
     step(0.3);
     const moving = arm.move('red', { xMm: 300, yMm: 120, zMm: 0 });
     for (let t = 0; arm.holding === null && t < 10; t += 0.05) step(0.05);

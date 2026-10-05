@@ -61,6 +61,11 @@ function cross(a: Vec3, b: Vec3): Vec3 {
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
+/** The horizontal part of a direction, made unit length. */
+function flat(v: Vec3): Vec3 {
+  const n = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / n, v[1] / n, 0];
+}
 function angle(a: Vec3, b: Vec3): number {
   return Math.atan2(Math.hypot(...cross(a, b)), dot(a, b));
 }
@@ -162,10 +167,10 @@ export class ArmKinematics {
   }
 
   /**
-   * The arm sinks more than `toleranceM` into itself in this pose (see `selfDepth`). Measured:
-   * 6 mm still grips (the hand stops that much short); 17 mm wrecked the pick (rahul, 6 Oct).
+   * The arm sinks more than `toleranceM` into itself in this pose (see `selfDepth`). Any real
+   * touch counts: even 6 mm stopped the hand 4 cm above a block once (6 Oct).
    */
-  selfHits(q: number[], gripper: number, toleranceM = 0.008): boolean {
+  selfHits(q: number[], gripper: number, toleranceM = 0.001): boolean {
     return this.selfDepth(q, gripper) > toleranceM;
   }
 
@@ -242,10 +247,13 @@ export class ArmKinematics {
         target.pos[2] - pose.pos[2],
       ];
       const ea = cross(pose.point, DOWN);
-      const ec = wantOpen ? cross(pose.open, wantOpen) : ([0, 0, 0] as Vec3);
+      // The yaw is the jaws' heading only (their direction seen from above), so the hand may
+      // still tip forward with the jaws facing the same way.
+      const heading = flat(pose.open);
+      const ec = wantOpen ? cross(heading, wantOpen) : ([0, 0, 0] as Vec3);
       const posErr = Math.hypot(...ep);
       const angErr = angle(pose.point, DOWN);
-      const yawErr = wantOpen ? angle(pose.open, wantOpen) : 0;
+      const yawErr = wantOpen ? angle(heading, wantOpen) : 0;
       if (posErr < POS_TOL_M && angErr < Math.max(ANG_TOL, maxTilt) && yawErr < ANG_TOL) break;
 
       this.mj.mj_comPos(m, d);
@@ -267,10 +275,8 @@ export class ArmKinematics {
         err.push(wAng * share * ea[r]);
       }
       if (wantOpen) {
-        for (let r = 0; r < 3; r++) {
-          rows.push(this.dofAdr.map((c) => wYaw * Jr[r * nv + c]));
-          err.push(wYaw * ec[r]);
-        }
+        rows.push(this.dofAdr.map((c) => wYaw * Jr[2 * nv + c])); // turning about up only
+        err.push(wYaw * ec[2]);
       }
       // (J^T J + lambda^2 I) dq = J^T e. A joint at its limit that the step would push past it
       // is left out and the step solved again, so the other joints do its share.
@@ -303,7 +309,7 @@ export class ArmKinematics {
       target.pos[2] - pose.pos[2],
     );
     const angErrDeg = (angle(pose.point, DOWN) * 180) / Math.PI;
-    const yawErrDeg = wantOpen ? (angle(pose.open, wantOpen) * 180) / Math.PI : 0;
+    const yawErrDeg = wantOpen ? (angle(flat(pose.open), wantOpen) * 180) / Math.PI : 0;
     return {
       q,
       posErrMm,

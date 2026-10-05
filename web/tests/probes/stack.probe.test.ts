@@ -14,7 +14,6 @@ test('stack reach', async () => {
   const arm = new Arm(mj, model, data);
   arm.goHomeNow();
   arm.putBlock('yellow', 470, 240);
-  arm.putBlock('green', 30, 240);
   arm.putBlock('blue', 20, 230);
   for (let i = 0; i < 100; i++) mj.mj_step(model, data);
   for (const z of [0, 30, 60]) {

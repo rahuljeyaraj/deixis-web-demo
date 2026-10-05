@@ -47,10 +47,10 @@ PHRASES = [
     ("Put the red block here.", "move", {"object": {"label": "red one"}, "place": that(4, "here")}),
     ("put the yellow box here", "move",
      {"object": {"label": "yellow one"}, "place": that(4, "here")}),
-    ("put that on the green cube", "move",
-     {"object": that(1), "place": {"relation": "on", "target": {"label": "green one"}}}),
-    ("put that to the left of the green one", "move",
-     {"object": that(1), "place": {"relation": "left_of", "target": {"label": "green one"}}}),
+    ("put that on the blue cube", "move",
+     {"object": that(1), "place": {"relation": "on", "target": {"label": "blue one"}}}),
+    ("put that to the left of the blue one", "move",
+     {"object": that(1), "place": {"relation": "left_of", "target": {"label": "blue one"}}}),
     ("put that behind the yellow one", "move",
      {"object": that(1), "place": {"relation": "behind", "target": {"label": "yellow one"}}}),
     ("pick up that and put it here", "move", {"object": that(2), "place": that(6, "here")}),
@@ -331,18 +331,18 @@ def test_here_pointed_onto_a_block_stacks_on_it(rules_api):
             "holds": [click(10, *CENTRES["red"]), click(11.5, 306, 84)]}  # fmt: skip
     body = post(rules_api, meta)
     place = body["result"]["calls"][0]["args"]["place"]
-    assert place["evidence"]["target"] == "green" and place["z_mm"] == 30
+    assert place["evidence"]["target"] == "blue" and place["z_mm"] == 30
     assert place["mean_mm"] == pytest.approx([300, 90], abs=0.5)
     assert body["notes"] == ["pointed onto a block: on top of it"]
-    # Red already on green: blue onto the stack lands on red, 60 mm up.
+    # Red already on blue: yellow onto the stack lands on red, 60 mm up.
     stacked = [dict(b) for b in BLOCKS]
     for b in stacked:
         if b["id"] == "red":
             b.update(box_mm=[285, 75, 30, 30], height_mm=60)
-        if b["id"] == "green":
+        if b["id"] == "blue":
             b.update(selectable=False)
     meta = {"text": "put that here", "things": stacked, "t": 12.0,
-            "holds": [click(10, *CENTRES["blue"]), click(11.5, 296, 93)]}  # fmt: skip
+            "holds": [click(10, *CENTRES["yellow"]), click(11.5, 296, 93)]}  # fmt: skip
     place = post(rules_api, meta)["result"]["calls"][0]["args"]["place"]
     assert place["evidence"]["target"] == "red" and place["z_mm"] == 60
     # A spot on the table next to a block stays a spot.

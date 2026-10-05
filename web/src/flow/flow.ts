@@ -12,7 +12,7 @@ import type { Ask, CoreResponse, ResolvedCall, Thing, Where } from '../core';
 import { isWhere } from '../core';
 import type { Arm, BlockId, BlockState, MoveResult, Place } from '../sim/arm';
 import { BLOCK_IDS } from '../sim/arm';
-import { BLOCK_MM, onMat } from '../sim/table';
+import { onMat } from '../sim/table';
 import { blockedBy, thingsFor, under } from './things';
 
 export type FlowState =
@@ -45,8 +45,6 @@ export const SAY = {
   cantReach: "I can't reach there. Please point somewhere closer.",
   inTheWay: 'The {block} block is in the way there.',
   tooHigh: "That stack is too high for me there. I can stack higher a bit further from me.",
-  // Four high needs the hand to tilt, and a tilted hand would tilt the block (rahul, 6 Oct).
-  fourHigh: 'I can stack three blocks high, but not four.',
   coveredObject: "There's a block on top of that one. Move that one first.",
   occupiedTarget: "There's already a block on that one.",
   onItself: "I can't put a block on itself.",
@@ -260,7 +258,6 @@ export class Flow {
       if (!onMat(place.xMm, place.yMm)) return SAY.cantReach;
       const inTheWay = onto ? null : blockedBy(place.xMm, place.yMm, blocks, [block]);
       if (inTheWay) return SAY.inTheWay.replace('{block}', inTheWay.id);
-      if (place.zMm >= 3 * BLOCK_MM - 5) return SAY.fourHigh;
       if (typeof this.arm.canMove(block, place) === 'string') return place.zMm > 0 ? SAY.tooHigh : SAY.cantReach;
       return null;
     })();

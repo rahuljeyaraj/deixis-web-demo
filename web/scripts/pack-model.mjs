@@ -19,7 +19,7 @@ const entries = [
   ['so101.xml', path.join(model, 'so101', 'so101.xml')],
   ...fs
     .readdirSync(path.join(model, 'so101', 'assets'))
-    .filter((f) => f.endsWith('.stl'))
+    .filter((f) => f.endsWith('.stl') && !f.includes('camera_mount')) // the mount is removed (NOTICE.md)
     .sort()
     .map((f) => [`assets/${f}`, path.join(model, 'so101', 'assets', f)]),
 ];

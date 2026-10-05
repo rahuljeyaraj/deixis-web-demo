@@ -71,10 +71,9 @@ const SPOT = [330, 50];
 await page.evaluate(() => {
   const { arm, flow } = window.__sim;
   arm.goHomeNow();
-  arm.putBlock('red', 180, 120, 0);
-  arm.putBlock('yellow', 225, 120, 0);
-  arm.putBlock('green', 300, 90, 0);
-  arm.putBlock('blue', 360, 150, 0);
+  arm.putBlock('red', 180, 100, 0);
+  arm.putBlock('yellow', 225, 100, 0);
+  arm.putBlock('blue', 300, 90, 0);
   flow.reset();
 });
 await page.waitForTimeout(800);
@@ -93,7 +92,7 @@ const screen = (x, y, z = 0) =>
     },
     [x, y, z],
   );
-const onRed = await screen(180, 120, 30);
+const onRed = await screen(180, 100, 30);
 const onSpot = await screen(...SPOT, 0);
 const rest = await screen(250, -40, 0);
 await page.mouse.move(...rest);

@@ -38,7 +38,7 @@ test('crowded moves', async () => {
   for (trial = 0; trial < Number(process.env.TRIALS ?? 60); trial++) {
     arm.goHomeNow();
     const spots: [number, number][] = [];
-    while (spots.length < 4) {
+    while (spots.length < BLOCK_IDS.length) {
       const r = REACH_MM.min + 20 + rand() * (REACH_MM.max - REACH_MM.min - 40);
       const a = (rand() - 0.5) * 2.0;
       const x = BASE_MM.x + r * Math.sin(a);
@@ -48,9 +48,9 @@ test('crowded moves', async () => {
     }
     BLOCK_IDS.forEach((id, i) => arm.putBlock(id, spots[i][0], spots[i][1], rand() * Math.PI));
     for (let i = 0; i < 100; i++) mj.mj_step(model, data);
-    const mover: BlockId = BLOCK_IDS[Math.floor(rand() * 4)];
+    const mover: BlockId = BLOCK_IDS[Math.floor(rand() * BLOCK_IDS.length)];
     const others = BLOCK_IDS.filter((b) => b !== mover);
-    const target = others[Math.floor(rand() * 3)];
+    const target = others[Math.floor(rand() * others.length)];
     const t = arm.block(target).tableMm;
     const kind = rand();
     let place;

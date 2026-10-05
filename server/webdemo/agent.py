@@ -78,8 +78,8 @@ class AgentResult:
 
 
 SYSTEM = """You turn what a person says to a small robot arm into the arm's tool calls.
-The arm stands at a table with four 30 mm blocks (people also say boxes or cubes): red,
-yellow, green and blue. The person points at blocks and spots on the table with a finger (or
+The arm stands at a table with three 30 mm blocks (people also say boxes or cubes): red,
+yellow and blue. The person points at blocks and spots on the table with a finger (or
 a mouse) while talking.
 
 Rules:

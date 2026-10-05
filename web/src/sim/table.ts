@@ -16,9 +16,10 @@ export const AREA_MM = { x: 0, y: 0, w: 500, h: 250 } as const;
 /**
  * The half ring around the base where the arm can both pick a block up and put one down, mm.
  * Measured on 5 Oct (tests/probes/reach2.probe.test.ts): places work from 130 to 310 mm, picks of a block
- * turned 0.3 rad from 130 to 280 mm.
+ * turned 0.3 rad from 130 to 280 mm. On 6 Oct the inner edge moved out to 140 mm: closer in,
+ * the gripper can touch the arm's own shoulder (tests/probes/inner.probe.test.ts).
  */
-export const REACH_MM = { min: 130, max: 280 } as const;
+export const REACH_MM = { min: 140, max: 280 } as const;
 
 /** The blocks are cubes of this size. */
 export const BLOCK_MM = 30;
