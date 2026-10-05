@@ -43,7 +43,8 @@ export interface FlowOptions {
 export const SAY = {
   confirm: 'This one, here?',
   cantReach: "I can't reach there. Please point somewhere closer.",
-  inTheWay: "There's a block in the way there.",
+  inTheWay: 'The {block} block is in the way there.',
+  tooHigh: "That stack is too high for me there. I can stack higher a bit further from me.",
   coveredObject: "There's a block on top of that one. Move that one first.",
   occupiedTarget: "There's already a block on that one.",
   onItself: "I can't put a block on itself.",
@@ -255,8 +256,9 @@ export class Flow {
       // The light mat is where the arm can both pick and place (plan 4.4); off it, say so,
       // even where the arm could just stretch.
       if (!onMat(place.xMm, place.yMm)) return SAY.cantReach;
-      if (!onto && blockedBy(place.xMm, place.yMm, blocks, [block])) return SAY.inTheWay;
-      if (typeof this.arm.canMove(block, place) === 'string') return SAY.cantReach;
+      const inTheWay = onto ? null : blockedBy(place.xMm, place.yMm, blocks, [block]);
+      if (inTheWay) return SAY.inTheWay.replace('{block}', inTheWay.id);
+      if (typeof this.arm.canMove(block, place) === 'string') return place.zMm > 0 ? SAY.tooHigh : SAY.cantReach;
       return null;
     })();
     if (why) {

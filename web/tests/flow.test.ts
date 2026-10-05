@@ -9,7 +9,7 @@ import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { CoreResponse, Thing } from '../src/core';
 import { Flow, type FlowView, SAY } from '../src/flow/flow';
-import { blockedBy, footprint, thingsFor } from '../src/flow/things';
+import { blockedBy, distanceToBlock, footprint, thingsFor } from '../src/flow/things';
 import { Arm, BLOCK_IDS, type BlockId, type BlockState } from '../src/sim/arm';
 import { nodeScene } from './scene';
 
@@ -198,10 +198,67 @@ describe('robot-side checks before a preview', async () => {
     expect(flow.state.kind).toBe('idle');
   });
 
-  test('a block in the way', async () => {
+  test('a block in the way, named', async () => {
     const { view, flow } = await fresh();
     await flow.handle(reply({ object: thing('red'), place: spot(305, 95) }));
-    expect(view.said).toEqual([SAY.inTheWay]);
+    expect(view.said).toEqual(['The green block is in the way there.']);
+  });
+
+  test('next to a block is fine; a turned block counts with its real corners', () => {
+    const square = { tableMm: [100, 100] as [number, number], yaw: 0 };
+    expect(distanceToBlock(100, 100, square)).toBe(0);
+    expect(distanceToBlock(135, 100, square)).toBeCloseTo(20, 6);
+    const turned = { tableMm: [100, 100] as [number, number], yaw: Math.PI / 4 };
+    expect(distanceToBlock(135, 100, turned)).toBeCloseTo(35 - 15 * Math.SQRT2, 6); // its corner
+    // 32 mm centre to centre, side by side: 2 mm apart, not in the way.
+    const blocks = BLOCK_IDS.map((id) => arm.block(id));
+    const green = arm.block('green').tableMm;
+    expect(blockedBy(green[0] + 32, green[1], blocks, [])).toBeNull();
+    expect(blockedBy(green[0] + 25, green[1], blocks, [])?.id).toBe('green');
+  });
+
+  test('three high: done right where the arm reaches, else refused before moving', async () => {
+    const settle = async <T>(p: Promise<T>): Promise<T> => {
+      for (let t = 0; arm.busy && t < 30; t += 0.1) {
+        for (let i = 0; i < 20; i++) {
+          arm.update();
+          mj.mj_step(model, data);
+        }
+      }
+      for (let i = 0; i < 60; i++) mj.mj_step(model, data);
+      return p;
+    };
+    let stacked = 0;
+    let refused = 0;
+    for (const [gx, gy] of [[300, 90], [250, 30], [330, 60], [360, 110]] as [number, number][]) {
+      const { view, flow } = await fresh();
+      arm.putBlock('green', gx, gy, 0);
+      arm.putBlock('red', 180, 120, 0);
+      arm.putBlock('blue', 360, 160, 0);
+      arm.putBlock('yellow', 470, 240, 0);
+      for (let i = 0; i < 100; i++) mj.mj_step(model, data);
+      await flow.handle(reply({ object: thing('red'), place: spot(gx, gy, 30, 'green') }));
+      if (flow.state.kind !== 'preview') continue;
+      const first = await settle(flow.go());
+      expect(first?.ok, `red onto green at ${gx}, ${gy}: ${first?.reason}`).toBe(true);
+      const red = arm.block('red');
+      expect(red.heightMm).toBeCloseTo(60, 0);
+      await flow.handle(reply({ object: thing('blue'), place: spot(red.tableMm[0], red.tableMm[1], 60, 'red') }));
+      if (flow.state.kind !== 'preview') {
+        expect(view.said.at(-1)).toBe(SAY.tooHigh);
+        refused++;
+        continue;
+      }
+      const second = await settle(flow.go());
+      expect(second?.ok, `blue onto red at ${gx}, ${gy}: ${second?.reason}`).toBe(true);
+      // Never knocked off: on top of the stack, 90 mm up.
+      expect(arm.block('blue').heightMm).toBeCloseTo(90, 0);
+      expect(Math.hypot(arm.block('blue').tableMm[0] - gx, arm.block('blue').tableMm[1] - gy)).toBeLessThan(6);
+      expect(flow.things().filter((t) => t.selectable).map((t) => t.id).sort()).toEqual(['blue', 'yellow']);
+      stacked++;
+    }
+    console.log(`three high: ${stacked} stacked, ${refused} refused`);
+    expect(stacked).toBeGreaterThan(0);
   });
 
   test('on itself', async () => {

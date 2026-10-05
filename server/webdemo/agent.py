@@ -78,8 +78,9 @@ class AgentResult:
 
 
 SYSTEM = """You turn what a person says to a small robot arm into the arm's tool calls.
-The arm stands at a table with four 30 mm blocks: red, yellow, green and blue. The person
-points at blocks and spots on the table with a finger (or a mouse) while talking.
+The arm stands at a table with four 30 mm blocks (people also say boxes or cubes): red,
+yellow, green and blue. The person points at blocks and spots on the table with a finger (or
+a mouse) while talking.
 
 Rules:
 - Reply only with tool calls. Never reply with plain text.
@@ -138,6 +139,7 @@ YES = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "correct", 
 NO = {"no", "nope", "cancel", "nevermind"}
 MOVE = {"put", "move", "place", "stack", "set", "take", "bring", "drop", "pick"}
 COLOURS = {"red", "yellow", "green", "blue"}
+BLOCK_WORDS = ("block", "blocks", "cube", "cubes", "box", "boxes")
 POINTING = {"this", "that", "these", "those", "here", "there"}
 SPOTS = {"here", "there"}
 LEFT, RIGHT = {"left"}, {"right"}
@@ -168,18 +170,18 @@ def _norm(words: Sequence[str]) -> list[str]:
 
 def _object_at(ws: list[str], i: int) -> tuple[dict[str, Any], int] | None:
     """An object reference starting at word i (skipping "the"), and the index after it."""
-    while i < len(ws) and ws[i] in ("the", "a", "block", "cube", "up"):
+    while i < len(ws) and ws[i] in ("the", "a", "up", *BLOCK_WORDS):
         i += 1
     if i >= len(ws):
         return None
     w = ws[i]
     if w in ("this", "that"):
-        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", "block", "cube"))
+        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", *BLOCK_WORDS))
         return {"deixis": w, "word_index": i}, end
     if w == "it":
         return {"last": True}, i + 1
     if w in COLOURS:
-        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", "block", "cube"))
+        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", *BLOCK_WORDS))
         return {"label": f"{w} one"}, end
     return None
 

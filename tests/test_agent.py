@@ -45,6 +45,10 @@ PHRASES = [
      {"object": that(1, "this"), "place": {"relation": "on", "target": that(5)}}),
     ("put it there", "move", {"object": {"last": True}, "place": that(2, "there")}),
     ("Put the red block here.", "move", {"object": {"label": "red one"}, "place": that(4, "here")}),
+    ("put the yellow box here", "move",
+     {"object": {"label": "yellow one"}, "place": that(4, "here")}),
+    ("put that on the green cube", "move",
+     {"object": that(1), "place": {"relation": "on", "target": {"label": "green one"}}}),
     ("put that to the left of the green one", "move",
      {"object": that(1), "place": {"relation": "left_of", "target": {"label": "green one"}}}),
     ("put that behind the yellow one", "move",
@@ -308,3 +312,41 @@ def test_spoken_put_that_here_with_the_finger(rules_api):
     args = res["calls"][0]["args"]
     assert args["object"]["thing"] == "red"
     assert args["place"]["mean_mm"] == pytest.approx(list(HERE), abs=3)
+
+
+def test_the_yellow_box_is_the_yellow_block(rules_api):
+    """rahul, 5 Oct: "yellow box" wasn't understood (the blocks are called blocks)."""
+    for name in ("box", "cube", "block"):
+        meta = {"text": f"put the yellow {name} here", "holds": [click(11.5, *HERE)],
+                "things": BLOCKS, "t": 12.0}  # fmt: skip
+        res = post(rules_api, meta)["result"]
+        assert res["status"] == "ok", (name, res)
+        assert res["calls"][0]["args"]["object"]["thing"] == "yellow"
+
+
+def test_here_pointed_onto_a_block_stacks_on_it(rules_api):
+    """rahul, 5 Oct: "put that here" pointing at a block said "a block in the way"; it means
+    on top of it. Off centre, and onto a stack of two (the top block)."""
+    meta = {"text": "put that here", "things": BLOCKS, "t": 12.0,
+            "holds": [click(10, *CENTRES["red"]), click(11.5, 306, 84)]}  # fmt: skip
+    body = post(rules_api, meta)
+    place = body["result"]["calls"][0]["args"]["place"]
+    assert place["evidence"]["target"] == "green" and place["z_mm"] == 30
+    assert place["mean_mm"] == pytest.approx([300, 90], abs=0.5)
+    assert body["notes"] == ["pointed onto a block: on top of it"]
+    # Red already on green: blue onto the stack lands on red, 60 mm up.
+    stacked = [dict(b) for b in BLOCKS]
+    for b in stacked:
+        if b["id"] == "red":
+            b.update(box_mm=[285, 75, 30, 30], height_mm=60)
+        if b["id"] == "green":
+            b.update(selectable=False)
+    meta = {"text": "put that here", "things": stacked, "t": 12.0,
+            "holds": [click(10, *CENTRES["blue"]), click(11.5, 296, 93)]}  # fmt: skip
+    place = post(rules_api, meta)["result"]["calls"][0]["args"]["place"]
+    assert place["evidence"]["target"] == "red" and place["z_mm"] == 60
+    # A spot on the table next to a block stays a spot.
+    meta = {"text": "put that here", "things": BLOCKS, "t": 12.0,
+            "holds": [click(10, *CENTRES["red"]), click(11.5, *HERE)]}  # fmt: skip
+    body = post(rules_api, meta)
+    assert body["notes"] == [] and body["result"]["calls"][0]["args"]["place"]["z_mm"] is None

@@ -29,6 +29,7 @@ from webdemo.command import (
     answer_by_label,
     answer_entry,
     nearest_candidate,
+    onto_pointed_block,
     say_for,
     typed_words,
 )
@@ -57,6 +58,31 @@ def load_speech(settings: Settings) -> Speech | None:
     except FileNotFoundError as e:
         log.warning("speech is off: %s", e)
         return None
+
+
+def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[str, Any] | None,
+                error: str | None, notes: list[str]) -> None:  # fmt: skip
+    """One line per command for the console: the words, the calls, what the core said. No
+    audio, no key, no address."""
+    said = " ".join(w["text"] for w in words)
+    calls = "; ".join(str(c) for c in agent.calls) or "-"
+    if error:
+        outcome = f"error: {error}"
+    elif result is None:
+        outcome = "not understood"
+    elif result["status"] == "ask":
+        outcome = f"ask {result['ask']['reason']}: {result['ask']['question']}"
+    else:
+        places = []
+        for c in result["calls"]:
+            for k, v in c["args"].items():
+                if isinstance(v, dict) and v.get("frame"):
+                    what = v.get("thing") or v.get("mean_mm")
+                    z = f" z{v['z_mm']:.0f}" if v.get("z_mm") else ""
+                    places.append(f"{c['name']}.{k}={what}{z}")
+        outcome = "ok " + ", ".join(places)
+    extra = f" ({'; '.join(notes)})" if notes else ""
+    log.info('command: "%s" -> %s [%s] -> %s%s', said, calls, agent.source, outcome, extra)
 
 
 class AnswerBody(BaseModel):
@@ -256,30 +282,37 @@ def create_app(
         result = error = None
         request: dict[str, Any] = {}
         entry = None if calls else await spoken_answer(sid, m, words)
+        notes: list[str] = []
+        t = time.perf_counter()
         if entry is not None:
-            t = time.perf_counter()
             result, error = await answer_open(sid, entry)
-            timings["core_s"] = round(time.perf_counter() - t, 3)
             agent_res.source = "answer"
-            timings["total_s"] = round(time.perf_counter() - t_start, 3)
             say = result["ask"]["question"] if result and result["status"] == "ask" else None
-            return {"words": words, "agent": agent_res.summary(), "result": result,
-                    "error": error, "say": say, "timings": timings}  # fmt: skip
-        if calls:
-            request = {"words": words, "samples": m.samples, "holds": m.holds,
-                       "things": m.things, "calls": calls, "context": m.context,
-                       "answers": m.answers}  # fmt: skip
-            t = time.perf_counter()
-            result, error = await resolve(request)
+        else:
+            if calls:
+                request = {"words": words, "samples": m.samples, "holds": m.holds,
+                           "things": m.things, "calls": calls, "context": m.context,
+                           "answers": m.answers}  # fmt: skip
+                result, error = await resolve(request)
+                again = onto_pointed_block(request, result) if result else None
+                if again is not None:
+                    result2, error2 = await resolve(again)
+                    if result2 is not None:
+                        request, result, error = again, result2, error2
+                        notes.append("pointed onto a block: on top of it")
+            remember(sid, request, result)
+            say = "Sorry, something went wrong." if error else say_for(result, calls)
+        if result is not None or entry is not None or calls:
             timings["core_s"] = round(time.perf_counter() - t, 3)
-        remember(sid, request, result)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
+        log_command(words, agent_res, result, error, notes)
         return {
             "words": words,
             "agent": agent_res.summary(),
             "result": result,
             "error": error,
-            "say": "Sorry, something went wrong." if error else say_for(result, calls),
+            "notes": notes,
+            "say": say,
             "timings": timings,
         }
 

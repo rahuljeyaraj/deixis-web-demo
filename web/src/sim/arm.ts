@@ -27,7 +27,11 @@ export const GRIPPER_SHUT = 0.0; // pushes on a 30 mm block (the jaws touch it n
 export const HOME = [0, -1.45, 0.75, 1.45, 0, 0.2];
 
 const Z_GRASP = 0.007; // fingertips about 4 mm above the table
-const LIFTS = [0.07, 0.058, 0.048]; // the highest that works: 0.07 clears a 30 mm block by 3 cm
+// The highest that works: 0.07 clears a 30 mm block by 3 cm. The low ones are for places on a
+// stack, where the arm can't go far straight up (clearUp then lifts the hand away).
+const LIFTS = [0.07, 0.058, 0.048, 0.035, 0.027, 0.02];
+// The site is 3 mm above the fingertips (Z_GRASP): this puts them 7 mm over the block, m.
+const CLEAR = 0.01;
 const STEPS = 4; // poses on each straight way up or down
 const GRIP_OFFSET = 0.0031; // block centre from the site along the opening axis, m
 const SPEED = 1.6; // rad/s for the largest joint in a move
@@ -296,7 +300,9 @@ export class Arm {
     const shut = GRIPPER_SHUT;
     const close = this.seg([...grasp.q, shut], grasp.q, 0.6);
     const lift = this.path([...down].reverse(), shut, 0.7);
-    const rest = this.carryAndPlace(b, planned, down[0]);
+    const top = want[2] + HALF; // the top of the block once it is down
+    const rest = this.carryAndPlace(b, planned, down[0], top);
+    if (!rest) return 'cant_reach'; // the hand couldn't get clear of the block it put down
     close.onEnd = () => {
       const local = this.grip(b, expected);
       const real = local ? this.placePath(local, want, down[0]) : null;
@@ -308,7 +314,7 @@ export class Arm {
         this.result = { ok: false, reason: 'slipped' };
         next.push(this.seg([...down[0], op], grasp.q), this.seg(HOME, down[0]));
       } else {
-        next.push(...this.carryAndPlace(b, real ?? planned, down[0]));
+        next.push(...((real && this.carryAndPlace(b, real, down[0], top)) || rest));
       }
       // Replace what follows the lift (the lift itself is already queued).
       const i = this.queue.indexOf(lift[lift.length - 1]);
@@ -321,7 +327,7 @@ export class Arm {
    * Carry from above the block to above the place, down, let go, up, home. `way` is the place
    * path from placePath: top first, then the place, then a pose 5 mm above it.
    */
-  private carryAndPlace(b: Block, way: number[][], from: number[]): Segment[] {
+  private carryAndPlace(b: Block, way: number[][], from: number[], blockTop: number): Segment[] | null {
     const op = GRIPPER_OPEN;
     const down = way.slice(0, -1);
     const placeQ = down[down.length - 1];
@@ -334,14 +340,32 @@ export class Arm {
     const letGo = this.seg([...eased, op], placeQ, 0.4);
     const rise = this.path([eased, ...[...down].reverse().slice(1)], op, 0.6);
     rise[rise.length - 1].onEnd = () => this.touchGripper(b, true);
+    const away = this.clearUp(down[0], blockTop);
+    if (!away) return null;
     return [
       this.seg([...down[0], GRIPPER_SHUT], from),
       ...this.path(down, GRIPPER_SHUT, 0.8),
       settle,
       letGo,
       ...rise,
-      this.seg(HOME, down[0]),
+      ...away,
     ];
+  }
+
+  /**
+   * Home from above a place. On a stack the way up may have been short (the arm can't go far
+   * straight up there), and if the open jaws still reach below the top of the block just put
+   * down, the way home sweeps it off: so the hand first rises until the fingertips clear it,
+   * tilting if it must. Null when it can't: near the base the SO-101 can't lift its hand
+   * above a stack of three (rahul, 5 Oct).
+   */
+  private clearUp(top: number[], blockTop: number): Segment[] | null {
+    const at = this.ik.fk(top).pos;
+    const want = blockTop + CLEAR;
+    if (at[2] >= want - 0.002) return [this.seg(HOME, top)];
+    const up = this.ik.solve({ pos: [at[0], at[1], want], yaw: null, maxTiltDeg: 70 }, top);
+    if (!up.ok) return null;
+    return [this.seg([...up.q, GRIPPER_OPEN], top, 0.4), this.seg(HOME, up.q)];
   }
 
   /**

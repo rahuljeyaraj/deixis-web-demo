@@ -35,7 +35,9 @@ export function thingsFor(blocks: BlockState[], movedAt: (id: string) => number)
   return blocks.map((b) => ({
     id: b.id,
     label: `${b.id} block`,
-    attrs: { color: b.id },
+    // The core matches every word said against the label and these values, so "the yellow
+    // box" and "the yellow cube" find the yellow block too (rahul, 5 Oct).
+    attrs: { color: b.id, also: 'box cube' },
     box_mm: footprint(b),
     height_mm: Math.round(b.heightMm * 10) / 10,
     t: movedAt(b.id),
@@ -44,24 +46,39 @@ export function thingsFor(blocks: BlockState[], movedAt: (id: string) => number)
   }));
 }
 
+/** Distance (mm) from a point to a block's real (turned) square footprint; 0 inside it. */
+export function distanceToBlock(x: number, y: number, b: Pick<BlockState, 'tableMm' | 'yaw'>): number {
+  // Into the block's own axes (any sign of turn works: a square is symmetric).
+  const dx = x - b.tableMm[0];
+  const dy = y - b.tableMm[1];
+  const c = Math.cos(b.yaw);
+  const s = Math.sin(b.yaw);
+  const u = Math.abs(c * dx + s * dy) - BLOCK_MM / 2;
+  const v = Math.abs(-s * dx + c * dy) - BLOCK_MM / 2;
+  return Math.hypot(Math.max(u, 0), Math.max(v, 0));
+}
+
 /**
- * Which other block a 30 mm block put at (x, y) would overlap, if any. `ignore`: the block
- * being moved, and the one it goes on top of.
+ * Which other block is in the way of a block put down at (x, y), if any. The block put down
+ * may end up turned any way, so it counts as its inner circle (15 mm) and needs `clearMm`
+ * more; the others count with their real, turned squares. `ignore`: the block being moved.
  */
 export function blockedBy(
   x: number,
   y: number,
   blocks: BlockState[],
   ignore: string[],
-  marginMm = 2,
+  clearMm = 1,
 ): BlockState | null {
-  const h = BLOCK_MM / 2;
+  let worst: BlockState | null = null;
+  let closest = BLOCK_MM / 2 + clearMm;
   for (const b of blocks) {
     if (ignore.includes(b.id)) continue;
-    const [bx, by, bw, bh] = footprint(b);
-    const overlapX = Math.min(x + h, bx + bw) - Math.max(x - h, bx);
-    const overlapY = Math.min(y + h, by + bh) - Math.max(y - h, by);
-    if (overlapX > marginMm && overlapY > marginMm) return b;
+    const d = distanceToBlock(x, y, b);
+    if (d < closest) {
+      closest = d;
+      worst = b;
+    }
   }
-  return null;
+  return worst;
 }

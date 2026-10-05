@@ -26,7 +26,7 @@ def block(name: str, t: float) -> dict:
     """A block as the page sends it (plan 6.2): footprint, height, colour."""
     cx, cy = CENTRES[name]
     return {"id": name, "label": f"{name} block", "box_mm": [cx - 15, cy - 15, 30, 30],
-            "height_mm": 30, "attrs": {"color": name}, "t": t}  # fmt: skip
+            "height_mm": 30, "attrs": {"color": name, "also": "box cube"}, "t": t}  # fmt: skip
 
 
 BLOCKS = [block(n, t) for t, n in enumerate(CENTRES, start=1)]

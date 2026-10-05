@@ -121,6 +121,34 @@ def answer_entry(ask: dict[str, Any], candidate: int) -> dict[str, Any]:
     return back
 
 
+def _inside(p: list[float] | None, box: list[float]) -> bool:
+    return bool(p) and box[0] <= p[0] <= box[0] + box[2] and box[1] <= p[1] <= box[1] + box[3]
+
+
+def onto_pointed_block(
+    request: dict[str, Any], result: dict[str, Any]
+) -> dict[str, Any] | None:
+    """ "Put that here" while pointing at another block means on top of it (rahul, 5 Oct:
+    stacking that way said "a block in the way"). For each move whose place was a pointing
+    word and whose pointed spot lies on another block, the same word becomes the target of
+    "on", so the core works out the block and the height. Robot-side glue, not a core change:
+    returns the request to resolve again, or None when nothing changes."""
+    calls = [dict(c) for c in request["calls"]]
+    changed = False
+    for rc in result.get("calls", []):
+        call = calls[rc["index"]]
+        place_ref = call["args"].get("place")
+        if call["name"] != "move" or not isinstance(place_ref, dict) or "deixis" not in place_ref:
+            continue
+        mean = (rc["args"].get("place") or {}).get("mean_mm")
+        moved = (rc["args"].get("object") or {}).get("thing")
+        if any(t["id"] != moved and _inside(mean, t["box_mm"]) for t in request["things"]):
+            call["args"] = {**call["args"], "place": {"relation": "on", "target": dict(place_ref)}}
+            calls[rc["index"]] = call
+            changed = True
+    return {**request, "calls": calls} if changed else None
+
+
 @dataclass
 class OpenAsk:
     request: dict[str, Any]

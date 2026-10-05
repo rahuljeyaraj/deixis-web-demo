@@ -12,7 +12,8 @@
    ],
    "height_mm": 30,
    "attrs": {
-    "color": "red"
+    "color": "red",
+    "also": "box cube"
    },
    "t": 1
   },
@@ -27,7 +28,8 @@
    ],
    "height_mm": 30,
    "attrs": {
-    "color": "yellow"
+    "color": "yellow",
+    "also": "box cube"
    },
    "t": 2
   },
@@ -42,7 +44,8 @@
    ],
    "height_mm": 30,
    "attrs": {
-    "color": "green"
+    "color": "green",
+    "also": "box cube"
    },
    "t": 3
   },
@@ -57,7 +60,8 @@
    ],
    "height_mm": 30,
    "attrs": {
-    "color": "blue"
+    "color": "blue",
+    "also": "box cube"
    },
    "t": 4
   }
