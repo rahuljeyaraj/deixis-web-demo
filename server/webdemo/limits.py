@@ -5,6 +5,10 @@ behind one network, or one visitor clearing cookies) `address`, and everyone tog
 (about $1 a day). Past any of them the visitor gets simple mode: the rule parser, with a
 banner. A visitor's own key skips the daily caps, not the burst limit.
 
+The demo is for the judges only (rahul, 5 Oct, D4): its address is given only in Devpost's
+private field, so the caps are set where no judge reaches them; they are there in case the
+address leaks. The address cap stops one person from using up everyone's day.
+
 A visitor is the random `sid` cookie; an address is a keyed hash of the IP address (IPv6 by
 its /64), made with a secret that lives only in this process, so it can't be turned back into
 the address. Everything is in memory and starts again at midnight UTC (and on a restart).
@@ -31,8 +35,8 @@ Why = Literal["visitor", "address", "total", "no_key", "rules"]
 
 @dataclass(frozen=True)
 class Caps:
-    visitor: int = 30  # Nemotron commands a day with our key, per visitor [D4]
-    address: int = 90  # per address: three visitors' worth, for a shared network
+    visitor: int = 500  # Nemotron commands a day with our key, per visitor: off in effect
+    address: int = 500  # per address (a network): no judge reaches it; a spammer stops here
     total: int = 2000  # for everyone, about $1 a day [D4]
     burst_s: float = 1.5  # one command per visitor this often (own key too)
     address_burst_s: float = 0.5  # and per address, looser for a shared network

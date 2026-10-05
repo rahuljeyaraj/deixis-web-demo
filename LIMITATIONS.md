@@ -42,14 +42,15 @@ below. These are simulator numbers; a real arm's error would be larger.
 
 ## L5. A day's share of the AI
 
-Nemotron runs on our Nebius key, so each visitor gets **30 commands a day** with it, a network
-90, and everyone together 2,000 (about $1). Past that, a **simple word matcher** answers
-instead, and a banner says so. It knows the demo's phrases ("put that here", "put the blue one
-next to that", "a bit left", "yes") but not free wording. A visitor can paste their own Nebius
-key to keep using Nemotron. One command can be sent every 1.5 s; the page waits by itself.
+The hosted demo is for the hackathon judges: its address is given only to them. Nemotron runs
+on our Nebius key, with a safety limit in case the address leaks: **2,000 commands a day** in
+all (about $1), and 500 a day from one network, so one person can't use up everyone's day.
+No judge should reach either. Past them, a **simple word matcher** answers instead, and a
+banner says so. It knows the demo's phrases ("put that here", "put the blue one next to
+that", "a bit left", "yes") but not free wording. A visitor can paste their own Nebius key to
+keep using Nemotron. One command can be sent every 1.5 s; the page waits by itself.
 
 The counts live in the server's memory: they start again at midnight UTC and when the server
-restarts. A visitor is a random cookie plus a scrambled form of their address, so clearing
-cookies doesn't give a new share, and people on one network share 90.
+restarts. A network is a scrambled form of the visitor's address, never logged.
 
 More items arrive as the finger, speech and the core are added (plan section 9).

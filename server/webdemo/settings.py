@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     # "rules": the rule parser only (tests, simple mode); "nemotron": Nemotron, rules if it fails.
     ai: Literal["nemotron", "rules"] = "nemotron"
 
-    # How much of our key each visitor may use (plan 8.1, open decision D4); see `limits.py`.
-    cap_visitor_per_day: int = 30
-    cap_address_per_day: int = 90
+    # How much of our key each visitor may use (plan 8.1, D4: judges only, 2,000 a day and 500
+    # per network, rahul 5 Oct); see `limits.py`.
+    cap_visitor_per_day: int = 500
+    cap_address_per_day: int = 500
     cap_total_per_day: int = 2000
     burst_s: float = 1.5
     # Proxies in front of the server (hosted: the Space's or Caddy's). The visitor's address is
