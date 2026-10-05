@@ -6,6 +6,7 @@ import json
 import re
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from deixis.profile import load_profile
 from webdemo.app import create_app
@@ -36,7 +37,7 @@ def test_info_has_the_profile_and_every_model(api):
 
 
 def test_info_never_shows_our_key(settings, core):
-    settings.nebius_api_key = "sk-our-secret-key-123"
+    settings.nebius_api_key = SecretStr("sk-our-secret-key-123")
     with TestClient(create_app(settings, client=core)) as c:
         assert "sk-our-secret-key-123" not in c.get("/api/info").text
         assert "sk-our-secret-key-123" not in c.get("/healthz").text

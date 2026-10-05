@@ -23,6 +23,15 @@ class Settings(BaseSettings):
     # "rules": the rule parser only (tests, simple mode); "nemotron": Nemotron, rules if it fails.
     ai: Literal["nemotron", "rules"] = "nemotron"
 
+    # How much of our key each visitor may use (plan 8.1, open decision D4); see `limits.py`.
+    cap_visitor_per_day: int = 30
+    cap_address_per_day: int = 90
+    cap_total_per_day: int = 2000
+    burst_s: float = 1.5
+    # Proxies in front of the server (hosted: the Space's or Caddy's). The visitor's address is
+    # then this many places from the right of `X-Forwarded-For`; 0: the connection's address.
+    proxy_hops: int = 0
+
     # How the server reaches the core: over MCP (a `deixis-mcp` child process) or in-process.
     deixis_mode: Literal["mcp", "direct"] = "mcp"
     # Hosted: a crashed `deixis-mcp` falls back to in-process calls (logged). Tests: none.

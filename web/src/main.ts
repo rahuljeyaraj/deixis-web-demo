@@ -5,7 +5,8 @@
  * places over MCP); and the flow (W9: preview, "This one, here?", yes, the arm moves).
  *
  * W10 adds the page around it: the start card, the thinking strip, the details panel, the
- * try-saying chips, the models list (plan 8.4), and typing instead of talking.
+ * try-saying chips, the models list (plan 8.4), and typing instead of talking. W11: the day's
+ * limits on our key, the simple-mode banner, and the visitor's own key (plan 8.1, 8.2).
  *
  * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests);
  * it and `?start=skip` skip the start card.
@@ -28,6 +29,7 @@ import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
 import { BASE_MM, BLOCK_MM, REACH_MM, onMat, tableToWorld } from './sim/table';
 import { fillDetails } from './ui/details';
+import { KeyPanel, ownKey } from './ui/key';
 import { fillModels, modelsUnavailable } from './ui/models';
 import { type StripModel, drawStrip, stripModel } from './ui/strip';
 import { speak } from './voice';
@@ -67,7 +69,8 @@ async function start(): Promise<void> {
   /** `?hands=demo`: a made-up hand points instead of the camera. */
   const synthetic = params.get('hands') === 'demo';
   if (synthetic || params.get('start') === 'skip') stage.classList.remove('starting');
-  showInfo();
+  const keys = new KeyPanel(document.getElementById('models-list')!);
+  showInfo(keys);
   const [mj, files] = await Promise.all([
     mujoco(),
     fetchPack('/so101.pack', (f) =>
@@ -167,13 +170,18 @@ async function start(): Promise<void> {
     usedClicksUntil = meta.t ?? now();
     flow.thinking();
     showStrip(wav ? 'Turning your voice into words…' : 'Thinking…', true);
-    const reply = await sendCommand(meta, wav);
+    const reply = await sendCommand(meta, wav, ownKey(), () => say('One moment…'));
     lastReply = reply;
+    const keyNote = keys.reply(reply);
     const heard = reply.words.map((w) => w.text).join(' ');
     showStrip(heard ? stripModel(reply.words, reply.result) : HINT);
     fillDetails(detailsBody, { ...reply, typed: !wav });
-    if (wav) say(heard ? `${prefix}You said: “${heard}”` : `${prefix}I didn't hear any words.`);
-    else say(`You typed: “${heard}”`);
+    const line = wav
+      ? heard
+        ? `${prefix}You said: “${heard}”`
+        : `${prefix}I didn't hear any words.`
+      : `You typed: “${heard}”`;
+    say(keyNote ? `${keyNote} ${line}` : line);
     await flow.handle(heard ? reply : { result: null, say: "Sorry, I didn't hear that. Try again?" });
   };
   const hitOf = (e: MouseEvent): Hit | null => {
@@ -456,8 +464,8 @@ async function start(): Promise<void> {
   });
 }
 
-/** The page's name and the models list (plan 8.4), from the server. */
-function showInfo(): void {
+/** The page's name, the models list (plan 8.4) and the day's limits (8.1), from the server. */
+function showInfo(keys: KeyPanel): void {
   const list = document.getElementById('models-list')!;
   const models = document.getElementById('models') as HTMLDetailsElement;
   document.getElementById('start-models')!.addEventListener('click', (e) => {
@@ -468,6 +476,7 @@ function showInfo(): void {
   getInfo().then(
     (info) => {
       fillModels(list, info);
+      keys.show(info.limits);
       for (const el of document.querySelectorAll('.page-title')) el.textContent = info.title;
       document.title = `${info.title}: put that here`;
     },

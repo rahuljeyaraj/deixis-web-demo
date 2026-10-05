@@ -34,6 +34,10 @@ class AgentUnavailable(RuntimeError):
     """Token Factory can't be used (no key, network error, timeout, a refused key)."""
 
 
+class KeyRefused(AgentUnavailable):
+    """Token Factory said no to the key (401 or 403)."""
+
+
 @dataclass
 class Context:
     """What the agent should know about the moment (from the page's state)."""
@@ -61,6 +65,8 @@ class AgentResult:
     errors: list[str] = field(default_factory=list)  # validation errors seen (and fixed?)
     attempts: int = 0
     latency_s: float = 0.0
+    asked_model: bool = False  # Nemotron was asked (it costs, even when it failed)
+    key_refused: bool = False  # Token Factory refused the key
 
     @property
     def ok(self) -> bool:
@@ -354,7 +360,7 @@ class ArmAgent:
             except Exception as e:  # openai errors, timeouts
                 status = getattr(e, "status_code", None)
                 if status in (401, 403):
-                    raise AgentUnavailable("the Nebius key was refused") from None
+                    raise KeyRefused("the Nebius key was refused") from None
                 raise AgentUnavailable(_scrub(f"{type(e).__name__}: {e}", key)) from None
             result.attempts = attempt + 1
             msg = resp.choices[0].message
@@ -382,24 +388,32 @@ class ArmAgent:
         return result
 
     def understand(
-        self, words: Sequence[str], key: str | None, context: Context | None = None
+        self,
+        words: Sequence[str],
+        key: str | None,
+        context: Context | None = None,
+        no_key_why: str = "no Nebius key: simple mode",
     ) -> AgentResult:
         """Nemotron if it answers with calls, else the rule parser (with why in `errors`).
-        "Stop" never waits for the model (about a second): the rule parser answers at once."""
+        "Stop" never waits for the model (about a second): the rule parser answers at once.
+        `no_key_why` is the reason given when there is no key (simple mode, plan 8.1)."""
         if parse(words, context) == [{"name": "stop", "args": {}}]:
             return rules(self.profile, words, context)
-        why = ""
+        why = no_key_why
+        refused = False
         if key:
             try:
                 res = self.run(words, key, context)
+                res.asked_model = True
                 if res.ok:
                     return res
                 why = "; ".join(res.errors)
             except AgentUnavailable as e:
                 why = str(e)
+                refused = isinstance(e, KeyRefused)
                 log.warning("nemotron unavailable, using the rule parser: %s", why)
-        else:
-            why = "no Nebius key: simple mode"
         res = rules(self.profile, words, context)
         res.errors = [why, *res.errors]
+        res.asked_model = bool(key)
+        res.key_refused = refused
         return res

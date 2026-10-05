@@ -4,22 +4,26 @@
  * real plotter and the real vacuum act on), and how long each step took.
  */
 
-import type { AgentSummary, HeardWord, Timings } from '../api';
+import type { AgentSummary, HeardWord, Limits, Timings } from '../api';
 import type { CoreResponse } from '../core';
 
 export interface DetailsInput {
   words?: HeardWord[];
   typed?: boolean;
   agent?: AgentSummary;
+  limits?: Limits;
   result: CoreResponse | null;
   error?: string | null;
   timings: Timings;
 }
 
-/** Who understood the words, in plain words. */
-export function understoodBy(agent: AgentSummary | undefined): string {
+/** Who understood the words, in plain words; `mode`: whose key (plan 8.1, 8.2). */
+export function understoodBy(agent: AgentSummary | undefined, mode?: Limits['mode']): string {
   if (!agent) return 'Your answer to the robot’s question (no language model needed).';
-  if (agent.source === 'nemotron') return `NVIDIA Nemotron 3.5 Lightning (${agent.model}), on Nebius Token Factory.`;
+  if (agent.source === 'nemotron') {
+    const whose = mode === 'own' ? ', with your own key' : '';
+    return `NVIDIA Nemotron 3.5 Lightning (${agent.model}), on Nebius Token Factory${whose}.`;
+  }
   if (agent.source === 'answer') return 'Your answer to the robot’s question (no language model needed).';
   const why = agent.errors.length ? ` Nemotron didn’t answer (${agent.errors[0]}).` : '';
   return `The simple word matcher (no AI model).${why}`;
@@ -85,7 +89,7 @@ export function fillDetails(body: HTMLElement, d: DetailsInput): void {
     const said = d.words.map((w) => w.text).join(' ') || '(no words)';
     parts.push(section(d.typed ? 'You typed' : 'Heard (NVIDIA Parakeet, with the time of each word)', said));
   }
-  parts.push(section('Understood by', understoodBy(d.agent)));
+  parts.push(section('Understood by', understoodBy(d.agent, d.limits?.mode)));
   if (d.agent && d.agent.calls.length) {
     parts.push(section('The tool calls it wrote (words, never coordinates)', pre(d.agent.calls.map(callLine).join('\n'))));
   }

@@ -45,9 +45,10 @@ def speech() -> Iterator[Speech | None]:
 
 @pytest.fixture
 def settings(tmp_path) -> Settings:
-    # No .env, no key, no built page unless a test makes one; speech comes from the fixture.
+    # No .env, no key, no built page unless a test makes one; speech comes from the fixture;
+    # no burst limit (tests send commands fast; `test_limits.py` turns it on).
     return Settings(_env_file=None, nebius_api_key=None, web_dist=tmp_path / "no-dist",
-                    deixis_fallback="none", asr_enabled=False)  # fmt: skip
+                    deixis_fallback="none", asr_enabled=False, burst_s=0)  # fmt: skip
 
 
 @pytest.fixture

@@ -8,13 +8,25 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
-from fastapi import Cookie, FastAPI, File, Form, Header, HTTPException, Response, UploadFile
+from fastapi import (
+    Cookie,
+    FastAPI,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -33,12 +45,14 @@ from webdemo.command import (
     say_for,
     typed_words,
 )
+from webdemo.limits import NO_KEY_WHY, Caps, Limits, Mode, Why, view
 from webdemo.models import NOT_USED, models_in_use
 from webdemo.settings import Settings
 from webdemo.speech import ClipError, Speech
 
 MAX_META_BYTES = 1_000_000  # plan 7.2
 MAX_AUDIO_BYTES = 44 + 12 * 16000 * 2 + 1024  # 12 s of 16 kHz 16-bit mono, plus a header
+MAX_KEY_CHARS = 4096
 
 log = logging.getLogger("webdemo")
 
@@ -61,9 +75,9 @@ def load_speech(settings: Settings) -> Speech | None:
 
 
 def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[str, Any] | None,
-                error: str | None, notes: list[str]) -> None:  # fmt: skip
-    """One line per command for the console: the words, the calls, what the core said. No
-    audio, no key, no address."""
+                error: str | None, notes: list[str], mode: str = "") -> None:  # fmt: skip
+    """One line per command for the console: the words, the calls, what the core said, and
+    whose key (ours, own, simple). No audio, no key, no address."""
     said = " ".join(w["text"] for w in words)
     calls = "; ".join(str(c) for c in agent.calls) or "-"
     if error:
@@ -82,7 +96,8 @@ def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[st
                     places.append(f"{c['name']}.{k}={what}{z}")
         outcome = "ok " + ", ".join(places)
     extra = f" ({'; '.join(notes)})" if notes else ""
-    log.info('command: "%s" -> %s [%s] -> %s%s', said, calls, agent.source, outcome, extra)
+    source = f"{agent.source}, {mode}" if mode else agent.source
+    log.info('command: "%s" -> %s [%s] -> %s%s', said, calls, source, outcome, extra)
 
 
 class AnswerBody(BaseModel):
@@ -96,13 +111,19 @@ def create_app(
     client: DeixisClient | None = None,
     speech: Speech | None = None,
     llm_factory: Callable[[str], Any] | None = None,
+    limits: Limits | None = None,
 ) -> FastAPI:
     """The app. Tests pass their own `client` (over MCP, `fallback=None`) and `speech` (loaded
     once per test session), and keep them; `llm_factory(key)` makes the OpenAI-like client for
-    Nemotron (tests pass a fake)."""
+    Nemotron (tests pass a fake); `limits` (tests pass one with their own clock)."""
     settings = settings or Settings()
     profile = load_profile(settings.profile)
     sessions = Sessions()
+    limits = limits or Limits(
+        Caps(visitor=settings.cap_visitor_per_day, address=settings.cap_address_per_day,
+             total=settings.cap_total_per_day, burst_s=settings.burst_s,
+             address_burst_s=settings.burst_s / 3)
+    )  # fmt: skip
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -128,6 +149,7 @@ def create_app(
     app = FastAPI(title="deixis web demo", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.sessions = sessions
+    app.state.limits = limits
 
     @app.get("/healthz")
     def healthz() -> dict[str, Any]:
@@ -145,26 +167,61 @@ def create_app(
             "speech": {"loaded": app.state.speech is not None},
         }  # fmt: skip
 
+    def visitor(response: Response, sid: str | None) -> str:
+        """The visitor's random id (a cookie), made on the first visit."""
+        if not sid or len(sid) > 64:
+            sid = Sessions.new_id()
+            response.set_cookie("sid", sid, httponly=True, samesite="strict", max_age=86400)
+        return sid
+
+    def address(request: Request) -> str:
+        """The visitor's address, hashed (plan 8.1). Behind proxies, the one our outermost
+        proxy saw (`proxy_hops` from the right of `X-Forwarded-For`); never the left end,
+        which anyone can write."""
+        ip = request.client.host if request.client else "unknown"
+        if settings.proxy_hops > 0:
+            seen = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",")]
+            seen = [h for h in seen if h]
+            if len(seen) >= settings.proxy_hops:
+                ip = seen[-settings.proxy_hops]
+        return limits.address_of(ip)
+
+    def our_key(sid: str, addr: str) -> tuple[str | None, Why | None]:
+        """Our key if this visitor may use it now, else why not (simple mode)."""
+        if settings.ai == "rules":
+            return None, "rules"
+        if not settings.nebius_api_key:
+            return None, "no_key"
+        _, why = limits.left(sid, addr)
+        return (None, why) if why else (settings.nebius_api_key.get_secret_value(), None)
+
+    def limits_now(sid: str, addr: str, mode: Mode, why: Why | None) -> dict[str, Any]:
+        left, _ = limits.left(sid, addr)
+        if why in ("rules", "no_key"):
+            left = 0
+        return view(mode, left, limits.caps.visitor, why)
+
     @app.get("/api/info")
-    def info() -> dict[str, Any]:
+    def info(request: Request, response: Response,
+             sid: Annotated[str | None, Cookie()] = None) -> dict[str, Any]:  # fmt: skip
         core: DeixisClient = app.state.deixis
         described = core.describe()
+        sid = visitor(response, sid)
+        addr = address(request)
+        key, why = our_key(sid, addr)
+        lim = limits_now(sid, addr, "ours" if key else "simple", why)
+        key = None
+        models = models_in_use(settings.nemotron_model, off=lim["off"])
         return {
             "title": settings.title,
             "version": __version__,
             "core": {"version": described["version"], "schema_version": described["schema_version"],
                      "over_mcp": core.over_mcp},
             "profile": described["profile"],
-            "models": models_in_use(settings.nemotron_model),
+            "models": models,
             "not_used": NOT_USED,
+            "limits": lim,
         }  # fmt: skip
-
-    def visitor(response: Response, sid: str | None) -> str:
-        """The visitor's random id (a cookie), made on the first command."""
-        if not sid or len(sid) > 64:
-            sid = Sessions.new_id()
-            response.set_cookie("sid", sid, httponly=True, samesite="strict", max_age=86400)
-        return sid
 
     async def resolve(request: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
         """The core's answer over MCP, as JSON; or why it refused the request."""
@@ -221,19 +278,35 @@ def create_app(
             return None if picked is None else answer_entry(ask, picked)
         return {"call": ask.get("call") or 0, "arg": ask["arg"], "where": where}  # which spot
 
-    @app.post("/api/command")
+    @app.post("/api/command", response_model=None)
     async def command(
+        request: Request,
         response: Response,
         meta: Annotated[str, Form()],
         audio: Annotated[UploadFile | None, File()] = None,
         x_nebius_key: Annotated[str | None, Header()] = None,
         sid: Annotated[str | None, Cookie()] = None,
-    ) -> dict[str, Any]:
+    ) -> dict[str, Any] | JSONResponse:
         """One command (plan 4.2, 7.2): words (from the clip, or typed), the agent's tool
         calls, the core's places over MCP. A visitor's own key (`X-Nebius-Key`) is used for
-        this request's Nemotron call only; it is never stored, logged or sent back."""
+        this request's Nemotron call only; it is never stored, logged or sent back. Our key
+        is used within the day's limits (plan 8.1), else the rule parser (simple mode)."""
         t_start = time.perf_counter()
         sid = visitor(response, sid)
+        addr = address(request)
+        own = (x_nebius_key or "").strip() or None
+        x_nebius_key = None
+        if own is not None and len(own) > MAX_KEY_CHARS:
+            raise HTTPException(400, "that key is too long")
+        wait = limits.wait_s(sid, addr)
+        if wait > 0:  # the burst limit (R9); the page waits and sends it again
+            busy = JSONResponse(
+                {"detail": "one command at a time, please", "wait_s": wait}, status_code=429,
+                headers={"Retry-After": str(math.ceil(wait))},
+            )  # fmt: skip
+            for cookie in response.headers.getlist("set-cookie"):
+                busy.headers.append("set-cookie", cookie)
+            return busy
         if len(meta) > MAX_META_BYTES:
             raise HTTPException(413, "meta is over 1 MB")
         try:
@@ -262,19 +335,38 @@ def create_app(
         else:
             raise HTTPException(400, "send a clip (audio) or a typed sentence (meta.text)")
 
-        # The agent: Nemotron with the visitor's key or ours, else the rule parser.
+        # The agent: Nemotron with the visitor's own key, or ours within the day's limits;
+        # else the rule parser (simple mode). A refused own key: as if none was sent.
         texts = [w["text"] for w in words]
         agent: ArmAgent = app.state.agent
-        ours = settings.nebius_api_key.get_secret_value() if settings.nebius_api_key else None
-        key = None if settings.ai == "rules" else (x_nebius_key or ours)
         context = Context(previewing=m.state.previewing, question=m.state.question)
+        loop = asyncio.get_running_loop()
+
+        async def understand(key: str | None, why: Why | None) -> AgentResult:
+            no_key_why = NO_KEY_WHY[why or "no_key"]
+            return await loop.run_in_executor(
+                None, agent.understand, texts, key, context, no_key_why
+            )
+
+        if settings.ai == "rules":
+            own = None
+        agent_res = AgentResult([], source="rules", model="rules", errors=["no words"])
+        key_refused = False
+        mode: Mode = "own"
+        why: Why | None = None
         t = time.perf_counter()
-        if texts:
-            loop = asyncio.get_running_loop()
-            agent_res = await loop.run_in_executor(None, agent.understand, texts, key, context)
-        else:
-            agent_res = AgentResult([], source="rules", model="rules", errors=["no words"])
-        key = ours = None
+        if texts and own:
+            agent_res = await understand(own, None)
+            key_refused = agent_res.key_refused
+        if key_refused or not own:
+            key, why = our_key(sid, addr)
+            mode = "ours" if key else "simple"
+            if texts:
+                agent_res = await understand(key, why)
+                if key and agent_res.asked_model:
+                    limits.spend(sid, addr)
+            key = None
+        own = None
         timings["agent_s"] = round(time.perf_counter() - t, 3)
 
         # The core: every reference to a place or a block, over MCP.
@@ -305,7 +397,10 @@ def create_app(
         if result is not None or entry is not None or calls:
             timings["core_s"] = round(time.perf_counter() - t, 3)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
-        log_command(words, agent_res, result, error, notes)
+        whose = f"{mode} key" if mode != "simple" else f"simple: {why}"
+        if key_refused:
+            whose = f"own key refused, {whose}"
+        log_command(words, agent_res, result, error, notes, whose)
         return {
             "words": words,
             "agent": agent_res.summary(),
@@ -314,6 +409,8 @@ def create_app(
             "notes": notes,
             "say": say,
             "timings": timings,
+            "limits": limits_now(sid, addr, mode, why),
+            "key_refused": key_refused,
         }
 
     @app.post("/api/answer")
@@ -347,6 +444,10 @@ def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    # Only warnings from the HTTP libraries: their request lines are noise, and their debug
+    # lines carry request details. Ours never carry a key (plan 8.2).
+    for name in ("openai", "httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
     settings = Settings()
     uvicorn.run(create_app(settings), host=settings.host, port=settings.port)
 

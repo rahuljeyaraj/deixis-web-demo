@@ -157,3 +157,29 @@ footer details .off { color: #b45309; font-weight: 600; }
 #models-list > p { margin: 8px 14px; }
 #models-list .small { margin: 4px 16px 10px; }
 .foot-link { padding: 9px 4px; font-size: 15px; }
+
+/* Simple mode (plan 8.1): the word matcher answers instead of Nemotron. */
+#banner { display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px;
+  padding: 8px 14px; border: 1.5px solid #e0a43a; border-radius: 10px; background: #fff4dc;
+  color: #6b3d00; font-size: 15px; }
+#banner[hidden], #banner-key[hidden] { display: none; }
+#banner .link { margin-left: 0; padding: 0; font-size: 15px; font-weight: 600; }
+
+/* Use your own Nebius key (plan 8.2). */
+#own-key > summary { font-weight: 600; }
+.key-body { padding: 4px 14px 10px; font-size: 14.5px; }
+.key-body > p { margin: 6px 0; }
+.key-row { display: flex; gap: 8px; flex-wrap: wrap; }
+#key-box { flex: 1 1 180px; min-width: 0; padding: 8px 10px; border: 2px solid var(--line);
+  border-radius: 8px; font: inherit; font-size: 15px; }
+#key-box:focus { border-color: var(--blue); outline: none; }
+#key-save { padding: 8px 16px; border: 0; border-radius: 8px; background: var(--blue); color: white;
+  font: inherit; font-weight: 600; cursor: pointer; }
+/* Before a key is saved: the box and Save. After: only Forget (the box would be empty). */
+#key-forget, #own-key.has-key #key-box, #own-key.has-key #key-save { display: none; }
+#own-key.has-key #key-forget { display: inline-block; }
+#key-forget { padding: 8px 14px; border: 2px solid #9aa3b2; border-radius: 8px; background: white;
+  color: var(--ink); font: inherit; cursor: pointer; }
+#key-status { min-height: 1.2em; font-weight: 600; color: #166534; }
+#key-status:empty { display: none; }
+#key-status.bad { color: #b42318; }

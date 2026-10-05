@@ -17,15 +17,11 @@ function link(text: string, href: string): HTMLAnchorElement {
 export function fillModels(list: HTMLElement, info: Info): void {
   const items = info.models.map((m) => {
     const li = document.createElement('li');
+    li.dataset.id = m.id;
     const role = document.createElement('b');
     role.textContent = `${m.role}: `;
     li.append(role, link(m.name, m.url), ` (${m.by}), ${m.where}.`);
-    if (m.off) {
-      const off = document.createElement('span');
-      off.className = 'off';
-      off.textContent = ` (${m.off})`;
-      li.append(off);
-    }
+    setOff(li, m.off ?? null);
     return li;
   });
   for (const n of info.not_used) {
@@ -45,6 +41,22 @@ export function fillModels(list: HTMLElement, info: Info): void {
     (info.core.over_mcp ? 'reached over MCP. ' : 'called directly (MCP is down right now). ') +
     `This page ${info.version}.`;
   list.replaceChildren(ul, core);
+}
+
+function setOff(li: HTMLElement, text: string | null): void {
+  li.querySelector('.off')?.remove();
+  if (!text) return;
+  const off = document.createElement('span');
+  off.className = 'off';
+  off.textContent = ` (${text})`;
+  li.append(off);
+}
+
+/** Mark one model as off right now (simple mode: "off right now: today's budget is used
+ * up"), or on again (`null`). */
+export function setModelOff(list: HTMLElement, id: string, text: string | null): void {
+  const li = list.querySelector<HTMLElement>(`li[data-id="${id}"]`);
+  if (li) setOff(li, text);
 }
 
 export function modelsUnavailable(list: HTMLElement): void {

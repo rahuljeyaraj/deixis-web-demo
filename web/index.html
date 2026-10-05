@@ -9,6 +9,11 @@
   </head>
   <body>
     <main id="app">
+      <!-- Simple mode (plan 8.1): only when the word matcher answers instead of Nemotron. -->
+      <div id="banner" role="status" hidden>
+        <span id="banner-text"></span>
+        <button id="banner-key" type="button" class="link">Add your own Nebius key to use Nemotron</button>
+      </div>
       <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). -->
       <div id="chips" aria-label="Try saying">
         <span class="chips-label">Try saying:</span>
@@ -76,12 +81,28 @@
           <summary>What runs this demo</summary>
           <div id="models-list"><p>Loading…</p></div>
         </details>
+        <details id="own-key">
+          <summary>Use your own Nebius key</summary>
+          <div class="key-body">
+            <p>You don’t need one. With your own key, Nemotron answers you even when today’s free commands are used up. <a href="https://tokenfactory.nebius.com/" target="_blank" rel="noopener">Get a key from Nebius Token Factory</a>.</p>
+            <div class="key-row">
+              <input id="key-box" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your Nebius key" aria-label="Your Nebius key" />
+              <button id="key-save" type="button">Save</button>
+              <button id="key-forget" type="button">Forget my key</button>
+            </div>
+            <p id="key-status" aria-live="polite"></p>
+            <p class="small">Your key goes to our server only to call Nebius for your own commands. It isn’t saved or logged, and it’s gone when you close this tab.</p>
+            <p id="key-left" class="small"></p>
+          </div>
+        </details>
         <details id="privacy">
           <summary>Privacy</summary>
           <ul>
             <li>Your camera video never leaves your browser. The hand tracking runs here; only the fingertip’s points on the table are sent.</li>
             <li>Your voice is sent once per command, turned into words in memory, then dropped. It is never saved.</li>
             <li>The server writes one line per command to its log: the words and what the robot did. No audio, no video, no address.</li>
+            <li>To share the free AI commands fairly, the server counts today’s commands per visitor, by a random cookie and a scrambled form of your address. The counts stay in memory and are never logged.</li>
+            <li>If you add your own Nebius key, it is sent with each command only to call Nebius. It is never saved or logged.</li>
           </ul>
         </details>
         <a class="foot-link" href="https://github.com/rahuljeyaraj/deixis" target="_blank" rel="noopener">The deixis core on GitHub</a>

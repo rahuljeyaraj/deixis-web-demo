@@ -8,10 +8,12 @@ from __future__ import annotations
 from typing import Any
 
 
-def models_in_use(nemotron_model: str, simple_mode: bool = False) -> list[dict[str, Any]]:
-    """The panel's lines in order. `simple_mode`: today's AI budget is used up (plan 8.1)."""
+def models_in_use(nemotron_model: str, off: str | None = None) -> list[dict[str, Any]]:
+    """The panel's lines in order. `off`: why Nemotron is off for this visitor right now
+    (simple mode, plan 8.1), else None."""
     return [
         {
+            "id": "mediapipe",
             "role": "Hand tracking",
             "name": "MediaPipe Hand Landmarker",
             "by": "Google",
@@ -19,6 +21,7 @@ def models_in_use(nemotron_model: str, simple_mode: bool = False) -> list[dict[s
             "url": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
         },
         {
+            "id": "parakeet",
             "role": "Speech to words, with the time of each word",
             "name": "NVIDIA Parakeet TDT 0.6B v2",
             "by": "NVIDIA",
@@ -26,15 +29,17 @@ def models_in_use(nemotron_model: str, simple_mode: bool = False) -> list[dict[s
             "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2",
         },
         {
+            "id": "nemotron",
             "role": "Understanding what you asked",
             "name": "NVIDIA Nemotron 3.5 Lightning",
             "by": "NVIDIA",
             "where": "on Nebius Token Factory; it turns your words into the robot's tool calls",
             "url": "https://nebius.com/services/token-factory/nemotron",
             "model_id": nemotron_model,
-            "off": "off right now: today's budget is used up" if simple_mode else None,
+            "off": off,
         },
         {
+            "id": "deixis",
             "role": 'Finding "here" and "that"',
             "name": "the deixis core",
             "by": "open source, MIT",
@@ -45,6 +50,7 @@ def models_in_use(nemotron_model: str, simple_mode: bool = False) -> list[dict[s
             "url": "https://github.com/rahuljeyaraj/deixis",
         },
         {
+            "id": "mujoco",
             "role": "The arm",
             "name": "MuJoCo physics, with the SO-101 arm from MuJoCo Menagerie",
             "by": "Google DeepMind; the arm model by The Robot Studio",
@@ -52,6 +58,7 @@ def models_in_use(nemotron_model: str, simple_mode: bool = False) -> list[dict[s
             "url": "https://github.com/google-deepmind/mujoco_menagerie/tree/main/robotstudio_so101",
         },
         {
+            "id": "voice",
             "role": "The robot's voice",
             "name": "your browser's own voice",
             "by": "your browser",
