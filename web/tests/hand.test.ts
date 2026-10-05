@@ -14,7 +14,7 @@ import { Arm, type BlockId } from '../src/sim/arm';
 import { solveLinear } from '../src/sim/ik';
 import { pointAt } from '../src/sim/pick';
 import { TableView } from '../src/sim/render';
-import { AREA_MM, BLOCK_MM, tableToWorld } from '../src/sim/table';
+import { AREA_MM, BLOCK_MM, tableToWorld, worldToTable } from '../src/sim/table';
 import { nodeScene } from './scene';
 
 interface Case {
@@ -180,5 +180,57 @@ describe('raycast (plan 4.3)', async () => {
 
   test('a ray that misses the table is null', () => {
     expect(pointAt(view, 0.5, 0.0, blockOfGeom)).toBeNull(); // the sky above the table
+  });
+
+  test("the server tests' view (tests/fixtures/view.json) is this view", () => {
+    // The Python tests (tests/test_arm_core.py) point a made-up fingertip through the same
+    // camera and raycast it the same way. This fixture pins the camera and a grid of real
+    // raycasts; run with UPDATE_FIXTURES=1 after changing the camera to write it again.
+    const blocks: [BlockId, number, number][] = [
+      ['red', 180, 120],
+      ['yellow', 225, 120],
+      ['green', 300, 90],
+      ['blue', 360, 150],
+    ];
+    for (const [id, x, y] of blocks) arm.putBlock(id, x, y, 0);
+    for (let i = 0; i < 200; i++) mj.mj_step(model, data); // let them settle on the table
+    view.sync(data);
+    const cases: { canvas: [number, number]; hit: { x: number; y: number; z: number; block: string | null } | null }[] = [];
+    const add = (fx: number, fy: number) => {
+      const h = pointAt(view, fx, fy, blockOfGeom);
+      const r = (v: number) => Math.round(v * 1e4) / 1e4;
+      cases.push({ canvas: [r(fx), r(fy)], hit: h && { x: r(h.x), y: r(h.y), z: r(h.z), block: h.block } });
+    };
+    for (let fy = 0.3; fy < 0.99; fy += 0.05) for (let fx = 0.05; fx < 0.99; fx += 0.1) add(fx, fy);
+    for (const [id] of blocks) {
+      const b = arm.block(id);
+      add(...screenOf(b.tableMm[0], b.tableMm[1], BLOCK_MM));
+    }
+    const [ex, ey] = worldToTable(view.camera.position.x, view.camera.position.y);
+    const fwd = view.camera.getWorldDirection(new THREE.Vector3());
+    const view_ = {
+      about: 'The page camera in table mm, and real raycasts with 4 blocks (yaw 0). Written by web/tests/hand.test.ts.',
+      eye_mm: [ex, ey, view.camera.position.z * 1000].map((v) => Math.round(v * 1e4) / 1e4),
+      // The direction in table axes: world X is table -y, world Y is table +x.
+      forward: [fwd.y, -fwd.x, fwd.z].map((v) => Math.round(v * 1e8) / 1e8),
+      fov_deg: view.camera.fov,
+      aspect: view.camera.aspect,
+      blocks: blocks.map(([id]) => ({ id, center_mm: arm.block(id).tableMm.map((v) => Math.round(v * 1e3) / 1e3) })),
+      block_mm: BLOCK_MM,
+      cases,
+    };
+    const file = path.join(import.meta.dirname, '..', '..', 'tests', 'fixtures', 'view.json');
+    if (process.env.UPDATE_FIXTURES || !fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify(view_, null, 1) + '\n');
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    expect(saved.eye_mm).toEqual(view_.eye_mm);
+    expect(saved.forward).toEqual(view_.forward);
+    expect([saved.fov_deg, saved.aspect]).toEqual([view_.fov_deg, view_.aspect]);
+    expect(saved.cases.length).toBe(cases.length);
+    saved.cases.forEach((c: (typeof cases)[number], i: number) => {
+      expect(c.canvas).toEqual(cases[i].canvas);
+      if (!c.hit || !cases[i].hit) return expect(c.hit).toEqual(cases[i].hit);
+      expect(c.hit.block).toBe(cases[i].hit!.block);
+      expect(Math.hypot(c.hit.x - cases[i].hit!.x, c.hit.y - cases[i].hit!.y)).toBeLessThan(0.01);
+    });
   });
 });
