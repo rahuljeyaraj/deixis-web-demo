@@ -258,7 +258,20 @@ describe('robot-side checks before a preview', async () => {
       stacked++;
     }
     console.log(`three high: ${stacked} stacked, ${refused} refused`);
-    expect(stacked).toBeGreaterThan(0);
+    // Since the solver lets the hand tilt as it lifts away (6 Oct), all four places stack,
+    // including the pick right next to a stack, which used to knock it over.
+    expect(stacked).toBe(4);
+  });
+
+  test('four high: says it can only stack three, before moving', async () => {
+    const { view, flow } = await fresh();
+    arm.putBlock('green', 300, 90, 0);
+    arm.putBlock('red', 300, 90, 0, 30);
+    arm.putBlock('yellow', 300, 90, 0, 60);
+    for (let i = 0; i < 100; i++) mj.mj_step(model, data);
+    await flow.handle(reply({ object: thing('blue'), place: spot(300, 90, 90, 'yellow') }));
+    expect(flow.state.kind).toBe('idle');
+    expect(view.said.at(-1)).toBe(SAY.fourHigh);
   });
 
   test('on itself', async () => {

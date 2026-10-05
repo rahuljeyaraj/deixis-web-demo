@@ -27,6 +27,8 @@ export interface IkTarget {
    * same every 90 degrees, so the solver picks the nearest one. Null: any yaw.
    */
   yaw?: number | null;
+  /** The jaws open exactly along `yaw`, not the nearest of its four quarter turns. */
+  yawExact?: boolean;
   /**
    * How far the fingers may tilt from straight down, degrees (0: straight down). Close to the
    * base the wrist can't point straight down at height, so carry poses allow some tilt.
@@ -92,6 +94,9 @@ export class ArmKinematics {
   readonly lo: number[];
   readonly hi: number[];
   readonly siteId: number;
+  private readonly gripperAdr: number;
+  /** The arm's own bodies (base to jaws), for the check that it doesn't hit itself. */
+  private readonly armBodies: Set<number>;
   private readonly scratch: MjData;
   private readonly jacp: InstanceType<Mujoco['DoubleBuffer']>;
   private readonly jacr: InstanceType<Mujoco['DoubleBuffer']>;
@@ -115,6 +120,10 @@ export class ArmKinematics {
     this.hi = ids.map((i) => range[2 * i + 1]);
     this.siteId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE.value, 'gripperframe');
     if (this.siteId < 0) throw new Error('no gripperframe site');
+    this.gripperAdr = qa[mj.mj_name2id(model, J, 'gripper')];
+    const root = model.body_rootid as Int32Array;
+    const armRoot = root[(model.jnt_bodyid as Int32Array)[ids[0]]];
+    this.armBodies = new Set([...root.keys()].filter((b) => b > 0 && root[b] === armRoot));
     this.scratch = new mj.MjData(model);
     this.jacp = new mj.DoubleBuffer(3 * model.nv);
     this.jacr = new mj.DoubleBuffer(3 * model.nv);
@@ -126,6 +135,38 @@ export class ArmKinematics {
     for (let j = 0; j < 5; j++) d.qpos[this.qposAdr[j]] = q[j];
     this.mj.mj_kinematics(this.model, d);
     return this.pose();
+  }
+
+  /**
+   * How deep the arm sinks into itself in this pose, m (0: it doesn't touch), with the gripper
+   * at `gripper`. Near the base a hand turned far hits the upper arm with its camera mount.
+   */
+  selfDepth(q: number[], gripper: number): number {
+    const d = this.scratch;
+    for (let j = 0; j < 5; j++) d.qpos[this.qposAdr[j]] = q[j];
+    d.qpos[this.gripperAdr] = gripper;
+    this.mj.mj_fwdPosition(this.model, d);
+    const bodyOf = this.model.geom_bodyid as Int32Array;
+    const contacts = d.contact;
+    let depth = 0;
+    for (let i = 0; i < d.ncon; i++) {
+      const c = contacts.get(i);
+      if (!c) continue;
+      if (this.armBodies.has(bodyOf[c.geom1]) && this.armBodies.has(bodyOf[c.geom2])) {
+        depth = Math.max(depth, -c.dist);
+      }
+      c.delete();
+    }
+    contacts.delete();
+    return depth;
+  }
+
+  /**
+   * The arm sinks more than `toleranceM` into itself in this pose (see `selfDepth`). Measured:
+   * 6 mm still grips (the hand stops that much short); 17 mm wrecked the pick (rahul, 6 Oct).
+   */
+  selfHits(q: number[], gripper: number, toleranceM = 0.008): boolean {
+    return this.selfDepth(q, gripper) > toleranceM;
   }
 
   private pose(): Pose {
@@ -145,21 +186,38 @@ export class ArmKinematics {
     return [-Math.atan2(y, x), -0.3, 0.6, 1.2, 0];
   }
 
+  /**
+   * Solve with a steady pull toward straight down (the straightest grip); if that fails and
+   * some tilt is allowed, solve again with the tilt free inside the allowed cone.
+   */
   solve(target: IkTarget, q0?: number[], maxIter = 300): IkResult {
-    const best = this.solveFrom(target, q0 ?? this.guess(target), maxIter);
+    const steady = this.solveIn(target, q0, maxIter, false);
+    if (steady.ok || !target.maxTiltDeg) return steady;
+    const cone = this.solveIn(target, q0, maxIter, true);
+    return cone.ok || cone.posErrMm < steady.posErrMm ? cone : steady;
+  }
+
+  private solveIn(target: IkTarget, q0: number[] | undefined, maxIter: number, cone: boolean): IkResult {
+    const best = this.solveFrom(target, q0 ?? this.guess(target), maxIter, cone);
     if (best.ok || q0 === undefined) return best;
-    const again = this.solveFrom(target, this.guess(target), maxIter);
+    const again = this.solveFrom(target, this.guess(target), maxIter, cone);
     return again.posErrMm < best.posErrMm ? again : best;
   }
 
-  private solveFrom(target: IkTarget, q0: number[], maxIter: number): IkResult {
+  private solveFrom(target: IkTarget, q0: number[], maxIter: number, cone: boolean): IkResult {
     const d = this.scratch;
     const m = this.model;
     const q = q0.map((v, j) => Math.min(this.hi[j], Math.max(this.lo[j], v)));
     const nv = m.nv;
     const maxTilt = ((target.maxTiltDeg ?? 0) * Math.PI) / 180;
-    // 1 rad of tilt weighs like 10 cm of position; much less when some tilt is allowed.
-    const wAng = maxTilt > 0 ? 0.02 : 0.1;
+    // 1 rad of tilt weighs like 10 cm of position; steady: much less when some tilt is
+    // allowed. Cone: inside the allowed tilt only a faint pull toward straight down, so the
+    // position wins; past it, the tilt is pulled back to the edge. (The steady pull fights the
+    // position wherever the wrist sits at its limit: the hand stopped 13 mm short, and stacks
+    // near the base were "too high", rahul 6 Oct.)
+    const W_ANG = 0.1;
+    const W_ANG_STEADY = 0.02;
+    const W_ANG_INSIDE = 0.003;
     const wYaw = 0.05;
     const lambda2 = 1e-4;
     let wantOpen: Vec3 | null = null;
@@ -169,7 +227,7 @@ export class ArmKinematics {
       if (target.yaw !== null && target.yaw !== undefined && wantOpen === null) {
         // Of the four equivalent yaws, take the one closest to where the jaws face now.
         let bestDot = -Infinity;
-        for (let k = 0; k < 4; k++) {
+        for (let k = 0; k < (target.yawExact ? 1 : 4); k++) {
           const a = target.yaw + (k * Math.PI) / 2;
           const c: Vec3 = [Math.cos(a), Math.sin(a), 0];
           if (dot(c, pose.open) > bestDot) {
@@ -201,9 +259,12 @@ export class ArmKinematics {
         rows.push(this.dofAdr.map((c) => Jp[r * nv + c]));
         err.push(ep[r]);
       }
+      const over = cone && maxTilt > 0 ? Math.max(0, angErr - maxTilt) : angErr;
+      const wAng = maxTilt === 0 ? W_ANG : !cone ? W_ANG_STEADY : over === 0 ? W_ANG_INSIDE : W_ANG;
+      const share = cone && over > 0 ? over / angErr : 1; // only the part past the edge
       for (let r = 0; r < 3; r++) {
         rows.push(this.dofAdr.map((c) => wAng * Jr[r * nv + c]));
-        err.push(wAng * ea[r]);
+        err.push(wAng * share * ea[r]);
       }
       if (wantOpen) {
         for (let r = 0; r < 3; r++) {
@@ -211,16 +272,24 @@ export class ArmKinematics {
           err.push(wYaw * ec[r]);
         }
       }
-      // (J^T J + lambda^2 I) dq = J^T e
-      const A = Array.from({ length: 5 }, (_, i) =>
-        Array.from({ length: 5 }, (_, k) => {
-          let s = i === k ? lambda2 : 0;
-          for (const row of rows) s += row[i] * row[k];
-          return s;
-        }),
-      );
-      const g = Array.from({ length: 5 }, (_, i) => rows.reduce((s, row, r) => s + row[i] * err[r], 0));
-      const dq = solveLinear(A, g);
+      // (J^T J + lambda^2 I) dq = J^T e. A joint at its limit that the step would push past it
+      // is left out and the step solved again, so the other joints do its share.
+      const stepFor = (free: boolean[]) => {
+        const A = Array.from({ length: 5 }, (_, i) =>
+          Array.from({ length: 5 }, (_, k) => {
+            let s = i === k ? lambda2 : 0;
+            if (free[i] && free[k]) for (const row of rows) s += row[i] * row[k];
+            return s;
+          }),
+        );
+        const g = Array.from({ length: 5 }, (_, i) =>
+          free[i] ? rows.reduce((s, row, r) => s + row[i] * err[r], 0) : 0,
+        );
+        return solveLinear(A, g);
+      };
+      let dq = stepFor([true, true, true, true, true]);
+      const stuck = dq.map((v, j) => (q[j] <= this.lo[j] + 1e-6 && v < 0) || (q[j] >= this.hi[j] - 1e-6 && v > 0));
+      if (stuck.some(Boolean)) dq = stepFor(stuck.map((s) => !s));
       const step = Math.max(...dq.map(Math.abs));
       const scale = step > 0.2 ? 0.2 / step : 1;
       for (let j = 0; j < 5; j++) {

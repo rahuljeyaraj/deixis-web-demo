@@ -36,6 +36,11 @@ const STEPS = 4; // poses on each straight way up or down
 const GRIP_OFFSET = 0.0031; // block centre from the site along the opening axis, m
 const SPEED = 1.6; // rad/s for the largest joint in a move
 const HALF = BLOCK_MM / 2000;
+// How far the open jaws reach from a gripped block's centre along the opening axis, with the
+// jaws' thickness, m: the moving jaw on the opening side, the fixed jaw on the other.
+const JAW_OPEN_REACH = 0.048;
+const JAW_FIXED_REACH = 0.022;
+const JAW_HALF_WIDTH = 0.012;
 
 export type Reason = 'cant_reach' | 'busy' | 'no_block' | 'slipped' | 'stopped';
 
@@ -102,6 +107,11 @@ function quatMul(a: number[], b: number[]): number[] {
     a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
     a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
   ];
+}
+
+/** The yaw (world) of a direction's horizontal part. */
+function yawOf(v: Vec3): number {
+  return Math.atan2(v[1], v[0]);
 }
 
 function cross(a: Vec3, b: Vec3): Vec3 {
@@ -273,28 +283,52 @@ export class Arm {
     if (!b) return 'no_block';
     const st = this.block(id);
     const q0 = this.armQ();
-
     // Down at the block with the jaws turned to its faces and the fixed jaw just off one face.
     // A block on another block is gripped that much higher.
     const zGrasp = Z_GRASP + Math.max(0, st.center[2] - HALF);
-    const target = (pos: Vec3): IkTarget => ({ pos, yaw: st.yaw, maxTiltDeg: 4 });
-    const grasp0 = this.ik.solve(target([st.center[0], st.center[1], zGrasp]), q0);
+    const grasp0 = this.ik.solve({ pos: [st.center[0], st.center[1], zGrasp], yaw: st.yaw, maxTiltDeg: 4 }, q0);
     if (!grasp0.ok) return 'cant_reach';
+    // The jaws open on a side with room (opening toward a stack next to the block knocked it
+    // over), and the arm mustn't hit itself on the way (near the base, a hand turned far hits
+    // the upper arm with its camera mount): each of the block's four sides in turn.
+    const natural = yawOf(this.ik.fk(grasp0.q).open);
+    for (const y of this.roomyYaws(st.center, natural, Math.PI / 2, zGrasp - 0.003, id)) {
+      const plan = this.planMove(b, st, place, zGrasp, q0, y === natural ? null : y);
+      if (plan && !this.hitsItself(plan, q0)) return plan;
+    }
+    return 'cant_reach';
+  }
+
+  /** A pick and place with the jaws opening along `yaw` (null: the block's side nearest). */
+  private planMove(
+    b: Block,
+    st: BlockState,
+    place: Place,
+    zGrasp: number,
+    q0: number[],
+    exactYaw: number | null,
+  ): Segment[] | null {
+    const id = b.id;
+    const yaw = exactYaw ?? st.yaw;
+    const exact = exactYaw !== null;
+    const target = (pos: Vec3): IkTarget => ({ pos, yaw, yawExact: exact, maxTiltDeg: 4 });
+    const grasp0 = this.ik.solve(target([st.center[0], st.center[1], zGrasp]), q0);
+    if (!grasp0.ok) return null;
     const open = this.ik.fk(grasp0.q).open;
     const sx = st.center[0] + GRIP_OFFSET * open[0];
     const sy = st.center[1] + GRIP_OFFSET * open[1];
     const grasp = this.ik.solve(target([sx, sy, zGrasp]), grasp0.q);
-    if (!grasp.ok) return 'cant_reach';
-    const down = this.vertical([sx, sy], zGrasp, st.yaw, grasp.q); // top first
-    if (!down) return 'cant_reach';
+    if (!grasp.ok) return null;
+    const down = this.vertical([sx, sy], zGrasp, yaw, grasp.q, exact); // top first
+    if (!down) return null;
 
     // Where the block should sit in the site's frame once gripped, and the way down at the
     // place. Both are worked out again from the real grip, once the jaws have closed.
     const expected = this.toSite(this.ik.fk(grasp.q), st.center);
     const [px, py] = tableToWorld(place.xMm, place.yMm);
     const want: Vec3 = [px, py, place.zMm / 1000 + HALF + 0.001];
-    const planned = this.placePath(expected, want, down[0]);
-    if (!planned) return 'cant_reach';
+    const planned = this.placePath(expected, want, down[0], id);
+    if (!planned) return null;
 
     const op = GRIPPER_OPEN;
     const shut = GRIPPER_SHUT;
@@ -302,10 +336,10 @@ export class Arm {
     const lift = this.path([...down].reverse(), shut, 0.7);
     const top = want[2] + HALF; // the top of the block once it is down
     const rest = this.carryAndPlace(b, planned, down[0], top);
-    if (!rest) return 'cant_reach'; // the hand couldn't get clear of the block it put down
+    if (!rest) return null; // the hand couldn't get clear of the block it put down
     close.onEnd = () => {
       const local = this.grip(b, expected);
-      const real = local ? this.placePath(local, want, down[0]) : null;
+      const real = local ? this.placePath(local, want, down[0], id) : null;
       const next: Segment[] = [];
       if (!local) {
         // The block isn't where the jaws should hold it: let go and go home.
@@ -377,6 +411,7 @@ export class Arm {
     zBottom: number,
     yaw: number | null,
     qBottom: number[],
+    yawExact = false,
   ): number[][] | null {
     for (const lift of LIFTS) {
       const zTop = Math.max(lift, zBottom + (lift - Z_GRASP));
@@ -385,7 +420,7 @@ export class Arm {
       for (let k = 1; k <= STEPS; k++) {
         const f = k / STEPS;
         const z = zBottom + f * (zTop - zBottom);
-        const r = this.ik.solve({ pos: [xy[0], xy[1], z], yaw, maxTiltDeg: 4 + 31 * f }, q);
+        const r = this.ik.solve({ pos: [xy[0], xy[1], z], yaw, yawExact, maxTiltDeg: 4 + 31 * f }, q);
         if (!r.ok) break;
         q = r.q;
         qs.push(q);
@@ -398,22 +433,88 @@ export class Arm {
   /**
    * The way down that puts a gripped block's centre at `want`, flat (top first), then a pose
    * 5 mm above the place for letting go. `local` is the block's centre in the site's frame.
+   * The jaws open on a side with room when they let go (next to a block, they pushed it).
    */
-  private placePath(local: Vec3, want: Vec3, q0: number[]): number[][] | null {
-    let q = q0;
-    for (let k = 0; k < 3; k++) {
-      const off = this.fromSite(this.ik.fk(q), local);
-      const r = this.ik.solve(
-        { pos: [want[0] - off[0], want[1] - off[1], want[2] - off[2]], yaw: null, maxTiltDeg: 4 },
-        q,
-      );
-      if (!r.ok) return null;
-      q = r.q;
+  private placePath(local: Vec3, want: Vec3, q0: number[], id: BlockId): number[][] | null {
+    const at = (yaw: number | null): number[] | null => {
+      let q = q0;
+      for (let k = 0; k < 3; k++) {
+        const off = this.fromSite(this.ik.fk(q), local);
+        const pos: Vec3 = [want[0] - off[0], want[1] - off[1], want[2] - off[2]];
+        const r = this.ik.solve({ pos, yaw, yawExact: yaw !== null, maxTiltDeg: 4 }, q);
+        if (!r.ok) return null;
+        q = r.q;
+      }
+      return q;
+    };
+    const free = at(null);
+    if (!free) return null;
+    const natural = yawOf(this.ik.fk(free).open);
+    let q: number[] | null = null;
+    for (const y of this.roomyYaws(want, natural, Math.PI / 4, want[2] - HALF + 0.004, id)) {
+      const turned = y === natural ? free : at(y);
+      if (turned && !this.ik.selfHits(turned, GRIPPER_OPEN)) {
+        q = turned;
+        break;
+      }
     }
+    if (!q) return null;
     const site = this.ik.fk(q).pos;
     const way = this.vertical([site[0], site[1]], site[2], null, q);
     const eased = this.ik.solve({ pos: [site[0], site[1], site[2] + 0.005], yaw: null, maxTiltDeg: 4 }, q);
     return way && eased.ok ? [...way, eased.q] : null;
+  }
+
+  /**
+   * How much room the open jaws have around a block at `c` opening along `yaw` (world), m;
+   * below 0 they would hit another block. Blocks with their top below `zTips` don't count.
+   */
+  private jawRoom(c: Vec3, yaw: number, zTips: number, ignore: BlockId): number {
+    const d = [Math.cos(yaw), Math.sin(yaw)];
+    let room = Infinity;
+    for (const id of BLOCK_IDS) {
+      if (id === ignore) continue;
+      const o = this.block(id);
+      if (o.heightMm / 1000 <= zTips) continue;
+      const rx = o.center[0] - c[0];
+      const ry = o.center[1] - c[1];
+      const along = rx * d[0] + ry * d[1];
+      const across = Math.abs(rx * d[1] - ry * d[0]);
+      const half = HALF * (Math.abs(Math.cos(o.yaw - yaw)) + Math.abs(Math.sin(o.yaw - yaw)));
+      if (across > half + JAW_HALF_WIDTH) continue; // beside the jaws' way
+      room = Math.min(room, Math.abs(along) - half - (along > 0 ? JAW_OPEN_REACH : JAW_FIXED_REACH));
+    }
+    return room;
+  }
+
+  /**
+   * Jaw yaws to try, `step` apart: those with room first, nearest `natural` first; then the
+   * rest, most room first. `natural` itself first if it has room.
+   */
+  private roomyYaws(c: Vec3, natural: number, step: number, zTips: number, ignore: BlockId): number[] {
+    const n = Math.round((2 * Math.PI) / step);
+    const turns = [0];
+    for (let k = 1; turns.length < n; k++) turns.push(k, -k);
+    const all = turns.slice(0, n).map((k) => {
+      const y = k === 0 ? natural : natural + k * step;
+      return { y, room: this.jawRoom(c, y, zTips, ignore) };
+    });
+    const roomy = all.filter((a) => a.room >= 0);
+    const tight = all.filter((a) => a.room < 0).sort((a, b) => b.room - a.room);
+    return [...roomy, ...tight].map((a) => a.y);
+  }
+
+  /** Whether the arm would hit itself anywhere on these segments (checked at thirds). */
+  private hitsItself(plan: Segment[], q0: number[]): boolean {
+    let from = [...q0, GRIPPER_OPEN];
+    for (const seg of plan) {
+      for (const f of [1 / 3, 2 / 3, 1]) {
+        const q = from.map((v, j) => v + (seg.to[j] - v) * f);
+        if (this.ik.selfHits(q.slice(0, 5), q[5])) return true;
+      }
+      from = seg.to;
+    }
+    return false;
   }
 
   /** Segments through joint poses, `duration` seconds at least in all. */
