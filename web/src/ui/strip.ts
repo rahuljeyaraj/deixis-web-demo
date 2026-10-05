@@ -146,17 +146,18 @@ export function drawStrip(svg: SVGSVGElement, what: StripModel | string): void {
   svg.replaceChildren();
   svg.setAttribute('viewBox', `0 0 ${W} ${STRIP_H}`);
   svg.setAttribute('height', String(STRIP_H));
+  if (typeof what === 'string') {
+    // A state (listening, thinking, a hint), not something the person said: no row labels.
+    // What the robot says goes in its speech bubble, never here (rahul, 5 Oct).
+    svg.append(el('text', { x: W / 2, y: STRIP_H / 2 + 5, class: 'note', 'text-anchor': 'middle' }, what));
+    return;
+  }
   svg.append(
     el('text', { x: 0, y: WORD_Y + 5, class: 'row-label' }, 'you said'),
     el('text', { x: 0, y: HOLD_Y + HOLD_H - 1, class: 'row-label' }, 'you pointed'),
   );
   const left = LABEL_W;
   const right = W - PAD;
-  if (typeof what === 'string') {
-    svg.append(el('text', { x: left, y: WORD_Y + 5, class: 'note' }, what));
-    svg.append(el('line', { x1: left, x2: right, y1: HOLD_Y + HOLD_H / 2, y2: HOLD_Y + HOLD_H / 2, class: 'axis' }));
-    return;
-  }
   const m = what;
   const x = (t: number) => left + ((t - m.t0) / (m.t1 - m.t0)) * (right - left);
 

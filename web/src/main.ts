@@ -133,8 +133,9 @@ async function start(): Promise<void> {
   const stripEl = document.getElementById('strip')!;
   const stripSvg = document.getElementById('strip-svg') as unknown as SVGSVGElement;
   const detailsBody = document.getElementById('details-body')!;
-  let shown: StripModel | string =
-    'Speak while you point: your words and your pointing show here, on one timeline.';
+  // Only what the person said and where they pointed; the robot's words go in its bubble.
+  const HINT = 'Speak while you point: your words and your pointing show here, on one timeline.';
+  let shown: StripModel | string = HINT;
   const showStrip = (what: StripModel | string, busy = false) => {
     shown = what;
     stripEl.classList.toggle('busy', busy);
@@ -147,7 +148,7 @@ async function start(): Promise<void> {
     console.error(e);
     void flow.handle({ result: null, say: "Sorry, that didn't work. Please try again." });
     say(`Something went wrong (${e instanceof Error ? e.message : e}).`);
-    showStrip('Something went wrong. Please try again.');
+    showStrip(HINT);
   };
 
   let lastReply: CommandReply | null = null;
@@ -162,7 +163,7 @@ async function start(): Promise<void> {
     const reply = await sendCommand(meta, wav);
     lastReply = reply;
     const heard = reply.words.map((w) => w.text).join(' ');
-    showStrip(heard ? stripModel(reply.words, reply.result) : "I didn't hear any words.");
+    showStrip(heard ? stripModel(reply.words, reply.result) : HINT);
     fillDetails(detailsBody, { ...reply, typed: !wav });
     if (wav) say(heard ? `${prefix}You said: “${heard}”` : `${prefix}I didn't hear any words.`);
     else say(`You typed: “${heard}”`);
@@ -290,7 +291,7 @@ async function start(): Promise<void> {
       if (reason === 'cancel') {
         mic.recorder.cancel();
         say('Stopped listening.');
-        showStrip('Stopped listening.');
+        showStrip(HINT);
         return;
       }
       const long = reason === 'long' ? 'That was long, so I stopped listening. ' : '';
