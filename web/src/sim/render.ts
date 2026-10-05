@@ -15,7 +15,8 @@ export interface ViewOptions {
 }
 
 export class TableView {
-  readonly renderer: THREE.WebGLRenderer;
+  /** Null without a canvas (Node tests: the scene and the camera for raycasts only). */
+  readonly renderer: THREE.WebGLRenderer | null;
   readonly scene = new THREE.Scene();
   readonly camera: THREE.PerspectiveCamera;
   /** Meshes the raycast may hit, with the geom id each one draws. */
@@ -26,17 +27,12 @@ export class TableView {
   private readonly ghost: THREE.Mesh;
 
   constructor(
-    readonly canvas: HTMLCanvasElement,
+    readonly canvas: HTMLCanvasElement | null,
     mj: Mujoco,
     readonly model: MjModel,
     opts: ViewOptions = {},
   ) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: !!opts.transparent });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.localClippingEnabled = true;
+    this.renderer = canvas ? TableView.makeRenderer(canvas, !!opts.transparent) : null;
     if (!opts.transparent) this.scene.background = new THREE.Color(0xdfe5ee);
 
     this.camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.01, 10);
@@ -48,6 +44,16 @@ export class TableView {
     this.addGeoms(mj);
     this.addMat();
     this.ghost = this.makeGhost();
+  }
+
+  private static makeRenderer(canvas: HTMLCanvasElement, transparent: boolean): THREE.WebGLRenderer {
+    const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent });
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFShadowMap;
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.localClippingEnabled = true;
+    return r;
   }
 
   isTable(geom: number): boolean {
@@ -106,7 +112,7 @@ export class TableView {
   }
 
   resize(width: number, height: number): void {
-    this.renderer.setSize(width, height, false);
+    this.renderer?.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
   }
@@ -129,7 +135,7 @@ export class TableView {
   }
 
   render(): void {
-    this.renderer.render(this.scene, this.camera);
+    this.renderer?.render(this.scene, this.camera);
   }
 
   private addLights(): void {
@@ -221,7 +227,10 @@ export class TableView {
     return geo;
   }
 
-  /** The lighter half ring that shows where the arm can reach (plan 4.4), cut at the area. */
+  /**
+   * The lighter half ring that shows where the arm can reach (plan 4.4), cut at the area. It
+   * is drawn only: it floats 0.4 mm above the table, so a raycast hits the table under it.
+   */
   private addMat(): void {
     const [nearX] = tableToWorld(BASE_MM.x, AREA_MM.y); // the area's near edge, world x
     const clip = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), nearX)];
@@ -240,6 +249,5 @@ export class TableView {
     mat.position.set(0, 0, 0.0004);
     mat.receiveShadow = true;
     this.scene.add(mat);
-    this.pickable.push(mat);
   }
 }

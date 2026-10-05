@@ -31,3 +31,5 @@ Thumbs.db
 .vscode/
 *.code-workspace
 web/public/so101.pack
+web/public/mediapipe/
+web/public/models/

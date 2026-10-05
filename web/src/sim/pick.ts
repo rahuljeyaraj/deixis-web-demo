@@ -29,6 +29,9 @@ const ndc = new THREE.Vector2();
  */
 export function pointAt(view: TableView, fx: number, fy: number, blockOfGeom: Map<number, BlockId>): Hit | null {
   ndc.set(fx * 2 - 1, -(fy * 2 - 1));
+  // The renderer does this each frame; without one (tests), or between frames, do it here.
+  view.camera.updateMatrixWorld();
+  view.scene.updateMatrixWorld();
   ray.setFromCamera(ndc, view.camera);
   for (const h of ray.intersectObjects(view.pickable, false)) {
     const geom = h.object.userData.geom as number | undefined;
