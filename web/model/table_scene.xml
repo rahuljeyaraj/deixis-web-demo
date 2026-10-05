@@ -1,0 +1,65 @@
+<!--
+  The SO-101 at a small table with four 30 mm blocks (plan 4.4, 6.1).
+
+  World: metres, z up, origin at the arm's base on the table top. The arm's forward
+  (shoulder_pan = 0) is +x, so the person sits on the +x side facing -x. The deixis table
+  frame (mm, x to the person's right, y away from them) maps to the world as
+      X = (250 - y) / 1000,   Y = (x - 250) / 1000      (src/sim/table.ts)
+  so the base is at table (250, 250), the middle of the far edge of the work area.
+
+  so101.xml (MuJoCo Menagerie, Apache-2.0) is included unchanged; it must sit next to this
+  file in the virtual file system because its meshdir is "assets".
+-->
+<mujoco model="so101 at the table">
+  <include file="so101.xml"/>
+
+  <statistic center="0.12 0 0.05" extent="0.4"/>
+
+  <visual>
+    <headlight diffuse="0.5 0.5 0.5" ambient="0.35 0.35 0.35" specular="0 0 0"/>
+  </visual>
+
+  <default>
+    <default class="block">
+      <!-- contype/conaffinity 3: they touch the table, each other and the gripper (1). A held
+           block is switched to 2 so it no longer touches the gripper (plan 6.2). -->
+      <geom type="box" size="0.015 0.015 0.015" mass="0.02" friction="1.2 0.01 0.001" condim="4"
+        solref="0.004 1" group="0" contype="3" conaffinity="3"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="key" pos="0.35 -0.25 0.9" dir="-0.35 0.25 -0.9" directional="true"/>
+    <!-- The table top is z = 0. It is wider than the work area (500 x 250 mm). -->
+    <geom name="table" type="box" pos="0.11 0 -0.015" size="0.21 0.31 0.015"
+      rgba="0.78 0.63 0.47 1" friction="0.8 0.005 0.0001" group="0" contype="3" conaffinity="3"/>
+
+    <!-- Start spots only; the page places them at random inside the arm's reach. -->
+    <body name="red" pos="0.17 -0.08 0.015">
+      <freejoint name="red"/>
+      <geom name="red" class="block" rgba="0.84 0.16 0.16 1"/>
+    </body>
+    <body name="yellow" pos="0.20 0.02 0.015">
+      <freejoint name="yellow"/>
+      <geom name="yellow" class="block" rgba="0.95 0.76 0.05 1"/>
+    </body>
+    <body name="green" pos="0.13 0.11 0.015">
+      <freejoint name="green"/>
+      <geom name="green" class="block" rgba="0.16 0.62 0.29 1"/>
+    </body>
+    <body name="blue" pos="0.10 -0.16 0.015">
+      <freejoint name="blue"/>
+      <geom name="blue" class="block" rgba="0.11 0.31 0.85 1"/>
+    </body>
+  </worldbody>
+
+  <!-- Grip assist (plan 6.2): the jaws really close on the block; then one weld from the
+       gripper holds it, and the block stops touching the gripper, so no squeeze can push it
+       while it's carried or let go. The page points the weld at the block (eq_obj2id), sets
+       the current relative pose (eq_data), and switches it with the global "equality" disable
+       flag, because the WASM bindings can't write eq_active (3.14.0). It is the scene's only
+       equality, so the flag switches only the grip. -->
+  <equality>
+    <weld name="grip" body1="gripper" body2="red"/>
+  </equality>
+</mujoco>

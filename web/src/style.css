@@ -1,0 +1,15 @@
+:root {
+  --bg: #f6f7f9;
+  --ink: #1f2430;
+  --muted: #6b7280;
+  --stage: #dfe5ee;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+  font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+#app { max-width: 1280px; margin: 0 auto; padding: 16px; }
+#stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--stage);
+  border-radius: 12px; overflow: hidden; }
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#status { position: absolute; left: 12px; bottom: 10px; padding: 4px 10px; border-radius: 8px;
+  background: rgb(255 255 255 / 0.8); color: var(--muted); font-size: 14px; }

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Node
+node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Downloaded models, caches, logs, recordings (never commit)
+.cache/
+out/
+logs/
+recordings/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+*.code-workspace
+web/public/so101.pack
