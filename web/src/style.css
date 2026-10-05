@@ -2,13 +2,21 @@
   --bg: #f6f7f9;
   --ink: #1f2430;
   --muted: #6b7280;
+  --line: #d4d9e1;
   --stage: #dfe5ee;
   --accent: #ff4081;
+  --accent-ink: #b0124f;
+  --accent-soft: #ffe1ec;
+  --blue: #1d4ed8;
+  --hold: #3b82f6;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-#app { max-width: 1280px; margin: 0 auto; padding: 16px; }
+/* The scene, the buttons and the strip fit one screen: the width follows the window's height. */
+#app { max-width: min(1280px, max(640px, calc((100vh - 290px) * 16 / 9))); margin: 0 auto;
+  padding: 12px 16px 24px; }
+a { color: var(--blue); }
 #stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--stage);
   border-radius: 12px; overflow: hidden; }
 #scene, #hand { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -31,18 +39,48 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
   border: 0; border-radius: 999px; background: var(--ink); color: white; font: inherit;
   font-size: 15px; cursor: pointer; }
 #camera-btn:disabled { opacity: 0.6; cursor: default; }
-#stage.camera-on #camera-btn { display: none; }
+#stage.camera-on #camera-btn, #stage.starting #camera-btn { display: none; }
 #status { position: absolute; left: 12px; bottom: 10px; z-index: 3; padding: 4px 10px;
-  border-radius: 8px; background: rgb(255 255 255 / 0.85); color: var(--muted); font-size: 14px; }
+  border-radius: 8px; background: rgb(255 255 255 / 0.85); color: var(--muted); font-size: 14px;
+  max-width: calc(100% - 24px); }
+#stage.starting #status { display: none; }
+
+/* The start card (plan 5.1), over the live scene. */
+#start { position: absolute; inset: 0; z-index: 5; display: none; place-items: center;
+  background: rgb(223 229 238 / 0.55); backdrop-filter: blur(3px); }
+#stage.starting #start { display: grid; }
+#start .card { width: min(620px, 90%); padding: 26px 32px 18px; border-radius: 16px;
+  background: rgb(255 255 255 / 0.96); box-shadow: 0 10px 40px rgb(0 0 0 / 0.18); text-align: center; }
+#start h1 { margin: 0 0 6px; font-size: 30px; letter-spacing: 0.01em; }
+#start .lead { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+#start .how { margin: 0 0 18px; color: var(--muted); }
+#start q, #chips q { quotes: "“" "”"; }
+#start .choices { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px; }
+button.big { padding: 13px 22px; border-radius: 12px; border: 2px solid #9aa3b2; background: white;
+  color: var(--ink); font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; }
+button.big.primary { border-color: var(--blue); background: var(--blue); color: white; }
+button.big:disabled { opacity: 0.5; cursor: default; }
+.small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
-#controls { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
-#talk-btn { --level: 0; padding: 12px 28px; border: 0; border-radius: 10px; background: #1d4ed8;
+#controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+#talk-btn { --level: 0; padding: 12px 28px; border: 0; border-radius: 10px; background: var(--blue);
   color: white; font: inherit; font-weight: 600; font-size: 17px; cursor: pointer;
   user-select: none; -webkit-user-select: none; touch-action: none;
   box-shadow: 0 0 0 calc(var(--level) * 10px) rgb(255 64 129 / 0.45); }
 #talk-btn:not(.ready) { background: #4b5563; }
 #talk-btn.on { background: var(--accent); }
+
+/* Typing instead of talking (plan 5.3): shown when there is no microphone, or on request. */
+#type-form { display: none; gap: 8px; flex: 1 1 320px; max-width: 520px; }
+body.typing #type-form { display: flex; }
+body.typing #talk-btn { display: none; }
+#type-box { flex: 1; min-width: 0; padding: 11px 12px; border: 2px solid var(--blue); border-radius: 10px;
+  font: inherit; font-size: 16px; }
+#type-send { padding: 11px 18px; border: 0; border-radius: 10px; background: var(--blue); color: white;
+  font: inherit; font-weight: 600; cursor: pointer; }
+button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; color: var(--blue);
+  font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; }
 
 /* The robot's speech bubble (plan 5.2), above the scene; also spoken aloud. */
 #bubble { min-height: 44px; margin: 0 auto 10px; max-width: 760px; padding: 9px 18px;
@@ -55,4 +93,53 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
   background: white; color: var(--ink); font: inherit; font-size: 16px; cursor: pointer; }
 #controls button.plain:disabled { opacity: 0.45; cursor: default; }
 #controls button.stop { border-color: #c62828; background: #fde8e8; color: #8e1b1b; }
-#stage[data-flow="preview"] ~ #controls #go-btn { border-color: #1d4ed8; color: #1d4ed8; font-weight: 600; }
+#stage[data-flow="preview"] ~ #controls #go-btn { border-color: var(--blue); background: var(--blue);
+  color: white; font-weight: 600; }
+
+/* The thinking strip (plan 5.2). */
+#strip { margin-top: 12px; padding: 8px 14px 4px; border: 1px solid var(--line); border-radius: 12px;
+  background: white; }
+#strip h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+#strip-svg { display: block; width: 100%; height: 96px; overflow: visible; }
+#strip-svg .row-label { font-size: 12px; fill: var(--muted); }
+#strip-svg .note { font-size: 15px; fill: var(--muted); }
+#strip-svg .word { font-size: 16px; fill: var(--ink); }
+#strip-svg .word.pointing { font-weight: 700; fill: var(--accent-ink); }
+#strip-svg .pill { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+#strip-svg .axis { stroke: var(--line); stroke-width: 2; }
+#strip-svg .tick { stroke: #b8c0cc; stroke-width: 1.5; }
+#strip-svg .hold { fill: var(--hold); }
+#strip-svg .hold.click { fill: #6366f1; }
+#strip-svg .link { fill: none; stroke: var(--accent); stroke-width: 2; }
+#strip.busy .note { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+
+/* Details (plan 5.2), collapsed. */
+details { border: 1px solid var(--line); border-radius: 12px; background: white; }
+details > summary { padding: 9px 14px; cursor: pointer; font-size: 15px; color: var(--ink); }
+details[open] > summary { border-bottom: 1px solid var(--line); }
+#details { margin-top: 8px; }
+#details-body { padding: 4px 14px 10px; }
+#details-body h3 { margin: 10px 0 2px; font-size: 13px; color: var(--muted); font-weight: 600; }
+#details-body p { margin: 0; }
+#details-body pre { margin: 2px 0 0; padding: 8px 10px; max-height: 260px; overflow: auto;
+  background: #f3f4f6; border-radius: 8px; font-size: 12.5px; line-height: 1.35; }
+
+/* Try saying (plan 5.2): a chip only shows the words; it doesn't run them. */
+#chips { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.chips-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
+.chip { padding: 5px 12px; border: 1.5px solid #8b91f0; border-radius: 9px; background: #eef0ff;
+  color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+
+/* Footer (plan 5.2): the models (8.4), privacy, links. */
+footer { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px; }
+footer details { flex: 1 1 300px; }
+#models > summary { font-weight: 600; }
+#models { border-color: #86c9a8; background: #f2fbf6; }
+footer details ul { margin: 8px 0 4px; padding: 0 16px 0 32px; }
+footer details li { margin: 4px 0; font-size: 14.5px; }
+footer details li.not-used { color: var(--muted); }
+footer details .off { color: #b45309; font-weight: 600; }
+#models-list > p { margin: 8px 14px; }
+#models-list .small { margin: 4px 16px 10px; }
+.foot-link { padding: 9px 4px; font-size: 15px; }

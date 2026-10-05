@@ -79,6 +79,31 @@ export async function sendCommand(meta: CommandMeta, wav?: ArrayBuffer): Promise
   return check(await fetch('/api/command', { method: 'POST', body: form }));
 }
 
+/** One line of "What runs this demo" (plan 8.4), as the server lists it. */
+export interface ModelLine {
+  role: string;
+  name: string;
+  by: string;
+  where: string;
+  url: string;
+  model_id?: string;
+  /** Set when this model is off right now (simple mode). */
+  off?: string | null;
+}
+
+/** `GET /api/info`: the page's name, the core, and every model the demo uses. */
+export interface Info {
+  title: string;
+  version: string;
+  core: { version: string; schema_version: string; over_mcp: boolean };
+  models: ModelLine[];
+  not_used: { name: string; why: string }[];
+}
+
+export async function getInfo(): Promise<Info> {
+  return check(await fetch('/api/info'));
+}
+
 export async function sendAnswer(candidate: number): Promise<AnswerReply> {
   return check(
     await fetch('/api/answer', {

@@ -98,7 +98,7 @@ const rest = await screen(250, -40, 0);
 await page.mouse.move(...rest);
 
 // The microphone, and where its loop is: wait for the first sound of "put that".
-await page.click('#talk-btn');
+await page.click('#start-mouse'); // the start card: the mouse points, the microphone listens
 await page.waitForFunction(() => window.__sim.mic()?.chunks > 10, null, { timeout: 20000 });
 const loopStart = await page.evaluate(async (firstSound) => {
   // The first sound after 3 s of quiet (inside the sentence there is at most 2 s).

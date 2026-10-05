@@ -3,7 +3,7 @@
 //   node scripts/camera-check.mjs [url]
 import { chromium } from '@playwright/test';
 
-const [url = 'http://localhost:5173/'] = process.argv.slice(2);
+const [url = 'http://localhost:5173/?start=skip'] = process.argv.slice(2);
 const browser = await chromium.launch({
   channel: 'chrome',
   args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'],

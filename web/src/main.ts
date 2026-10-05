@@ -4,10 +4,14 @@
  * on the page clock); one command to the server (W6, W8: words, Nemotron's calls, the core's
  * places over MCP); and the flow (W9: preview, "This one, here?", yes, the arm moves).
  *
- * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests).
+ * W10 adds the page around it: the start card, the thinking strip, the details panel, the
+ * try-saying chips, the models list (plan 8.4), and typing instead of talking.
+ *
+ * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests);
+ * it and `?start=skip` skip the start card.
  */
 
-import { type CommandReply, sendAnswer, sendCommand } from './api';
+import { type CommandMeta, type CommandReply, getInfo, sendAnswer, sendCommand } from './api';
 import { MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
@@ -23,6 +27,9 @@ import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
 import { BASE_MM, BLOCK_MM, REACH_MM, onMat, tableToWorld } from './sim/table';
+import { fillDetails } from './ui/details';
+import { fillModels, modelsUnavailable } from './ui/models';
+import { type StripModel, drawStrip, stripModel } from './ui/strip';
 import { speak } from './voice';
 
 /** Random spots on the reach mat, at least 60 mm apart. */
@@ -50,10 +57,17 @@ async function start(): Promise<void> {
   const talkBtn = document.getElementById('talk-btn') as HTMLButtonElement;
   const goBtn = document.getElementById('go-btn') as HTMLButtonElement;
   const bubble = document.getElementById('bubble')!;
+  const startLoading = document.getElementById('start-loading')!;
   const now = () => performance.now() / 1000;
-  const say = (text: string) => (status.textContent = text);
+  const say = (text: string) => {
+    status.textContent = text;
+    if (stage.classList.contains('starting')) startLoading.textContent = text;
+  };
+  const params = new URLSearchParams(location.search);
   /** `?hands=demo`: a made-up hand points instead of the camera. */
-  const synthetic = new URLSearchParams(location.search).get('hands') === 'demo';
+  const synthetic = params.get('hands') === 'demo';
+  if (synthetic || params.get('start') === 'skip') stage.classList.remove('starting');
+  showInfo();
   const [mj, files] = await Promise.all([
     mujoco(),
     fetchPack('/so101.pack', (f) => say(`Loading the arm… ${Math.round(f * 100)} %`)),
@@ -112,17 +126,52 @@ async function start(): Promise<void> {
       if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
     },
   });
+
+  // The thinking strip and the details panel (plan 5.2).
+  const stripEl = document.getElementById('strip')!;
+  const stripSvg = document.getElementById('strip-svg') as unknown as SVGSVGElement;
+  const detailsBody = document.getElementById('details-body')!;
+  let shown: StripModel | string =
+    'Speak while you point: your words and your pointing show here, on one timeline.';
+  const showStrip = (what: StripModel | string, busy = false) => {
+    shown = what;
+    stripEl.classList.toggle('busy', busy);
+    drawStrip(stripSvg, what);
+  };
+  new ResizeObserver(() => drawStrip(stripSvg, shown)).observe(stripSvg);
+  showStrip(shown);
+
   const failed = (e: unknown) => {
     console.error(e);
     void flow.handle({ result: null, say: "Sorry, that didn't work. Please try again." });
     say(`Something went wrong (${e instanceof Error ? e.message : e}).`);
+    showStrip('Something went wrong. Please try again.');
+  };
+
+  let lastReply: CommandReply | null = null;
+  /** Clicks after this page time belong to the next typed command. */
+  let usedClicksUntil = -Infinity;
+  /** One command, spoken (with its clip) or typed: the server, then the strip, the details
+   * and the flow. */
+  const runCommand = async (meta: CommandMeta, wav?: ArrayBuffer, prefix = '') => {
+    usedClicksUntil = meta.t ?? now();
+    flow.thinking();
+    showStrip(wav ? 'Turning your voice into words…' : 'Thinking…', true);
+    const reply = await sendCommand(meta, wav);
+    lastReply = reply;
+    const heard = reply.words.map((w) => w.text).join(' ');
+    showStrip(heard ? stripModel(reply.words, reply.result) : "I didn't hear any words.");
+    fillDetails(detailsBody, { ...reply, typed: !wav });
+    if (wav) say(heard ? `${prefix}You said: “${heard}”` : `${prefix}I didn't hear any words.`);
+    else say(`You typed: “${heard}”`);
+    await flow.handle(heard ? reply : { result: null, say: "Sorry, I didn't hear that. Try again?" });
   };
   const hitOf = (e: MouseEvent): Hit | null => {
     const r = canvas.getBoundingClientRect();
     return pointAt(view, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, blockOfGeom);
   };
-  // The finger (plan W4).
-  const fingerHelp = 'Point with one finger: the pink dot follows it. Keys: L record, [ ] gain.';
+  // The finger (plan W4). (Keys for development: L records the hand, [ and ] set the gain.)
+  const fingerHelp = 'Point with one finger: the pink dot follows it.';
   let tracker: HandTracker | null = null;
   const startCamera = async (): Promise<string> => {
     try {
@@ -154,19 +203,43 @@ async function start(): Promise<void> {
     // A click on one of the glowing choices answers the robot's question.
     const pick = hit.block ? flow.candidateOf(hit.block) : null;
     if (pick === null) return;
+    usedClicksUntil = now(); // this click was the answer, not part of the next command
     flow.thinking();
     try {
-      await flow.handle(await sendAnswer(pick));
+      const reply = await sendAnswer(pick);
+      fillDetails(detailsBody, reply);
+      if (lastReply) showStrip(stripModel(lastReply.words, lastReply.result, reply.result));
+      await flow.handle(reply);
     } catch (err) {
       failed(err);
     }
+  });
+
+  // Typing instead of talking (plan 5.3): click the blocks and spots in order, then type; the
+  // server gives the k-th pointing word the k-th click's time.
+  const typeForm = document.getElementById('type-form') as HTMLFormElement;
+  const typeBox = document.getElementById('type-box') as HTMLInputElement;
+  const typeToggle = document.getElementById('type-toggle') as HTMLButtonElement;
+  const isTyping = () => document.body.classList.contains('typing');
+  const setTyping = (on: boolean) => {
+    document.body.classList.toggle('typing', on);
+    typeToggle.textContent = on ? 'Talk instead' : 'Type instead';
+    if (on) typeBox.focus();
+  };
+  typeForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = typeBox.value.trim();
+    if (!text) return;
+    const t = now();
+    const holds = mouse.clicksBetween(usedClicksUntil, t);
+    typeBox.value = '';
+    void runCommand({ text, t, holds, samples: [], things: flow.things(), ...flow.request() }).catch(failed);
   });
 
   // The voice (plan W5): push-to-talk; the clip with its pre-roll and tail, on the page clock.
   let mic: MicCapture | null = null;
   let micStarting: Promise<string> | null = null;
   let lastClip: Clip | null = null;
-  let lastReply: CommandReply | null = null;
   const startMic = (): Promise<string> =>
     (micStarting ??= MicCapture.start().then(
       (m) => {
@@ -177,14 +250,36 @@ async function start(): Promise<void> {
       (e) => {
         micStarting = null;
         console.error(e);
-        return `No microphone (${e instanceof Error ? e.message : e}).`;
+        setTyping(true);
+        return `No microphone (${e instanceof Error ? e.message : e}), so type instead: click a block, click a spot, then type “put that here”.`;
       },
     ));
+  typeToggle.addEventListener('click', () => {
+    if (!isTyping()) return setTyping(true);
+    if (mic) return setTyping(false);
+    void startMic().then((msg) => {
+      if (mic) setTyping(false);
+      say(msg);
+    });
+  });
+  for (const chip of document.querySelectorAll<HTMLButtonElement>('#chips .chip')) {
+    // A chip only shows the words (plan 5.2); in typing mode it fills the box.
+    chip.addEventListener('click', () => {
+      const text = chip.textContent ?? '';
+      if (isTyping()) {
+        typeBox.value = text;
+        typeBox.focus();
+      } else {
+        say(`Point, then hold Talk (or the space bar) and say “${text}”.`);
+      }
+    });
+  }
   const talk = new PushToTalk({
     start: (t) => {
       mic?.begin(t);
       talkBtn.classList.add('on');
       say('Listening… let go to stop (after a quick tap: tap again).');
+      showStrip('Listening… point while you speak.', true);
     },
     stop: (t, reason) => {
       talkBtn.classList.remove('on');
@@ -193,6 +288,7 @@ async function start(): Promise<void> {
       if (reason === 'cancel') {
         mic.recorder.cancel();
         say('Stopped listening.');
+        showStrip('Stopped listening.');
         return;
       }
       const long = reason === 'long' ? 'That was long, so I stopped listening. ' : '';
@@ -201,7 +297,6 @@ async function start(): Promise<void> {
         .then(async (clip) => {
           lastClip = clip;
           say(`${long}Thinking…`);
-          flow.thinking();
           // The pointing from 2.5 s before the speech to 0.8 s after it (plan 4.2); the clip
           // already starts 0.5 s early and ends 0.4 s late.
           const from = clip.t0 - 2;
@@ -215,11 +310,7 @@ async function start(): Promise<void> {
             things: flow.things(),
             ...flow.request(),
           };
-          const reply = await sendCommand(meta, clip.wav);
-          lastReply = reply;
-          const heard = reply.words.map((w) => w.text).join(' ');
-          say(heard ? `${long}You said: “${heard}”` : `${long}I didn't hear any words.`);
-          await flow.handle(heard ? reply : { result: null, say: "Sorry, I didn't hear that. Try again?" });
+          await runCommand(meta, clip.wav, long);
         })
         .catch(failed);
     },
@@ -238,13 +329,29 @@ async function start(): Promise<void> {
   talkBtn.addEventListener('pointercancel', () => talk.release(now()));
   talkBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  cameraBtn.addEventListener('click', async () => {
+  const useCamera = async () => {
     cameraBtn.disabled = true;
     say('Starting the camera and the microphone…');
     const [cam, voice] = await Promise.all([startCamera(), startMic()]);
     if (!tracker) cameraBtn.disabled = false;
     say(`${cam} ${voice}`);
-  });
+  };
+  const useMouse = async () => {
+    say('Starting the microphone…');
+    const voice = await startMic();
+    say(mic ? 'Point with the mouse (a click counts too), hold Talk or the space bar, and say “put that here”.' : voice);
+  };
+  cameraBtn.addEventListener('click', () => void useCamera());
+
+  // The start card (plan 5.1): the two ways in, and the models list.
+  const startCameraBtn = document.getElementById('start-camera') as HTMLButtonElement;
+  const startMouseBtn = document.getElementById('start-mouse') as HTMLButtonElement;
+  const begin = (how: () => Promise<void>) => () => {
+    stage.classList.remove('starting');
+    void how();
+  };
+  startCameraBtn.addEventListener('click', begin(useCamera));
+  startMouseBtn.addEventListener('click', begin(useMouse));
   if (synthetic) {
     // No video: the small window shows the made-up hand itself, labelled.
     inset.drawHand = true;
@@ -277,13 +384,14 @@ async function start(): Promise<void> {
     if (e.code === 'Space' && !typing(e)) talk.release(now());
   });
   window.addEventListener('keydown', (e) => {
+    if (stage.classList.contains('starting')) return; // the start card's buttons first
+    if (e.key === 'Escape') return stopAll(); // Stop works even while typing
     if (e.code === 'Space' && !typing(e)) {
       e.preventDefault(); // no page scroll, no "click" on a focused button
-      if (!e.repeat) pressTalk();
+      if (!e.repeat && !isTyping()) pressTalk();
       return;
     }
     if (typing(e)) return;
-    if (e.key === 'Escape') stopAll();
     if (e.key === 'Enter') void flow.go();
     if (e.key === 'r') newBlocks();
     if (e.key === '[' || e.key === ']') {
@@ -323,6 +431,9 @@ async function start(): Promise<void> {
   };
   requestAnimationFrame(loop);
   say('Point at a block, hold Talk (or the space bar) and say “put that here”.');
+  startLoading.textContent = '';
+  startCameraBtn.disabled = false;
+  startMouseBtn.disabled = false;
   Object.assign(window, {
     __sim: {
       mj, model, data, view, arm, pointer, mouse, talk, flow,
@@ -333,6 +444,28 @@ async function start(): Promise<void> {
       startMic,
     },
   });
+}
+
+/** The page's name and the models list (plan 8.4), from the server. */
+function showInfo(): void {
+  const list = document.getElementById('models-list')!;
+  const models = document.getElementById('models') as HTMLDetailsElement;
+  document.getElementById('start-models')!.addEventListener('click', (e) => {
+    e.preventDefault();
+    models.open = true;
+    models.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  });
+  getInfo().then(
+    (info) => {
+      fillModels(list, info);
+      for (const el of document.querySelectorAll('.page-title')) el.textContent = info.title;
+      document.title = `${info.title}: put that here`;
+    },
+    (e) => {
+      console.error(e);
+      modelsUnavailable(list);
+    },
+  );
 }
 
 /**

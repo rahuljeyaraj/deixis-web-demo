@@ -11,7 +11,7 @@ import path from 'node:path';
 import { chromium } from '@playwright/test';
 
 const args = process.argv.slice(2);
-const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173/';
+const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173/?start=skip';
 const minute = args.includes('--minute');
 const root = path.resolve(import.meta.dirname, '..', '..');
 const out = path.join(root, 'out');

@@ -2,7 +2,7 @@
 //   node scripts/demo-shots.mjs [url] [outdir]
 import { chromium } from '@playwright/test';
 
-const [url = 'http://localhost:5173/', out = '../out'] = process.argv.slice(2);
+const [url = 'http://localhost:5173/?start=skip', out = '../out'] = process.argv.slice(2);
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await browser.newPage({ viewport: { width: 1312, height: 800 } });
 page.on('pageerror', (e) => console.log('pageerror:', e.message));

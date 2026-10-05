@@ -64,10 +64,44 @@ export class TableView {
   glow(geom: number, on: boolean): void {
     const mesh = this.meshOfGeom.get(geom);
     if (!mesh) return;
-    // Lit from inside in its own colour, so a chosen block reads as brighter, not paler.
+    // Lit from inside in its own colour, so a chosen block reads as brighter, not paler; and a
+    // pulsing pink ring on the table around it (the fingertip dot's colour).
     const m = mesh.material as THREE.MeshStandardMaterial;
     m.emissive.copy(on ? m.color : new THREE.Color(0x000000));
-    m.emissiveIntensity = on ? 0.55 : 0;
+    m.emissiveIntensity = on ? 0.45 : 0;
+    const halo = this.haloOf(mesh);
+    halo.visible = on;
+    if (on) this.halos.add(halo);
+    else this.halos.delete(halo);
+  }
+
+  private readonly halos = new Set<THREE.Mesh>();
+
+  /** A flat square ring under the block (it moves and turns with the block). */
+  private haloOf(mesh: THREE.Mesh): THREE.Mesh {
+    let halo = mesh.userData.halo as THREE.Mesh | undefined;
+    if (!halo) {
+      const box = (mesh.geometry as THREE.BoxGeometry).parameters;
+      const half = box.width / 2;
+      const outer = half + 0.009;
+      const inner = half + 0.0015;
+      const square = (s: number) => [
+        new THREE.Vector2(-s, -s), new THREE.Vector2(s, -s), new THREE.Vector2(s, s), new THREE.Vector2(-s, s),
+      ]; // prettier-ignore
+      const shape = new THREE.Shape(square(outer));
+      shape.holes.push(new THREE.Path(square(inner).reverse()));
+      halo = new THREE.Mesh(
+        new THREE.ShapeGeometry(shape),
+        new THREE.MeshBasicMaterial({ color: 0xff4081, transparent: true, depthWrite: false }),
+      );
+      halo.position.z = -box.depth / 2 + 0.0012; // just above what the block stands on
+      halo.raycast = () => {}; // pointing goes to the block, not its ring
+      halo.renderOrder = 1;
+      halo.visible = false;
+      mesh.add(halo);
+      mesh.userData.halo = halo;
+    }
+    return halo;
   }
 
   /**
@@ -135,6 +169,11 @@ export class TableView {
   }
 
   render(): void {
+    const k = 0.5 + 0.5 * Math.sin(performance.now() / 160);
+    for (const halo of this.halos) {
+      halo.scale.set(1 + 0.15 * k, 1 + 0.15 * k, 1);
+      (halo.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.45 * k;
+    }
     this.renderer?.render(this.scene, this.camera);
   }
 

@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Put that here</title>
+    <title>deixis: put that here</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23ff4081'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <main id="app">
       <div id="bubble" aria-live="polite"></div>
-      <div id="stage">
+      <div id="stage" class="starting">
         <canvas id="scene"></canvas>
         <canvas id="hand"></canvas>
         <div id="cam-box" aria-label="Your camera">
@@ -18,16 +18,74 @@
           <canvas id="cam-dots"></canvas>
           <span id="cam-label">made-up hand</span>
         </div>
-        <button id="camera-btn" type="button">Use my camera and mic</button>
+        <button id="camera-btn" type="button">Use my camera</button>
         <div id="status">Loading the arm…</div>
+
+        <!-- The start card (plan 5.1): the first 10 seconds. -->
+        <section id="start" aria-labelledby="start-title">
+          <div class="card">
+            <h1 id="start-title" class="page-title">deixis</h1>
+            <p class="lead">Point at a block and say <q>put that here</q>.</p>
+            <p class="how">The robot arm finds <q>that</q> and <q>here</q> from your finger and the moment you say each word.</p>
+            <div class="choices">
+              <button id="start-camera" class="big primary" type="button" disabled>Use my camera and mic</button>
+              <button id="start-mouse" class="big" type="button" disabled>Use my mouse</button>
+            </div>
+            <p id="start-loading" class="small">Loading the arm…</p>
+            <p class="small">Your video stays in your browser. Only fingertip points and your voice clip are sent. The voice clip is deleted after it’s turned into words.</p>
+            <p class="small"><a href="#models" id="start-models">What runs this demo</a></p>
+          </div>
+        </section>
       </div>
+
       <div id="controls">
         <button id="talk-btn" type="button" title="Hold to talk (or hold the space bar). A quick tap listens until you tap again.">Hold to talk</button>
+        <form id="type-form" autocomplete="off">
+          <input id="type-box" type="text" maxlength="200" placeholder="Click a block and a spot, then type: put that here" aria-label="Type what you want the robot to do" />
+          <button id="type-send" type="submit">Send</button>
+        </form>
         <button id="go-btn" class="plain" type="button" title="Do it (same as saying yes). Key: Enter">Go</button>
         <button id="undo-btn" class="plain" type="button" title="Put the last block back">Undo</button>
         <button id="reset-btn" class="plain" type="button" title="New blocks. Key: R">Reset blocks</button>
         <button id="stop-btn" class="plain stop" type="button" title="Stop the arm. Key: Esc">Stop</button>
+        <button id="type-toggle" class="link" type="button">Type instead</button>
       </div>
+
+      <!-- The thinking strip (plan 5.2): the words and the pointing on one timeline. -->
+      <section id="strip" aria-label="What the robot heard and saw">
+        <h2>What the robot heard and saw</h2>
+        <svg id="strip-svg" role="img" aria-label="Your words and your pointing on one timeline"></svg>
+      </section>
+      <details id="details">
+        <summary>Details: the tool calls, the core’s answer, the timings</summary>
+        <div id="details-body"><p>Nothing yet. Say or type a command first.</p></div>
+      </details>
+
+      <div id="chips" aria-label="Try saying">
+        <span class="chips-label">Try saying:</span>
+        <button type="button" class="chip">put that here</button>
+        <button type="button" class="chip">put the blue one next to that</button>
+        <button type="button" class="chip">put that on that</button>
+        <button type="button" class="chip">a bit left</button>
+        <button type="button" class="chip">yes</button>
+        <button type="button" class="chip">go home</button>
+      </div>
+
+      <footer>
+        <details id="models">
+          <summary>What runs this demo</summary>
+          <div id="models-list"><p>Loading…</p></div>
+        </details>
+        <details id="privacy">
+          <summary>Privacy</summary>
+          <ul>
+            <li>Your camera video never leaves your browser. The hand tracking runs here; only the fingertip’s points on the table are sent.</li>
+            <li>Your voice is sent once per command, turned into words in memory, then dropped. It is never saved.</li>
+            <li>The server writes one line per command to its log: the words and what the robot did. No audio, no video, no address.</li>
+          </ul>
+        </details>
+        <a class="foot-link" href="https://github.com/rahuljeyaraj/deixis" target="_blank" rel="noopener">The deixis core on GitHub</a>
+      </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
