@@ -11,6 +11,18 @@ export interface Sample {
   pointing: boolean;
 }
 
+/** A hold the page already knows, such as a click (the core's `Hold` shape). */
+export interface Hold {
+  t0: number;
+  t1: number;
+  /** Table mm. */
+  mean: [number, number];
+  /** Standard deviation in x and y, mm. */
+  spread: [number, number];
+  frame: string;
+  source: string;
+}
+
 export class SampleBuffer {
   private readonly items: Sample[] = [];
 

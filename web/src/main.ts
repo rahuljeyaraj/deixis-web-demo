@@ -1,12 +1,17 @@
 /**
  * The page. For now: the arm, the table and the blocks; a mouse test of the arm (click a
- * block, then click a spot); and the finger as a pointer (plan W4: the webcam, the ghost hand,
- * the fingertip dot, samples in table mm). Speech and the deixis core come next (plan W5 on).
+ * block, then click a spot); the finger as a pointer (plan W4: the webcam, the fingertip dot,
+ * samples in table mm); and the voice (plan W5: push-to-talk, the clip on the page clock).
+ * The words and the deixis core come next (plan W6 on).
  *
  * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests).
  */
 
+import { MicCapture } from './audio/capture';
+import type { Clip } from './audio/clip';
+import { PushToTalk } from './audio/talk';
 import { fromCanvas } from './hand/cursor';
+import { MousePointer } from './hand/mouse';
 import { CameraInset, HandOverlay } from './hand/overlay';
 import { FingerPointer } from './hand/pointer';
 import { syntheticFrame } from './hand/synthetic';
@@ -39,7 +44,9 @@ async function start(): Promise<void> {
   const camBox = document.getElementById('cam-box')!;
   const camDots = document.getElementById('cam-dots') as HTMLCanvasElement;
   const cameraBtn = document.getElementById('camera-btn') as HTMLButtonElement;
-  const say = (text: string) => (status.textContent = text);
+  const talkBtn = document.getElementById('talk-btn') as HTMLButtonElement;
+  const now = () => performance.now() / 1000;
+  const say =(text: string) => (status.textContent = text);
   const [mj, files] = await Promise.all([
     mujoco(),
     fetchPack('/so101.pack', (f) => say(`Loading the arm… ${Math.round(f * 100)} %`)),
@@ -81,9 +88,9 @@ async function start(): Promise<void> {
     return pointAt(view, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, blockOfGeom);
   };
   canvas.addEventListener('click', async (e) => {
-    if (arm.busy) return;
     const hit = hitOf(e);
-    if (!hit) return;
+    if (hit) mouse.click(now(), hit);
+    if (arm.busy || !hit) return;
     if (!chosen) {
       if (hit.block) {
         choose(hit.block);
@@ -113,22 +120,89 @@ async function start(): Promise<void> {
   // The finger (plan W4).
   const fingerHelp = 'Point with one finger: the pink dot follows it. Keys: L record, [ ] gain.';
   let tracker: HandTracker | null = null;
-  cameraBtn.addEventListener('click', async () => {
-    cameraBtn.disabled = true;
-    say('Starting the camera…');
+  const startCamera = async (): Promise<string> => {
     try {
       tracker = await HandTracker.start(video);
       tracker.onFrame = (f) => pointer.onFrame(f);
       camBox.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
       pointer.inset = inset;
       stage.classList.add('camera-on');
-      say(fingerHelp);
+      return fingerHelp;
     } catch (e) {
-      cameraBtn.disabled = false;
-      const why = e instanceof Error ? e.message : String(e);
-      say(`No camera (${why}). The mouse still works: click a block, then a spot.`);
       console.error(e);
+      return `No camera (${e instanceof Error ? e.message : e}); the mouse points instead.`;
     }
+  };
+
+  // The mouse as the pointer while the camera is off (plan 5.3): sampled like a fingertip
+  // (always, so the 2.5 s before the speech are there too), and each click a hold.
+  const mouse = new MousePointer((u, v) => pointAt(view, u, v, blockOfGeom));
+  canvas.addEventListener('pointermove', (e) => {
+    const r = canvas.getBoundingClientRect();
+    mouse.move((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  });
+  canvas.addEventListener('pointerleave', () => mouse.leave());
+  setInterval(() => tracker || mouse.sample(now()), 1000 / 30);
+
+  // The voice (plan W5): push-to-talk; the clip with its pre-roll and tail, on the page clock.
+  let mic: MicCapture | null = null;
+  let micStarting: Promise<string> | null = null;
+  let lastClip: Clip | null = null;
+  const startMic = (): Promise<string> =>
+    (micStarting ??= MicCapture.start().then(
+      (m) => {
+        mic = m;
+        talkBtn.classList.add('ready');
+        return 'Hold Talk (or the space bar) and speak.';
+      },
+      (e) => {
+        micStarting = null;
+        console.error(e);
+        return `No microphone (${e instanceof Error ? e.message : e}).`;
+      },
+    ));
+  const talk = new PushToTalk({
+    start: (t) => {
+      mic?.begin(t);
+      talkBtn.classList.add('on');
+      say('Listening… let go to stop (after a quick tap: tap again).');
+    },
+    stop: (t, reason) => {
+      talkBtn.classList.remove('on');
+      talkBtn.style.setProperty('--level', '0');
+      if (!mic) return;
+      if (reason === 'cancel') {
+        mic.recorder.cancel();
+        say('Stopped listening.');
+        return;
+      }
+      void mic.end(t).then((clip) => {
+        lastClip = clip;
+        const long = clip.cut || reason === 'long' ? ' That was long, so I stopped listening.' : '';
+        say(`Heard ${clip.duration.toFixed(1)} s of sound (loudest ${clip.peakDb.toFixed(0)} dB).${long}`);
+      });
+    },
+  });
+  /** A Talk press with no microphone yet asks for it; that press doesn't record. */
+  const pressTalk = () => {
+    if (mic) talk.press(now());
+    else void startMic().then(say);
+  };
+  talkBtn.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    talkBtn.setPointerCapture(e.pointerId);
+    pressTalk();
+  });
+  talkBtn.addEventListener('pointerup', () => talk.release(now()));
+  talkBtn.addEventListener('pointercancel', () => talk.release(now()));
+  talkBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  cameraBtn.addEventListener('click', async () => {
+    cameraBtn.disabled = true;
+    say('Starting the camera and the microphone…');
+    const [cam, voice] = await Promise.all([startCamera(), startMic()]);
+    if (!tracker) cameraBtn.disabled = false;
+    say(`${cam} ${voice}`);
   });
   if (new URLSearchParams(location.search).get('hands') === 'demo') {
     // No video: the small window shows the made-up hand itself, labelled.
@@ -139,8 +213,21 @@ async function start(): Promise<void> {
     startSyntheticHand(view, arm, pointer);
   }
 
+  const typing = (e: KeyboardEvent) =>
+    e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' && !typing(e)) talk.release(now());
+  });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') arm.stop();
+    if (e.code === 'Space' && !typing(e)) {
+      e.preventDefault(); // no page scroll, no "click" on a focused button
+      if (!e.repeat) pressTalk();
+      return;
+    }
+    if (e.key === 'Escape') {
+      arm.stop();
+      talk.cancel(now());
+    }
     if (e.key === 'r' && !arm.busy) reset();
     if (e.key === '[' || e.key === ']') {
       const w = pointer.box.width + (e.key === '[' ? -0.05 : 0.05);
@@ -171,13 +258,23 @@ async function start(): Promise<void> {
       arm.update();
       mj.mj_step(model, data);
     }
+    talk.tick(now / 1000);
+    if (talk.listening && mic) talkBtn.style.setProperty('--level', Math.min(1, mic.level * 8).toFixed(2));
     view.sync(data);
     view.render();
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
   say('Click a block, then click where it should go. R: new blocks. Esc: stop.');
-  Object.assign(window, { __sim: { mj, model, data, view, arm, pointer, tracker: () => tracker } });
+  Object.assign(window, {
+    __sim: {
+      mj, model, data, view, arm, pointer, mouse, talk,
+      tracker: () => tracker,
+      mic: () => mic,
+      lastClip: () => lastClip,
+      startMic,
+    },
+  });
 }
 
 /**

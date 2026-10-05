@@ -1,0 +1,768 @@
+{
+ "meta": {
+  "description": "The arm's commands in Windows SAPI voices; word starts from SpeakProgress events. t0/t1 in seconds from the start of the WAV; t1 is the next word's start (or the end of speech), so it includes any pause.",
+  "generator": "scripts/make_voice_fixtures.py",
+  "wav_dir": ".cache/voice",
+  "sample_rate": 16000
+ },
+ "items": [
+  {
+   "id": "david_00",
+   "voice": "Microsoft David Desktop",
+   "text": "put that here",
+   "wav": "david_00.wav",
+   "duration": 1.615,
+   "first_sound": 0.2,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.1,
+     "t1": 0.375,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.375,
+     "t1": 0.535,
+     "deictic": true
+    },
+    {
+     "i": 2,
+     "text": "here",
+     "t0": 0.535,
+     "t1": 0.835,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "david_01",
+   "voice": "Microsoft David Desktop",
+   "text": "put the blue one next to that",
+   "wav": "david_01.wav",
+   "duration": 2.43,
+   "first_sound": 0.205,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.1,
+     "t1": 0.375,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "the",
+     "t0": 0.375,
+     "t1": 0.465,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "blue",
+     "t0": 0.465,
+     "t1": 0.695,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "one",
+     "t0": 0.695,
+     "t1": 0.935,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "next",
+     "t0": 0.935,
+     "t1": 1.215,
+     "deictic": false
+    },
+    {
+     "i": 5,
+     "text": "to",
+     "t0": 1.215,
+     "t1": 1.33,
+     "deictic": false
+    },
+    {
+     "i": 6,
+     "text": "that",
+     "t0": 1.33,
+     "t1": 1.595,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "david_02",
+   "voice": "Microsoft David Desktop",
+   "text": "put that on that",
+   "wav": "david_02.wav",
+   "duration": 1.785,
+   "first_sound": 0.2,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.1,
+     "t1": 0.375,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.375,
+     "t1": 0.535,
+     "deictic": true
+    },
+    {
+     "i": 2,
+     "text": "on",
+     "t0": 0.535,
+     "t1": 0.69,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "that",
+     "t0": 0.69,
+     "t1": 0.98,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "david_03",
+   "voice": "Microsoft David Desktop",
+   "text": "move it a bit left",
+   "wav": "david_03.wav",
+   "duration": 1.93,
+   "first_sound": 0.11,
+   "words": [
+    {
+     "i": 0,
+     "text": "move",
+     "t0": 0.1,
+     "t1": 0.375,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "it",
+     "t0": 0.375,
+     "t1": 0.49,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "a",
+     "t0": 0.49,
+     "t1": 0.555,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "bit",
+     "t0": 0.555,
+     "t1": 0.775,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "left",
+     "t0": 0.775,
+     "t1": 1.13,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_04",
+   "voice": "Microsoft David Desktop",
+   "text": "a bit to the right",
+   "wav": "david_04.wav",
+   "duration": 1.76,
+   "first_sound": 0.11,
+   "words": [
+    {
+     "i": 0,
+     "text": "a",
+     "t0": 0.1,
+     "t1": 0.19,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "bit",
+     "t0": 0.19,
+     "t1": 0.425,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "to",
+     "t0": 0.425,
+     "t1": 0.545,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "the",
+     "t0": 0.545,
+     "t1": 0.665,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "right",
+     "t0": 0.665,
+     "t1": 0.96,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_05",
+   "voice": "Microsoft David Desktop",
+   "text": "put it there",
+   "wav": "david_05.wav",
+   "duration": 1.585,
+   "first_sound": 0.2,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.1,
+     "t1": 0.38,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "it",
+     "t0": 0.38,
+     "t1": 0.5,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "there",
+     "t0": 0.5,
+     "t1": 0.81,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "david_06",
+   "voice": "Microsoft David Desktop",
+   "text": "yes",
+   "wav": "david_06.wav",
+   "duration": 1.275,
+   "first_sound": 0.12,
+   "words": [
+    {
+     "i": 0,
+     "text": "yes",
+     "t0": 0.1,
+     "t1": 0.505,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_07",
+   "voice": "Microsoft David Desktop",
+   "text": "no",
+   "wav": "david_07.wav",
+   "duration": 1.13,
+   "first_sound": 0.11,
+   "words": [
+    {
+     "i": 0,
+     "text": "no",
+     "t0": 0.1,
+     "t1": 0.36,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_08",
+   "voice": "Microsoft David Desktop",
+   "text": "stop",
+   "wav": "david_08.wav",
+   "duration": 1.39,
+   "first_sound": 0.12,
+   "words": [
+    {
+     "i": 0,
+     "text": "stop",
+     "t0": 0.1,
+     "t1": 0.48,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_09",
+   "voice": "Microsoft David Desktop",
+   "text": "go home",
+   "wav": "david_09.wav",
+   "duration": 1.415,
+   "first_sound": 0.12,
+   "words": [
+    {
+     "i": 0,
+     "text": "go",
+     "t0": 0.1,
+     "t1": 0.29,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "home",
+     "t0": 0.29,
+     "t1": 0.605,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_10",
+   "voice": "Microsoft David Desktop",
+   "text": "this one",
+   "wav": "david_10.wav",
+   "duration": 1.425,
+   "first_sound": 0.12,
+   "words": [
+    {
+     "i": 0,
+     "text": "this",
+     "t0": 0.1,
+     "t1": 0.325,
+     "deictic": true
+    },
+    {
+     "i": 1,
+     "text": "one",
+     "t0": 0.325,
+     "t1": 0.61,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "david_11",
+   "voice": "Microsoft David Desktop",
+   "text": "the red one",
+   "wav": "david_11.wav",
+   "duration": 1.555,
+   "first_sound": 0.115,
+   "words": [
+    {
+     "i": 0,
+     "text": "the",
+     "t0": 0.1,
+     "t1": 0.225,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "red",
+     "t0": 0.225,
+     "t1": 0.455,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "one",
+     "t0": 0.455,
+     "t1": 0.75,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_00",
+   "voice": "Microsoft Zira Desktop",
+   "text": "put that here",
+   "wav": "zira_00.wav",
+   "duration": 1.355,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.085,
+     "t1": 0.245,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.245,
+     "t1": 0.38,
+     "deictic": true
+    },
+    {
+     "i": 2,
+     "text": "here",
+     "t0": 0.38,
+     "t1": 0.695,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "zira_01",
+   "voice": "Microsoft Zira Desktop",
+   "text": "put the blue one next to that",
+   "wav": "zira_01.wav",
+   "duration": 2.055,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.085,
+     "t1": 0.22,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "the",
+     "t0": 0.22,
+     "t1": 0.3,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "blue",
+     "t0": 0.3,
+     "t1": 0.53,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "one",
+     "t0": 0.53,
+     "t1": 0.715,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "next",
+     "t0": 0.715,
+     "t1": 0.98,
+     "deictic": false
+    },
+    {
+     "i": 5,
+     "text": "to",
+     "t0": 0.98,
+     "t1": 1.07,
+     "deictic": false
+    },
+    {
+     "i": 6,
+     "text": "that",
+     "t0": 1.07,
+     "t1": 1.375,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "zira_02",
+   "voice": "Microsoft Zira Desktop",
+   "text": "put that on that",
+   "wav": "zira_02.wav",
+   "duration": 1.47,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.085,
+     "t1": 0.22,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.22,
+     "t1": 0.36,
+     "deictic": true
+    },
+    {
+     "i": 2,
+     "text": "on",
+     "t0": 0.36,
+     "t1": 0.485,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "that",
+     "t0": 0.485,
+     "t1": 0.8,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "zira_03",
+   "voice": "Microsoft Zira Desktop",
+   "text": "move it a bit left",
+   "wav": "zira_03.wav",
+   "duration": 1.715,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "move",
+     "t0": 0.085,
+     "t1": 0.33,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "it",
+     "t0": 0.33,
+     "t1": 0.42,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "a",
+     "t0": 0.42,
+     "t1": 0.47,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "bit",
+     "t0": 0.47,
+     "t1": 0.68,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "left",
+     "t0": 0.68,
+     "t1": 1.035,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_04",
+   "voice": "Microsoft Zira Desktop",
+   "text": "a bit to the right",
+   "wav": "zira_04.wav",
+   "duration": 1.57,
+   "first_sound": 0.085,
+   "words": [
+    {
+     "i": 0,
+     "text": "a",
+     "t0": 0.085,
+     "t1": 0.155,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "bit",
+     "t0": 0.155,
+     "t1": 0.34,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "to",
+     "t0": 0.34,
+     "t1": 0.43,
+     "deictic": false
+    },
+    {
+     "i": 3,
+     "text": "the",
+     "t0": 0.43,
+     "t1": 0.545,
+     "deictic": false
+    },
+    {
+     "i": 4,
+     "text": "right",
+     "t0": 0.545,
+     "t1": 0.89,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_05",
+   "voice": "Microsoft Zira Desktop",
+   "text": "put it there",
+   "wav": "zira_05.wav",
+   "duration": 1.255,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.085,
+     "t1": 0.245,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "it",
+     "t0": 0.245,
+     "t1": 0.33,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "there",
+     "t0": 0.33,
+     "t1": 0.595,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "zira_06",
+   "voice": "Microsoft Zira Desktop",
+   "text": "yes",
+   "wav": "zira_06.wav",
+   "duration": 1.185,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "yes",
+     "t0": 0.085,
+     "t1": 0.525,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_07",
+   "voice": "Microsoft Zira Desktop",
+   "text": "no",
+   "wav": "zira_07.wav",
+   "duration": 1.005,
+   "first_sound": 0.09,
+   "words": [
+    {
+     "i": 0,
+     "text": "no",
+     "t0": 0.085,
+     "t1": 0.36,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_08",
+   "voice": "Microsoft Zira Desktop",
+   "text": "stop",
+   "wav": "zira_08.wav",
+   "duration": 1.295,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "stop",
+     "t0": 0.085,
+     "t1": 0.61,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_09",
+   "voice": "Microsoft Zira Desktop",
+   "text": "go home",
+   "wav": "zira_09.wav",
+   "duration": 1.265,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "go",
+     "t0": 0.085,
+     "t1": 0.225,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "home",
+     "t0": 0.225,
+     "t1": 0.6,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_10",
+   "voice": "Microsoft Zira Desktop",
+   "text": "this one",
+   "wav": "zira_10.wav",
+   "duration": 1.225,
+   "first_sound": 0.1,
+   "words": [
+    {
+     "i": 0,
+     "text": "this",
+     "t0": 0.085,
+     "t1": 0.27,
+     "deictic": true
+    },
+    {
+     "i": 1,
+     "text": "one",
+     "t0": 0.27,
+     "t1": 0.565,
+     "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_11",
+   "voice": "Microsoft Zira Desktop",
+   "text": "the red one",
+   "wav": "zira_11.wav",
+   "duration": 1.355,
+   "first_sound": 0.1,
+   "words": [
+    {
+     "i": 0,
+     "text": "the",
+     "t0": 0.085,
+     "t1": 0.2,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "red",
+     "t0": 0.2,
+     "t1": 0.38,
+     "deictic": false
+    },
+    {
+     "i": 2,
+     "text": "one",
+     "t0": 0.38,
+     "t1": 0.69,
+     "deictic": false
+    }
+   ]
+  }
+ ]
+}
