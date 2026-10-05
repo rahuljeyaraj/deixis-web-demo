@@ -1,0 +1,221 @@
+/**
+ * The flow in the browser (plan W9) on the server's real replies for the plan's scenes
+ * (`tests/fixtures/replies.json`, written by the server tests `tests/test_flow_replies.py`):
+ * each reply goes into the flow, and the real arm in MuJoCo does the rest.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { describe, expect, test } from 'vitest';
+import type { CoreResponse, Thing } from '../src/core';
+import { Flow, type FlowView, SAY } from '../src/flow/flow';
+import { blockedBy, footprint, thingsFor } from '../src/flow/things';
+import { Arm, BLOCK_IDS, type BlockId, type BlockState } from '../src/sim/arm';
+import { nodeScene } from './scene';
+
+interface Step {
+  kind: 'command' | 'answer' | 'go';
+  text?: string;
+  reply?: { result: CoreResponse | null; say: string | null; error: string | null };
+}
+const FIXTURE = JSON.parse(
+  fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'replies.json'), 'utf8'),
+) as { things: Thing[]; here: [number, number]; scenes: Record<string, Step[]> };
+
+class Recorder implements FlowView {
+  said: string[] = [];
+  glowing: BlockId[] = [];
+  ghostOf: BlockId | null = null;
+  speak(text: string) {
+    this.said.push(text);
+  }
+  glow(ids: BlockId[]) {
+    this.glowing = ids;
+  }
+  ghost(block: BlockId | null) {
+    this.ghostOf = block;
+  }
+}
+
+describe('the flow on the server replies', async () => {
+  const { mj, model, data } = await nodeScene();
+  const arm = new Arm(mj, model, data);
+  const step = (s: number) => {
+    for (let i = 0, n = Math.round(s / model.opt.timestep); i < n; i++) {
+      arm.update();
+      mj.mj_step(model, data);
+    }
+  };
+  const settle = async <T>(p: Promise<T>): Promise<T> => {
+    for (let t = 0; arm.busy && t < 30; t += 0.1) step(0.1);
+    step(0.3);
+    return p;
+  };
+  const centre = (t: Thing): [number, number] => [t.box_mm[0] + t.box_mm[2] / 2, t.box_mm[1] + t.box_mm[3] / 2];
+
+  /** The blocks where the server's scene had them, the arm at home; then the scene's steps. */
+  async function play(name: string) {
+    arm.goHomeNow();
+    for (const t of FIXTURE.things) arm.putBlock(t.id as BlockId, ...centre(t), 0);
+    step(0.5);
+    const view = new Recorder();
+    let clock = 100;
+    const flow = new Flow(arm, view, { confirmFirst: true, now: () => clock++ });
+    for (const s of FIXTURE.scenes[name]) {
+      if (s.kind === 'go') await settle(flow.go());
+      else {
+        flow.thinking();
+        await flow.handle(s.reply!);
+      }
+    }
+    return { flow, view };
+  }
+
+  const at = (id: BlockId) => arm.block(id);
+  const near = (b: BlockState, x: number, y: number) => Math.hypot(b.tableMm[0] - x, b.tableMm[1] - y);
+
+  test('put that here: preview, "This one, here?", yes, the red block is there', async () => {
+    const { flow, view } = await play('put that here');
+    expect(view.said).toEqual([SAY.confirm]);
+    expect(flow.state.kind).toBe('idle');
+    expect(near(at('red'), ...FIXTURE.here)).toBeLessThan(3);
+    expect(at('red').heightMm).toBeCloseTo(30, 0);
+    expect(flow.lastThing).toBe('red');
+  });
+
+  test('put the blue one next to that: to the right of the green block', async () => {
+    await play('put the blue one next to that');
+    const blue = at('blue');
+    const green = at('green');
+    expect(blue.tableMm[0] - green.tableMm[0]).toBeGreaterThan(30 + 5);
+    expect(Math.abs(blue.tableMm[1] - green.tableMm[1])).toBeLessThan(3);
+  });
+
+  test('put that on that: stacked on the green block, flat', async () => {
+    const { flow } = await play('put that on that');
+    const red = at('red');
+    expect(near(red, ...at('green').tableMm)).toBeLessThan(4);
+    expect(red.heightMm).toBeCloseTo(60, 0);
+    // The green block now has one on top: it can't be picked.
+    const things = flow.things();
+    expect(things.find((t) => t.id === 'green')!.selectable).toBe(false);
+    expect(things.find((t) => t.id === 'red')!.height_mm).toBeCloseTo(60, 0);
+  });
+
+  test('a bit left: the ghost moves 20 mm to the left, then yes', async () => {
+    const { view } = await play('a bit left');
+    expect(view.said).toEqual([SAY.confirm, SAY.confirm]);
+    expect(near(at('red'), FIXTURE.here[0] - 20, FIXTURE.here[1])).toBeLessThan(3);
+  });
+
+  test('outside the area: the question, and nothing moves', async () => {
+    const { flow, view } = await play('outside the area');
+    const before = centre(FIXTURE.things.find((t) => t.id === 'red')!);
+    expect(view.said).toEqual(["I can't reach there. Please point somewhere closer."]);
+    expect(flow.state.kind).toBe('asking');
+    expect(flow.request().state.question).toBe(view.said[0]);
+    expect(near(at('red'), ...before)).toBeLessThan(0.5);
+  });
+
+  test('between two blocks: "This one or that one?", both glow; a click on yellow; yes', async () => {
+    const steps = FIXTURE.scenes['between two blocks, then a click'];
+    arm.goHomeNow();
+    for (const t of FIXTURE.things) arm.putBlock(t.id as BlockId, ...centre(t), 0);
+    step(0.5);
+    const view = new Recorder();
+    const flow = new Flow(arm, view, { confirmFirst: true, now: () => 1 });
+    flow.thinking();
+    await flow.handle(steps[0].reply!);
+    expect(view.said).toEqual(['This one or that one?']);
+    expect([...view.glowing].sort()).toEqual(['red', 'yellow']);
+    expect(flow.candidateOf('yellow')).not.toBeNull();
+    expect(flow.candidateOf('blue')).toBeNull();
+    await flow.handle(steps[1].reply!);
+    expect(flow.state.kind).toBe('preview');
+    expect(view.glowing).toEqual(['yellow']);
+    await settle(flow.go());
+    expect(near(at('yellow'), ...FIXTURE.here)).toBeLessThan(3);
+  });
+
+  test('no pointing: "Where? Point at the spot."', async () => {
+    const { view, flow } = await play('no pointing');
+    expect(view.said).toEqual(['Where? Point at the spot.']);
+    expect(flow.state.kind).toBe('asking');
+  });
+
+  test('not understood: says so and keeps what was there', async () => {
+    const { view, flow } = await play('not understood');
+    expect(view.said[0]).toMatch(/^Sorry, I didn't get that/);
+    expect(flow.state.kind).toBe('idle');
+  });
+
+  test('stop during a move freezes the arm; undo puts a block back', async () => {
+    const { flow } = await play('put that here');
+    // Undo: back to where the server's scene had it.
+    await settle(flow.undo());
+    const home = centre(FIXTURE.things.find((t) => t.id === 'red')!);
+    expect(near(at('red'), ...home)).toBeLessThan(3);
+    // Again, and stop half way.
+    const view = new Recorder();
+    const f2 = new Flow(arm, view, { confirmFirst: true, now: () => 1 });
+    await f2.handle(FIXTURE.scenes['put that here'][0].reply!);
+    const going = f2.go();
+    step(1.2);
+    await f2.handle(FIXTURE.scenes['stop'][0].reply!);
+    expect(arm.busy).toBe(false);
+    expect((await going)?.reason).toBe('stopped');
+    expect(view.said.at(-1)).toBe(SAY.stopped);
+  });
+});
+
+describe('robot-side checks before a preview', async () => {
+  const { mj, model, data } = await nodeScene();
+  const arm = new Arm(mj, model, data);
+  const reply = (args: Record<string, unknown>): { result: CoreResponse } => ({
+    result: { status: 'ok', calls: [{ index: 0, name: 'move', args }] },
+  });
+  const thing = (id: string) => ({ frame: 'table', kind: 'thing', thing: id, source: 'gesture', mean_mm: [0, 0] });
+  const spot = (x: number, y: number, z = 0, target?: string) => ({
+    frame: 'table', kind: 'box', source: 'gesture', mean_mm: [x, y], box_mm: [x - 15, y - 15, 30, 30], z_mm: z,
+    ...(target ? { evidence: { target } } : {}),
+  });
+
+  async function fresh() {
+    arm.goHomeNow();
+    arm.putBlock('red', 180, 120, 0);
+    arm.putBlock('yellow', 225, 120, 0);
+    arm.putBlock('green', 300, 90, 0);
+    arm.putBlock('blue', 360, 150, 0);
+    for (let i = 0; i < 100; i++) mj.mj_step(model, data);
+    const view = new Recorder();
+    return { view, flow: new Flow(arm, view, { confirmFirst: true, now: () => 1 }) };
+  }
+
+  test('out of reach (inside the area, off the mat)', async () => {
+    const { view, flow } = await fresh();
+    await flow.handle(reply({ object: thing('red'), place: spot(30, 30) }));
+    expect(view.said).toEqual([SAY.cantReach]);
+    expect(flow.state.kind).toBe('idle');
+  });
+
+  test('a block in the way', async () => {
+    const { view, flow } = await fresh();
+    await flow.handle(reply({ object: thing('red'), place: spot(305, 95) }));
+    expect(view.said).toEqual([SAY.inTheWay]);
+  });
+
+  test('on itself', async () => {
+    const { view, flow } = await fresh();
+    await flow.handle(reply({ object: thing('red'), place: spot(180, 120, 30, 'red') }));
+    expect(view.said).toEqual([SAY.onItself]);
+  });
+
+  test('the footprint of a turned block, and a free place', () => {
+    expect(footprint({ tableMm: [100, 100], yaw: 0 })).toEqual([85, 85, 30, 30]);
+    const turned = footprint({ tableMm: [100, 100], yaw: Math.PI / 4 });
+    expect(turned[2]).toBeCloseTo(42.4, 1);
+    const blocks = BLOCK_IDS.map((id) => arm.block(id));
+    expect(blockedBy(250, 50, blocks, [])).toBeNull();
+    expect(thingsFor(blocks, () => 0).every((t) => t.selectable)).toBe(true);
+  });
+});

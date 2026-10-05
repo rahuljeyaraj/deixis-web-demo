@@ -54,3 +54,11 @@ def settings(tmp_path) -> Settings:
 def api(settings, core, speech) -> Iterator[TestClient]:
     with TestClient(create_app(settings, client=core, speech=speech)) as c:
         yield c
+
+
+@pytest.fixture
+def rules_api(settings, core, speech) -> Iterator[TestClient]:
+    """The app with the rule parser instead of Nemotron (no key, no network)."""
+    settings.ai = "rules"
+    with TestClient(create_app(settings, client=core, speech=speech)) as c:
+        yield c

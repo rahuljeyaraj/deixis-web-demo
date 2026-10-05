@@ -1,17 +1,17 @@
 /**
- * The page. For now: the arm, the table and the blocks; a mouse test of the arm (click a
- * block, then click a spot); the finger as a pointer (plan W4: the webcam, the fingertip dot,
- * samples in table mm); the voice (plan W5: push-to-talk, the clip on the page clock); and
- * the words the server heard, on the page clock (W6). The agent and the deixis core come
- * next (plan W7 on).
+ * The page: the arm, the table and the blocks; the finger as a pointer (plan W4: the webcam,
+ * the fingertip dot, samples in table mm), or the mouse; the voice (W5: push-to-talk, the clip
+ * on the page clock); one command to the server (W6, W8: words, Nemotron's calls, the core's
+ * places over MCP); and the flow (W9: preview, "This one, here?", yes, the arm moves).
  *
  * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests).
  */
 
-import { type CommandReply, sendCommand } from './api';
+import { type CommandReply, sendAnswer, sendCommand } from './api';
 import { MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
+import { Flow } from './flow/flow';
 import { fromCanvas } from './hand/cursor';
 import { MousePointer } from './hand/mouse';
 import { CameraInset, HandOverlay } from './hand/overlay';
@@ -23,6 +23,7 @@ import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
 import { BASE_MM, BLOCK_MM, REACH_MM, onMat, tableToWorld } from './sim/table';
+import { speak } from './voice';
 
 /** Random spots on the reach mat, at least 60 mm apart. */
 function layout(n: number, rand = Math.random): [number, number][] {
@@ -47,8 +48,12 @@ async function start(): Promise<void> {
   const camDots = document.getElementById('cam-dots') as HTMLCanvasElement;
   const cameraBtn = document.getElementById('camera-btn') as HTMLButtonElement;
   const talkBtn = document.getElementById('talk-btn') as HTMLButtonElement;
+  const goBtn = document.getElementById('go-btn') as HTMLButtonElement;
+  const bubble = document.getElementById('bubble')!;
   const now = () => performance.now() / 1000;
-  const say =(text: string) => (status.textContent = text);
+  const say = (text: string) => (status.textContent = text);
+  /** `?hands=demo`: a made-up hand points instead of the camera. */
+  const synthetic = new URLSearchParams(location.search).get('hands') === 'demo';
   const [mj, files] = await Promise.all([
     mujoco(),
     fetchPack('/so101.pack', (f) => say(`Loading the arm… ${Math.round(f * 100)} %`)),
@@ -78,47 +83,44 @@ async function start(): Promise<void> {
   new ResizeObserver(fit).observe(canvas);
   fit();
 
-  // Mouse test: click a block, then a spot (or another block to stack on it).
-  let chosen: BlockId | null = null;
-  const choose = (id: BlockId | null) => {
-    if (chosen) view.glow(arm.blocks.get(chosen)!.geom, false);
-    chosen = id;
-    if (id) view.glow(arm.blocks.get(id)!.geom, true);
+  // The flow (plan 5.4, W9): what the server resolved, checked robot-side, shown, then done.
+  const glowing = new Set<BlockId>();
+  const robotSays = (text: string) => {
+    bubble.textContent = text;
+    bubble.classList.add('on');
+    speak(text);
+  };
+  const flow = new Flow(arm, {
+    speak: robotSays,
+    glow: (ids) => {
+      for (const id of BLOCK_IDS) {
+        const on = ids.includes(id);
+        if (on === glowing.has(id)) continue;
+        view.glow(arm.blocks.get(id)!.geom, on);
+        if (on) glowing.add(id);
+        else glowing.delete(id);
+      }
+    },
+    ghost: (block, place) => {
+      if (!block || !place) return view.showGhost(null);
+      const [gx, gy] = tableToWorld(place.xMm, place.yMm);
+      view.showGhost([gx, gy, (place.zMm + BLOCK_MM / 2) / 1000], arm.blocks.get(block)!.geom);
+    },
+    changed: (s) => {
+      stage.dataset.flow = s.kind;
+      goBtn.disabled = s.kind !== 'preview';
+      if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
+    },
+  });
+  const failed = (e: unknown) => {
+    console.error(e);
+    void flow.handle({ result: null, say: "Sorry, that didn't work. Please try again." });
+    say(`Something went wrong (${e instanceof Error ? e.message : e}).`);
   };
   const hitOf = (e: MouseEvent): Hit | null => {
     const r = canvas.getBoundingClientRect();
     return pointAt(view, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, blockOfGeom);
   };
-  canvas.addEventListener('click', async (e) => {
-    const hit = hitOf(e);
-    if (hit) mouse.click(now(), hit);
-    if (arm.busy || !hit) return;
-    if (!chosen) {
-      if (hit.block) {
-        choose(hit.block);
-        say(`The ${hit.block} block. Now click where it should go.`);
-      }
-      return;
-    }
-    const id = chosen;
-    const onto = hit.block && hit.block !== id ? arm.block(hit.block) : null;
-    const place = onto
-      ? { xMm: onto.tableMm[0], yMm: onto.tableMm[1], zMm: onto.heightMm }
-      : { xMm: hit.x, yMm: hit.y, zMm: 0 };
-    const [gx, gy] = tableToWorld(place.xMm, place.yMm);
-    view.showGhost([gx, gy, (place.zMm + BLOCK_MM / 2) / 1000], arm.blocks.get(id)!.geom);
-    say(`Moving the ${id} block…`);
-    const res = await arm.move(id, place);
-    choose(null);
-    view.showGhost(null);
-    say(
-      res.ok
-        ? 'Done. Click another block.'
-        : res.reason === 'cant_reach'
-          ? "I can't reach there. Please pick a spot on the light area."
-          : `That didn't work (${res.reason}).`,
-    );
-  });
   // The finger (plan W4).
   const fingerHelp = 'Point with one finger: the pink dot follows it. Keys: L record, [ ] gain.';
   let tracker: HandTracker | null = null;
@@ -145,6 +147,20 @@ async function start(): Promise<void> {
   });
   canvas.addEventListener('pointerleave', () => mouse.leave());
   setInterval(() => tracker || mouse.sample(now()), 1000 / 30);
+  canvas.addEventListener('click', async (e) => {
+    const hit = hitOf(e);
+    if (!hit) return;
+    mouse.click(now(), hit);
+    // A click on one of the glowing choices answers the robot's question.
+    const pick = hit.block ? flow.candidateOf(hit.block) : null;
+    if (pick === null) return;
+    flow.thinking();
+    try {
+      await flow.handle(await sendAnswer(pick));
+    } catch (err) {
+      failed(err);
+    }
+  });
 
   // The voice (plan W5): push-to-talk; the clip with its pre-roll and tail, on the page clock.
   let mic: MicCapture | null = null;
@@ -185,15 +201,27 @@ async function start(): Promise<void> {
         .then(async (clip) => {
           lastClip = clip;
           say(`${long}Thinking…`);
-          const reply = await sendCommand({ audio_t0: clip.t0 }, clip.wav);
+          flow.thinking();
+          // The pointing from 2.5 s before the speech to 0.8 s after it (plan 4.2); the clip
+          // already starts 0.5 s early and ends 0.4 s late.
+          const from = clip.t0 - 2;
+          const to = clip.t0 + clip.duration + 0.4;
+          const pointing = tracker || synthetic ? pointer.samples : mouse.samples;
+          const meta = {
+            audio_t0: clip.t0,
+            t: now(),
+            samples: pointing.between(from, to),
+            holds: mouse.clicksBetween(from, to),
+            things: flow.things(),
+            ...flow.request(),
+          };
+          const reply = await sendCommand(meta, clip.wav);
           lastReply = reply;
           const heard = reply.words.map((w) => w.text).join(' ');
-          say(heard ? `${long}I heard: “${heard}”.` : `${long}I didn't hear any words. Try again?`);
+          say(heard ? `${long}You said: “${heard}”` : `${long}I didn't hear any words.`);
+          await flow.handle(heard ? reply : { result: null, say: "Sorry, I didn't hear that. Try again?" });
         })
-        .catch((e) => {
-          console.error(e);
-          say(`Sorry, that didn't work (${e instanceof Error ? e.message : e}).`);
-        });
+        .catch(failed);
     },
   });
   /** A Talk press with no microphone yet asks for it; that press doesn't record. */
@@ -217,7 +245,7 @@ async function start(): Promise<void> {
     if (!tracker) cameraBtn.disabled = false;
     say(`${cam} ${voice}`);
   });
-  if (new URLSearchParams(location.search).get('hands') === 'demo') {
+  if (synthetic) {
     // No video: the small window shows the made-up hand itself, labelled.
     inset.drawHand = true;
     pointer.inset = inset;
@@ -225,6 +253,23 @@ async function start(): Promise<void> {
     stage.classList.add('camera-on');
     startSyntheticHand(view, arm, pointer);
   }
+
+  // The buttons (plan 5.2): Go (same as yes), Undo, Reset blocks, Stop (also Esc).
+  const stopAll = () => {
+    talk.cancel(now());
+    flow.stop();
+    robotSays('Stopped.');
+  };
+  const newBlocks = () => {
+    flow.stop();
+    reset();
+    flow.reset();
+  };
+  goBtn.addEventListener('click', () => void flow.go());
+  document.getElementById('undo-btn')!.addEventListener('click', () => void flow.undo());
+  document.getElementById('reset-btn')!.addEventListener('click', newBlocks);
+  document.getElementById('stop-btn')!.addEventListener('click', stopAll);
+  goBtn.disabled = true;
 
   const typing = (e: KeyboardEvent) =>
     e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
@@ -237,11 +282,10 @@ async function start(): Promise<void> {
       if (!e.repeat) pressTalk();
       return;
     }
-    if (e.key === 'Escape') {
-      arm.stop();
-      talk.cancel(now());
-    }
-    if (e.key === 'r' && !arm.busy) reset();
+    if (typing(e)) return;
+    if (e.key === 'Escape') stopAll();
+    if (e.key === 'Enter') void flow.go();
+    if (e.key === 'r') newBlocks();
     if (e.key === '[' || e.key === ']') {
       const w = pointer.box.width + (e.key === '[' ? -0.05 : 0.05);
       pointer.box.width = Math.min(1, Math.max(0.3, Math.round(w * 100) / 100));
@@ -278,10 +322,10 @@ async function start(): Promise<void> {
     requestAnimationFrame(loop);
   };
   requestAnimationFrame(loop);
-  say('Click a block, then click where it should go. R: new blocks. Esc: stop.');
+  say('Point at a block, hold Talk (or the space bar) and say “put that here”.');
   Object.assign(window, {
     __sim: {
-      mj, model, data, view, arm, pointer, mouse, talk,
+      mj, model, data, view, arm, pointer, mouse, talk, flow,
       tracker: () => tracker,
       mic: () => mic,
       lastClip: () => lastClip,

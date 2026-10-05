@@ -43,3 +43,16 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
   box-shadow: 0 0 0 calc(var(--level) * 10px) rgb(255 64 129 / 0.45); }
 #talk-btn:not(.ready) { background: #4b5563; }
 #talk-btn.on { background: var(--accent); }
+
+/* The robot's speech bubble (plan 5.2), above the scene; also spoken aloud. */
+#bubble { min-height: 44px; margin: 0 auto 10px; max-width: 760px; padding: 9px 18px;
+  border-radius: 12px; text-align: center; font-size: 19px; color: transparent;
+  background: transparent; border: 2px solid transparent; transition: background 0.15s; }
+#bubble.on { color: var(--ink); background: #fff8d6; border-color: #e3c454; }
+
+/* Go, Undo, Reset blocks, Stop (plan 5.2). */
+#controls button.plain { padding: 11px 20px; border-radius: 10px; border: 2px solid #9aa3b2;
+  background: white; color: var(--ink); font: inherit; font-size: 16px; cursor: pointer; }
+#controls button.plain:disabled { opacity: 0.45; cursor: default; }
+#controls button.stop { border-color: #c62828; background: #fde8e8; color: #8e1b1b; }
+#stage[data-flow="preview"] ~ #controls #go-btn { border-color: #1d4ed8; color: #1d4ed8; font-weight: 600; }

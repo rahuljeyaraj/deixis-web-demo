@@ -1,0 +1,1755 @@
+{
+ "about": "The server's real replies for the plan's scenes (plan 10), saved for the browser's flow\ntests (`web/tests/flow.test.ts` plays them into the real arm in MuJoCo). Typed words with\nclicks (the mouse-and-typing mode), the rule parser, the core over MCP.",
+ "things": [
+  {
+   "id": "red",
+   "label": "red block",
+   "box_mm": [
+    165.0,
+    105.0,
+    30,
+    30
+   ],
+   "height_mm": 30,
+   "attrs": {
+    "color": "red"
+   },
+   "t": 1
+  },
+  {
+   "id": "yellow",
+   "label": "yellow block",
+   "box_mm": [
+    210.0,
+    105.0,
+    30,
+    30
+   ],
+   "height_mm": 30,
+   "attrs": {
+    "color": "yellow"
+   },
+   "t": 2
+  },
+  {
+   "id": "green",
+   "label": "green block",
+   "box_mm": [
+    285.0,
+    75.0,
+    30,
+    30
+   ],
+   "height_mm": 30,
+   "attrs": {
+    "color": "green"
+   },
+   "t": 3
+  },
+  {
+   "id": "blue",
+   "label": "blue block",
+   "box_mm": [
+    345.0,
+    135.0,
+    30,
+    30
+   ],
+   "height_mm": 30,
+   "attrs": {
+    "color": "blue"
+   },
+   "t": 4
+  }
+ ],
+ "here": [
+  330.0,
+  50.0
+ ],
+ "scenes": {
+  "put that here": [
+   {
+    "kind": "command",
+    "text": "put that here",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "move",
+        "args": {
+         "object": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           180.0,
+           120.0
+          ],
+          "box_mm": [
+           165.0,
+           105.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": "red",
+          "label": "red block",
+          "source": "object_ref",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "pointed",
+           "hold_t": [
+            27.85,
+            28.15
+           ],
+           "candidates": 2,
+           "word": "that",
+           "word_t": [
+            28.0,
+            28.2
+           ],
+           "lead_s": 0.0,
+           "point": [
+            180.0,
+            120.0
+           ]
+          }
+         },
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           330.0,
+           50.0
+          ],
+          "box_mm": [
+           315.0,
+           35.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            16.0,
+            0.0
+           ],
+           [
+            0.0,
+            16.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "gesture",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "k_in_order",
+           "hold_t": [
+            29.05,
+            29.35
+           ],
+           "candidates": 2,
+           "word": "here",
+           "word_t": [
+            29.2,
+            29.4
+           ],
+           "lead_s": 0.0,
+           "box_from": "object",
+           "size_mm": [
+            30.0,
+            30.0
+           ]
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         180.0,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       },
+       {
+        "t0": 29.05,
+        "t1": 29.349999999999998,
+        "mean": [
+         330.0,
+         50.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       },
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          330.0,
+          50.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "here",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "go"
+   }
+  ],
+  "put the blue one next to that": [
+   {
+    "kind": "command",
+    "text": "put the blue one next to that",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "move",
+        "args": {
+         "object": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           360.0,
+           150.0
+          ],
+          "box_mm": [
+           345.0,
+           135.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": "blue",
+          "label": "blue block",
+          "source": "object_ref",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "label",
+           "label": "blue one"
+          }
+         },
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           340.0,
+           90.0
+          ],
+          "box_mm": [
+           325.0,
+           75.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "geometry",
+          "confidence": 1.0,
+          "evidence": {
+           "relation": "next_to",
+           "target": "green",
+           "box_from": "object",
+           "size_mm": [
+            30.0,
+            30.0
+           ]
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         300.0,
+         90.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          300.0,
+          90.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "nearest",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 1,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "go"
+   }
+  ],
+  "put that on that": [
+   {
+    "kind": "command",
+    "text": "put that on that",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "move",
+        "args": {
+         "object": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           180.0,
+           120.0
+          ],
+          "box_mm": [
+           165.0,
+           105.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": "red",
+          "label": "red block",
+          "source": "object_ref",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "pointed",
+           "hold_t": [
+            27.85,
+            28.15
+           ],
+           "candidates": 2,
+           "word": "that",
+           "word_t": [
+            28.0,
+            28.2
+           ],
+           "lead_s": 0.0,
+           "point": [
+            180.0,
+            120.0
+           ]
+          }
+         },
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           300.0,
+           90.0
+          ],
+          "box_mm": [
+           285.0,
+           75.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": 30.0,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "geometry",
+          "confidence": 1.0,
+          "evidence": {
+           "relation": "on",
+           "target": "green",
+           "box_from": "object",
+           "size_mm": [
+            30.0,
+            30.0
+           ]
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         180.0,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       },
+       {
+        "t0": 29.05,
+        "t1": 29.349999999999998,
+        "mean": [
+         300.0,
+         90.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       },
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          300.0,
+          90.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "go"
+   }
+  ],
+  "a bit left": [
+   {
+    "kind": "command",
+    "text": "put that here",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "move",
+        "args": {
+         "object": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           180.0,
+           120.0
+          ],
+          "box_mm": [
+           165.0,
+           105.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": "red",
+          "label": "red block",
+          "source": "object_ref",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "pointed",
+           "hold_t": [
+            27.85,
+            28.15
+           ],
+           "candidates": 2,
+           "word": "that",
+           "word_t": [
+            28.0,
+            28.2
+           ],
+           "lead_s": 0.0,
+           "point": [
+            180.0,
+            120.0
+           ]
+          }
+         },
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           330.0,
+           50.0
+          ],
+          "box_mm": [
+           315.0,
+           35.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            16.0,
+            0.0
+           ],
+           [
+            0.0,
+            16.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "gesture",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "k_in_order",
+           "hold_t": [
+            29.05,
+            29.35
+           ],
+           "candidates": 2,
+           "word": "here",
+           "word_t": [
+            29.2,
+            29.4
+           ],
+           "lead_s": 0.0,
+           "box_from": "object",
+           "size_mm": [
+            30.0,
+            30.0
+           ]
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         180.0,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       },
+       {
+        "t0": 29.05,
+        "t1": 29.349999999999998,
+        "mean": [
+         330.0,
+         50.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       },
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          330.0,
+          50.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "here",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "command",
+    "text": "a bit left",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "adjust",
+        "args": {
+         "dx": -1,
+         "dy": 0,
+         "scale": 1.0,
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           310.0,
+           50.0
+          ],
+          "box_mm": [
+           295.0,
+           35.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            16.0,
+            0.0
+           ],
+           [
+            0.0,
+            16.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "adjust",
+          "confidence": 1.0,
+          "evidence": {
+           "dx": -1,
+           "dy": 0,
+           "scale": 1.0,
+           "step_mm": 20.0,
+           "offset_mm": [
+            -20.0,
+            0.0
+           ],
+           "previous": {
+            "frame": "table",
+            "kind": "box",
+            "mean_mm": [
+             330.0,
+             50.0
+            ],
+            "box_mm": [
+             315.0,
+             35.0,
+             30.0,
+             30.0
+            ],
+            "path_mm": null,
+            "z_mm": null,
+            "cov_mm2": [
+             [
+              16.0,
+              0.0
+             ],
+             [
+              0.0,
+              16.0
+             ]
+            ],
+            "thing": null,
+            "label": null,
+            "source": "gesture",
+            "confidence": 1.0,
+            "evidence": {
+             "rule": "k_in_order",
+             "hold_t": [
+              29.05,
+              29.35
+             ],
+             "candidates": 2,
+             "word": "here",
+             "word_t": [
+              29.2,
+              29.4
+             ],
+             "lead_s": 0.0,
+             "box_from": "object",
+             "size_mm": [
+              30.0,
+              30.0
+             ]
+            }
+           }
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [],
+      "log": []
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "go"
+   }
+  ],
+  "outside the area": [
+   {
+    "kind": "command",
+    "text": "put that here",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ask",
+      "calls": [],
+      "ask": {
+       "version": "1.0",
+       "reason": "outside_area",
+       "question": "I can't reach there. Please point somewhere closer.",
+       "call": 0,
+       "arg": "place",
+       "candidates": [
+        {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "box",
+         "mean_mm": [
+          540.0,
+          120.0
+         ],
+         "box_mm": [
+          525.0,
+          105.0,
+          30.0,
+          30.0
+         ],
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "here",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0,
+          "box_from": "object",
+          "size_mm": [
+           30.0,
+           30.0
+          ]
+         }
+        }
+       ],
+       "options": [],
+       "word": null
+      },
+      "partial": [
+       {
+        "version": "1.0",
+        "call": 0,
+        "arg": "object",
+        "candidate": null,
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "box",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": [
+          165.0,
+          105.0,
+          30.0,
+          30.0
+         ],
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           0.0
+          ]
+         ],
+         "thing": "red",
+         "label": "red block",
+         "source": "object_ref",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "pointed",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0,
+          "point": [
+           180.0,
+           120.0
+          ]
+         }
+        },
+        "size": null,
+        "thing": null,
+        "hold": null
+       }
+      ],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         180.0,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       },
+       {
+        "t0": 29.05,
+        "t1": 29.349999999999998,
+        "mean": [
+         540.0,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       },
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          540.0,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "here",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": "I can't reach there. Please point somewhere closer.",
+     "error": null
+    }
+   }
+  ],
+  "between two blocks, then a click": [
+   {
+    "kind": "command",
+    "text": "put that here",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ask",
+      "calls": [],
+      "ask": {
+       "version": "1.0",
+       "reason": "ambiguous_object",
+       "question": "This one or that one?",
+       "call": 0,
+       "arg": "object",
+       "candidates": [
+        {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "box",
+         "mean_mm": [
+          180.0,
+          120.0
+         ],
+         "box_mm": [
+          165.0,
+          105.0,
+          30.0,
+          30.0
+         ],
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           0.0
+          ]
+         ],
+         "thing": "red",
+         "label": "red block",
+         "source": "object_ref",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "candidate"
+         }
+        },
+        {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "box",
+         "mean_mm": [
+          225.0,
+          120.0
+         ],
+         "box_mm": [
+          210.0,
+          105.0,
+          30.0,
+          30.0
+         ],
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           0.0,
+           0.0
+          ],
+          [
+           0.0,
+           0.0
+          ]
+         ],
+         "thing": "yellow",
+         "label": "yellow block",
+         "source": "object_ref",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "candidate"
+         }
+        }
+       ],
+       "options": [
+        "red block",
+        "yellow block"
+       ],
+       "word": {
+        "text": "that",
+        "t0": 28.0,
+        "t1": 28.2,
+        "confidence": null
+       }
+      },
+      "partial": [],
+      "holds": [
+       {
+        "t0": 27.85,
+        "t1": 28.15,
+        "mean": [
+         202.5,
+         120.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          202.5,
+          120.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 1.0,
+         "evidence": {
+          "rule": "k_in_order",
+          "hold_t": [
+           27.85,
+           28.15
+          ],
+          "candidates": 2,
+          "word": "that",
+          "word_t": [
+           28.0,
+           28.2
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": "This one or that one?",
+     "error": null
+    }
+   },
+   {
+    "kind": "answer",
+    "candidate": 1,
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "move",
+        "args": {
+         "object": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           225.0,
+           120.0
+          ],
+          "box_mm": [
+           210.0,
+           105.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            0.0,
+            0.0
+           ],
+           [
+            0.0,
+            0.0
+           ]
+          ],
+          "thing": "yellow",
+          "label": "yellow block",
+          "source": "object_ref",
+          "confidence": 1.0,
+          "evidence": {
+           "rule": "answer"
+          }
+         },
+         "place": {
+          "version": "1.0",
+          "frame": "table",
+          "kind": "box",
+          "mean_mm": [
+           330.0,
+           50.0
+          ],
+          "box_mm": [
+           315.0,
+           35.0,
+           30.0,
+           30.0
+          ],
+          "path_mm": null,
+          "z_mm": null,
+          "cov_mm2": [
+           [
+            16.0,
+            0.0
+           ],
+           [
+            0.0,
+            16.0
+           ]
+          ],
+          "thing": null,
+          "label": null,
+          "source": "gesture",
+          "confidence": 0.912,
+          "evidence": {
+           "rule": "nearest",
+           "hold_t": [
+            29.05,
+            29.35
+           ],
+           "candidates": 2,
+           "word": "here",
+           "word_t": [
+            29.2,
+            29.4
+           ],
+           "lead_s": 0.0,
+           "box_from": "object",
+           "size_mm": [
+            30.0,
+            30.0
+           ]
+          }
+         }
+        }
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [
+       {
+        "t0": 29.05,
+        "t1": 29.349999999999998,
+        "mean": [
+         330.0,
+         50.0
+        ],
+        "spread": [
+         0.0,
+         0.0
+        ],
+        "frame": "table",
+        "source": "click",
+        "cov_mm2": null
+       }
+      ],
+      "log": [
+       {
+        "where": {
+         "version": "1.0",
+         "frame": "table",
+         "kind": "point",
+         "mean_mm": [
+          330.0,
+          50.0
+         ],
+         "box_mm": null,
+         "path_mm": null,
+         "z_mm": null,
+         "cov_mm2": [
+          [
+           16.0,
+           0.0
+          ],
+          [
+           0.0,
+           16.0
+          ]
+         ],
+         "thing": null,
+         "label": null,
+         "source": "gesture",
+         "confidence": 0.912,
+         "evidence": {
+          "rule": "nearest",
+          "hold_t": [
+           29.05,
+           29.35
+          ],
+          "candidates": 2,
+          "word": "here",
+          "word_t": [
+           29.2,
+           29.4
+          ],
+          "lead_s": 0.0
+         }
+        }
+       }
+      ]
+     },
+     "say": null,
+     "error": null
+    }
+   },
+   {
+    "kind": "go"
+   }
+  ],
+  "no pointing": [
+   {
+    "kind": "command",
+    "text": "put that here",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ask",
+      "calls": [],
+      "ask": {
+       "version": "1.0",
+       "reason": "no_gesture",
+       "question": "Where? Point at the spot.",
+       "call": 0,
+       "arg": "object",
+       "candidates": [],
+       "options": [],
+       "word": {
+        "text": "that",
+        "t0": 29.5,
+        "t1": 29.7,
+        "confidence": null
+       }
+      },
+      "partial": [],
+      "holds": [],
+      "log": []
+     },
+     "say": "Where? Point at the spot.",
+     "error": null
+    }
+   }
+  ],
+  "stop": [
+   {
+    "kind": "command",
+    "text": "stop",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "stop",
+        "args": {}
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [],
+      "log": []
+     },
+     "say": null,
+     "error": null
+    }
+   }
+  ],
+  "go home": [
+   {
+    "kind": "command",
+    "text": "go home",
+    "reply": {
+     "result": {
+      "version": "1.0",
+      "status": "ok",
+      "calls": [
+       {
+        "index": 0,
+        "name": "home",
+        "args": {}
+       }
+      ],
+      "ask": null,
+      "partial": [],
+      "holds": [],
+      "log": []
+     },
+     "say": null,
+     "error": null
+    }
+   }
+  ],
+  "not understood": [
+   {
+    "kind": "command",
+    "text": "hello robot",
+    "reply": {
+     "result": null,
+     "say": "Sorry, I didn't get that. Try \u201cput that here\u201d.",
+     "error": null
+    }
+   }
+  ]
+ }
+}

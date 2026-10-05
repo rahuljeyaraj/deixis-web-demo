@@ -41,6 +41,9 @@ SENTENCES = [
     "go home",
     "this one",
     "the red one",
+    # Halves of "put that here", joined with a pause by web/scripts/flow-check.mjs.
+    "put that",
+    "here",
 ]
 
 VOICES = [("Microsoft David Desktop", "david", 0), ("Microsoft Zira Desktop", "zira", 1)]

@@ -386,6 +386,47 @@
    ]
   },
   {
+   "id": "david_12",
+   "voice": "Microsoft David Desktop",
+   "text": "put that",
+   "wav": "david_12.wav",
+   "duration": 1.47,
+   "first_sound": 0.2,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.1,
+     "t1": 0.375,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.375,
+     "t1": 0.67,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "david_13",
+   "voice": "Microsoft David Desktop",
+   "text": "here",
+   "wav": "david_13.wav",
+   "duration": 1.195,
+   "first_sound": 0.14,
+   "words": [
+    {
+     "i": 0,
+     "text": "here",
+     "t0": 0.1,
+     "t1": 0.42,
+     "deictic": true
+    }
+   ]
+  },
+  {
    "id": "zira_00",
    "voice": "Microsoft Zira Desktop",
    "text": "put that here",
@@ -761,6 +802,47 @@
      "t0": 0.38,
      "t1": 0.69,
      "deictic": false
+    }
+   ]
+  },
+  {
+   "id": "zira_12",
+   "voice": "Microsoft Zira Desktop",
+   "text": "put that",
+   "wav": "zira_12.wav",
+   "duration": 1.23,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "put",
+     "t0": 0.085,
+     "t1": 0.245,
+     "deictic": false
+    },
+    {
+     "i": 1,
+     "text": "that",
+     "t0": 0.245,
+     "t1": 0.56,
+     "deictic": true
+    }
+   ]
+  },
+  {
+   "id": "zira_13",
+   "voice": "Microsoft Zira Desktop",
+   "text": "here",
+   "wav": "zira_13.wav",
+   "duration": 1.075,
+   "first_sound": 0.095,
+   "words": [
+    {
+     "i": 0,
+     "text": "here",
+     "t0": 0.085,
+     "t1": 0.415,
+     "deictic": true
     }
    ]
   }

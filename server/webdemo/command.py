@@ -89,6 +89,38 @@ def say_for(result: dict[str, Any] | None, calls: list[dict[str, Any]]) -> str |
     return None
 
 
+def answer_by_label(ask: dict[str, Any], texts: list[str]) -> int | None:
+    """ "the red one" while the robot asks "This one or that one?": the candidate whose block
+    (its id is its colour) was named, if exactly one was."""
+    said = {norm_word(w) for w in texts}
+    hits = [i for i, c in enumerate(ask["candidates"]) if c.get("thing") in said]
+    return hits[0] if len(hits) == 1 else None
+
+
+def nearest_candidate(ask: dict[str, Any], point: list[float], within_mm: float) -> int | None:
+    """The candidate nearest a pointed spot ("this one" while pointing), if close enough."""
+    best = None
+    for i, c in enumerate(ask["candidates"]):
+        m = c.get("mean_mm")
+        if not m:
+            continue
+        d = ((m[0] - point[0]) ** 2 + (m[1] - point[1]) ** 2) ** 0.5
+        if d <= within_mm and (best is None or d < best[0]):
+            best = (d, i)
+    return None if best is None else best[1]
+
+
+def answer_entry(ask: dict[str, Any], candidate: int) -> dict[str, Any]:
+    """The `Answer` for picking one candidate of an `Ask` (as C18's last test sends it)."""
+    back: dict[str, Any] = {"call": ask.get("call") or 0, "arg": ask["arg"], "candidate": candidate}
+    thing = ask["candidates"][candidate].get("thing")
+    if thing:
+        back["thing"] = thing
+    else:
+        back["where"] = ask["candidates"][candidate]
+    return back
+
+
 @dataclass
 class OpenAsk:
     request: dict[str, Any]

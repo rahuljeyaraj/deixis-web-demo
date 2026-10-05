@@ -9,6 +9,7 @@
   </head>
   <body>
     <main id="app">
+      <div id="bubble" aria-live="polite"></div>
       <div id="stage">
         <canvas id="scene"></canvas>
         <canvas id="hand"></canvas>
@@ -22,6 +23,10 @@
       </div>
       <div id="controls">
         <button id="talk-btn" type="button" title="Hold to talk (or hold the space bar). A quick tap listens until you tap again.">Hold to talk</button>
+        <button id="go-btn" class="plain" type="button" title="Do it (same as saying yes). Key: Enter">Go</button>
+        <button id="undo-btn" class="plain" type="button" title="Put the last block back">Undo</button>
+        <button id="reset-btn" class="plain" type="button" title="New blocks. Key: R">Reset blocks</button>
+        <button id="stop-btn" class="plain stop" type="button" title="Stop the arm. Key: Esc">Stop</button>
       </div>
     </main>
     <script type="module" src="/src/main.ts"></script>

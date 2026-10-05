@@ -20,9 +20,18 @@ from pydantic import BaseModel, ValidationError
 
 from deixis.mcp import DeixisClient
 from deixis.profile import load_profile
+from deixis.refs import DEMONSTRATIVES, norm_word
 from webdemo import __version__
 from webdemo.agent import AgentResult, ArmAgent, Context
-from webdemo.command import Meta, Sessions, say_for, typed_words
+from webdemo.command import (
+    Meta,
+    Sessions,
+    answer_by_label,
+    answer_entry,
+    nearest_candidate,
+    say_for,
+    typed_words,
+)
 from webdemo.models import NOT_USED, models_in_use
 from webdemo.settings import Settings
 from webdemo.speech import ClipError, Speech
@@ -54,7 +63,6 @@ class AnswerBody(BaseModel):
     """`POST /api/answer`: the person chose one of the last question's candidates."""
 
     candidate: int
-    thing: str | None = None
 
 
 def create_app(
@@ -148,6 +156,45 @@ def create_app(
         else:
             sessions.drop(sid)
 
+    Reply = tuple[dict[str, Any] | None, str | None]  # the core's answer, or why it refused
+
+    async def answer_open(sid: str, entry: dict[str, Any]) -> Reply:
+        """Resolve the visitor's open question again with the person's answer, plus what was
+        already resolved (as C18's last test does)."""
+        open_ask = sessions.get(sid)
+        if open_ask is None:
+            raise HTTPException(409, "there is no open question (it may have expired)")
+        request = {**open_ask.request, "answers": [entry, *open_ask.response["partial"]]}
+        result, error = await resolve(request)
+        remember(sid, request, result)
+        return result, error
+
+    async def spoken_answer(sid: str, m: Meta, words: list[dict[str, Any]]) -> dict | None:
+        """The answer to the open question in words: "the red one"; "this one" while pointing
+        at a block; "here" while pointing at a spot (when the robot asked where)."""
+        open_ask = sessions.get(sid)
+        if open_ask is None or not m.state.question:
+            return None
+        ask = open_ask.response["ask"]
+        texts = [norm_word(w["text"]) for w in words]
+        picked = answer_by_label(ask, texts)
+        if picked is not None:
+            return answer_entry(ask, picked)
+        k = next((i for i, w in enumerate(texts) if w in DEMONSTRATIVES and w != "so"), None)
+        if k is None or not ask.get("arg"):
+            return None
+        # Where did they point while saying it? The core's own `locate`, over MCP.
+        locate = {"name": "locate", "args": {"place": {"deixis": texts[k], "word_index": k}}}
+        r, _ = await resolve({"words": words, "samples": m.samples, "holds": m.holds,
+                              "things": m.things, "calls": [locate]})  # fmt: skip
+        if not r or r["status"] != "ok":
+            return None
+        where = r["calls"][0]["args"]["place"]
+        if any(c.get("thing") for c in ask["candidates"]):  # which block
+            picked = nearest_candidate(ask, where.get("mean_mm") or [0, 0], within_mm=40)
+            return None if picked is None else answer_entry(ask, picked)
+        return {"call": ask.get("call") or 0, "arg": ask["arg"], "where": where}  # which spot
+
     @app.post("/api/command")
     async def command(
         response: Response,
@@ -208,6 +255,16 @@ def create_app(
         calls = [c.to_dict() for c in agent_res.calls]
         result = error = None
         request: dict[str, Any] = {}
+        entry = None if calls else await spoken_answer(sid, m, words)
+        if entry is not None:
+            t = time.perf_counter()
+            result, error = await answer_open(sid, entry)
+            timings["core_s"] = round(time.perf_counter() - t, 3)
+            agent_res.source = "answer"
+            timings["total_s"] = round(time.perf_counter() - t_start, 3)
+            say = result["ask"]["question"] if result and result["status"] == "ask" else None
+            return {"words": words, "agent": agent_res.summary(), "result": result,
+                    "error": error, "say": say, "timings": timings}  # fmt: skip
         if calls:
             request = {"words": words, "samples": m.samples, "holds": m.holds,
                        "things": m.things, "calls": calls, "context": m.context,
@@ -240,19 +297,8 @@ def create_app(
         ask = open_ask.response["ask"]
         if not 0 <= body.candidate < len(ask["candidates"]):
             raise HTTPException(400, "no such candidate")
-        back: dict[str, Any] = {"call": ask.get("call") or 0, "arg": ask["arg"],
-                                "candidate": body.candidate}  # fmt: skip
-        thing = body.thing or ask["candidates"][body.candidate].get("thing")
-        if thing:
-            back["thing"] = thing
-        else:
-            back["where"] = ask["candidates"][body.candidate]
-        request = {**open_ask.request, "answers": [back, *open_ask.response["partial"]]}
-        t = time.perf_counter()
-        result, error = await resolve(request)
-        timings = {"core_s": round(time.perf_counter() - t, 3)}
-        remember(sid, request, result)
-        timings["total_s"] = round(time.perf_counter() - t_start, 3)
+        result, error = await answer_open(sid, answer_entry(ask, body.candidate))
+        timings = {"total_s": round(time.perf_counter() - t_start, 3)}
         say = result["ask"]["question"] if result and result["status"] == "ask" else None
         return {"result": result, "error": error, "say": say, "timings": timings}
 

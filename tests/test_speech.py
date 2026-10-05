@@ -113,7 +113,7 @@ def test_put_that_here_on_the_browser_clock(speech, voice):
 @needs_parakeet
 @needs_voice
 def test_every_arm_command(speech):
-    """All 24 clips word for word; the demonstratives' start times (what deixis fuses with the
+    """All 28 clips word for word; the demonstratives' start times (what deixis fuses with the
     finger) a median within 0.15 s and never over 0.4 s (the profile's time sigma is 0.6 s)."""
     errors = []
     for item in GROUND_TRUTH:
@@ -122,7 +122,7 @@ def test_every_arm_command(speech):
         for w, truth in zip(words, item["words"], strict=True):
             if truth["deictic"]:
                 errors.append(abs(w.t0 - (100.0 + LEAD_S + truth["t0"])))
-    assert len(errors) == 14
+    assert len(errors) == 18
     assert statistics.median(errors) < 0.15
     assert max(errors) < 0.4
 

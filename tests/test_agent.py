@@ -178,13 +178,6 @@ def test_no_key_is_simple_mode():
 # --- the routes, end to end over MCP ---
 
 
-@pytest.fixture
-def rules_api(settings, core, speech):
-    settings.ai = "rules"
-    with TestClient(create_app(settings, client=core, speech=speech)) as c:
-        yield c
-
-
 def post(api, meta: dict, audio: bytes | None = None, **kw):
     files = {"audio": ("clip.wav", audio, "audio/wav")} if audio else None
     r = api.post("/api/command", data={"meta": json.dumps(meta)}, files=files, **kw)
@@ -230,6 +223,37 @@ def test_ask_then_click_the_answer(rules_api):
     assert second["status"] == "ok" and second["calls"][0]["args"]["object"]["thing"] == "yellow"
     # The question is closed now.
     assert rules_api.post("/api/answer", json={"candidate": 0}).status_code == 409
+
+
+@pytest.mark.parametrize("how", ["the yellow one", "this one"])
+def test_ask_then_say_the_answer(rules_api, how):
+    between = ((CENTRES["red"][0] + CENTRES["yellow"][0]) / 2, CENTRES["red"][1])
+    meta = {"text": "put that here", "holds": [click(10, *between), click(11.5, *HERE)],
+            "things": BLOCKS}  # fmt: skip
+    first = post(rules_api, meta)
+    assert first["result"]["status"] == "ask"
+    # Spoken: by colour, or "this one" while clicking (pointing at) the yellow block.
+    again = {"text": how, "things": BLOCKS, "holds": [click(20, *CENTRES["yellow"])], "t": 21,
+             "state": {"question": first["say"]}}  # fmt: skip
+    second = post(rules_api, again)
+    assert second["agent"]["source"] == "answer"
+    res = second["result"]
+    assert res["status"] == "ok" and res["calls"][0]["args"]["object"]["thing"] == "yellow"
+    assert res["calls"][0]["args"]["place"]["mean_mm"] == pytest.approx(list(HERE), abs=0.5)
+
+
+def test_where_then_here_while_pointing(rules_api):
+    first = post(rules_api, {"text": "put that here", "things": BLOCKS, "t": 30,
+                             "holds": [click(28, *CENTRES["red"])]})  # fmt: skip
+    assert first["result"]["status"] == "ask", first
+    assert first["say"] == "Where? Point at the spot."
+    again = {"text": "here", "things": BLOCKS, "holds": [click(40, *HERE)], "t": 41,
+             "state": {"question": first["say"]}}  # fmt: skip
+    second = post(rules_api, again)
+    assert second["agent"]["source"] == "answer", second
+    res = second["result"]
+    assert res["status"] == "ok" and res["calls"][0]["args"]["object"]["thing"] == "red"
+    assert res["calls"][0]["args"]["place"]["mean_mm"] == pytest.approx(list(HERE), abs=0.5)
 
 
 def test_answer_needs_an_open_question(rules_api):

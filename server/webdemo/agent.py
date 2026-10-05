@@ -55,7 +55,7 @@ class AgentResult:
     """What the agent decided for one command."""
 
     calls: list[Call]
-    source: Literal["nemotron", "rules"] = "nemotron"
+    source: Literal["nemotron", "rules", "answer"] = "nemotron"
     model: str = ""
     raw: list[dict[str, Any]] = field(default_factory=list)  # as the model (or rules) wrote them
     errors: list[str] = field(default_factory=list)  # validation errors seen (and fixed?)
