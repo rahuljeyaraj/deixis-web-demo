@@ -116,10 +116,10 @@ export function layoutWords(
 const SVG = 'http://www.w3.org/2000/svg';
 const LABEL_W = 78;
 const PAD = 14;
-const WORD_Y = 30;
-const HOLD_Y = 70;
+const WORD_Y = 26;
+const HOLD_Y = 60;
 const HOLD_H = 12;
-export const STRIP_H = 96;
+export const STRIP_H = 84;
 
 function el<K extends keyof SVGElementTagNameMap>(
   name: K,

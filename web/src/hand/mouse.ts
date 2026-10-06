@@ -14,6 +14,8 @@ export class MousePointer {
   private clicks: Hold[] = [];
   /** The cursor as canvas fractions (0..1 from the left and the top), or null when outside. */
   private at: [number, number] | null = null;
+  /** What the cursor was on at the last sample (the hover outline). */
+  hit: Hit | null = null;
 
   /** `locate`: the raycast for a canvas point (`pointAt` on the page). */
   constructor(
@@ -32,6 +34,7 @@ export class MousePointer {
   /** One sample of the cursor at page time `t`. */
   sample(t: number): void {
     const hit = this.at ? this.locate(this.at[0], this.at[1]) : null;
+    this.hit = hit;
     this.samples.push({ t, point: hit ? [hit.x, hit.y] : null, pointing: true });
   }
 

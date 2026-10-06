@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>deixis: put that here</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23ff4081'/%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23ffb000'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -16,13 +16,14 @@
       </div>
       <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). -->
       <div id="chips" aria-label="Try saying">
-        <span class="chips-label">Try saying:</span>
+        <!-- After the first move: "Now say it your own way." (item 18). These are hand-picked
+             sentences the simple word rules miss; they are never counted in the held-out test. -->
+        <span class="chips-label" id="chips-label">Try saying:</span>
         <button type="button" class="chip">put that here</button>
-        <button type="button" class="chip">put the blue one next to that</button>
-        <button type="button" class="chip">put that on that</button>
+        <button type="button" class="chip">pop that one on top of the red one</button>
+        <button type="button" class="chip">put the red cube between the yellow and the blue</button>
         <button type="button" class="chip">a bit left</button>
         <button type="button" class="chip">yes</button>
-        <button type="button" class="chip">go home</button>
       </div>
       <div id="stage" class="starting">
         <!-- The robot's speech bubble, over the scene: no empty space while it is quiet (rahul, 5 Oct). -->
@@ -35,20 +36,22 @@
           <span id="cam-label">made-up hand</span>
         </div>
         <button id="camera-btn" type="button">Use my camera</button>
+        <!-- The coach line (items 2, 7, 13, 19): what to do next, in the scene. -->
+        <div id="coach" role="status" aria-live="polite" hidden></div>
         <div id="status">Loading the arm…</div>
 
         <!-- The start card (plan 5.1): the first 10 seconds. -->
         <section id="start" aria-labelledby="start-title">
           <div class="card">
             <h1 id="start-title" class="page-title">deixis</h1>
-            <p class="lead">Point at a block and say <q>put that here</q>.</p>
-            <p class="ask">How do you want to point?</p>
+            <p class="lead">Pick a block, then a spot, and say <q>put that … here</q>.</p>
+            <p id="phone-line" class="phone" hidden>This demo needs a laptop or desktop browser.</p>
             <div class="choices">
-              <button id="start-camera" class="big primary" type="button" disabled>My finger <small>(camera)</small></button>
-              <button id="start-mouse" class="big" type="button" disabled>My mouse</button>
+              <button id="start-camera" class="big primary" type="button" disabled>Use my finger <small>(camera and mic)</small></button>
+              <button id="start-mouse" class="big" type="button" disabled>Use my mouse <small>(mic only)</small></button>
             </div>
             <p id="start-loading" class="loading">Loading the arm…</p>
-            <p class="small">Both use your microphone. Your video stays in your browser. <a href="#models" id="start-models">What runs this demo</a></p>
+            <p class="small">Your video stays in your browser. Only your fingertip’s position and your voice are sent. <a href="#models" id="start-models">What runs this demo</a></p>
           </div>
         </section>
       </div>
@@ -100,7 +103,7 @@
           <ul>
             <li>Your camera video never leaves your browser. The hand tracking runs here; only the fingertip’s points on the table are sent.</li>
             <li>Your voice is sent once per command, turned into words in memory, then dropped. It is never saved.</li>
-            <li>The server writes one line per command to its log: the words and what the robot did. No audio, no video, no address.</li>
+            <li>The server writes one line per command to its log (the words, what the robot did, the tokens it used) and one per step (the guess shown, yes, done). No audio, no video, no address.</li>
             <li>To share the free AI commands fairly, the server counts today’s commands per visitor, by a random cookie and a scrambled form of your address. The counts stay in memory and are never logged.</li>
             <li>If you add your own Nebius key, it is sent with each command only to call Nebius. It is never saved or logged.</li>
           </ul>

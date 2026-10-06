@@ -1,0 +1,21 @@
+# HTTPS for the judges' demo: Caddy gets and renews the certificate by itself.
+# The host name must not say deixis or rahul: every certificate's name is published in public
+# certificate logs.
+{$DEMO_HOST} {
+	encode gzip
+	# one hop: the app reads the visitor's address from X-Forwarded-For (PROXY_HOPS=1)
+	reverse_proxy webdemo:8000
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		# the page needs the camera and the microphone, on this site only
+		Permissions-Policy "camera=(self), microphone=(self)"
+		# not listed by search engines (the address is only in Devpost's private field)
+		X-Robots-Tag "noindex, nofollow"
+	}
+	log {
+		# no visitor addresses in Caddy's log either
+		output discard
+	}
+}

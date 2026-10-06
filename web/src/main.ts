@@ -8,12 +8,18 @@
  * try-saying chips, the models list (plan 8.4), and typing instead of talking. W11: the day's
  * limits on our key, the simple-mode banner, and the visitor's own key (plan 8.1, 8.2).
  *
+ * 6 Oct (test set-up, final/web-demo.md items 1 to 20): the robot says what it understood
+ * ("Move the red block here?"), the coach line, the hover outline, "Done.", one prompt for
+ * the camera and the microphone, plain error lines, the hand tracker loading during the start
+ * card, one look (amber you, dashed blue guess), tokens and cost, the word-rules line, and
+ * events for the server's log (the guess shown, yes, done) so M30 and M31 come from it.
+ *
  * `?hands=demo` replays a made-up pointing hand instead of the camera (screenshots, tests);
  * it and `?start=skip` skip the start card.
  */
 
-import { type CommandMeta, type CommandReply, getInfo, sendAnswer, sendCommand } from './api';
-import { MicCapture } from './audio/capture';
+import { type CommandMeta, type CommandReply, ServerDown, getInfo, sendAnswer, sendCommand, sendEvent } from './api';
+import { AUDIO_CONSTRAINTS, MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
 import { Flow } from './flow/flow';
@@ -22,17 +28,21 @@ import { MousePointer } from './hand/mouse';
 import { CameraInset, HandOverlay } from './hand/overlay';
 import { FingerPointer } from './hand/pointer';
 import { syntheticFrame } from './hand/synthetic';
-import { HandTracker } from './hand/tracker';
+import { HandTracker, VIDEO_CONSTRAINTS } from './hand/tracker';
 import { Arm, BLOCK_IDS, type BlockId } from './sim/arm';
 import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
 import { BASE_MM, BLOCK_MM, REACH_MM, onMat, tableToWorld } from './sim/table';
+import { COACH, Coach, onPhone } from './ui/coach';
 import { fillDetails } from './ui/details';
 import { KeyPanel, ownKey } from './ui/key';
 import { fillModels, modelsUnavailable } from './ui/models';
 import { type StripModel, drawStrip, stripModel } from './ui/strip';
 import { speak } from './voice';
+
+/** A clip whose loudest sample is below this is silence (a muted or wrong microphone). */
+const SILENT_DB = -45;
 
 /** Random spots on the reach mat, at least 60 mm apart. */
 function layout(n: number, rand = Math.random): [number, number][] {
@@ -69,8 +79,14 @@ async function start(): Promise<void> {
   /** `?hands=demo`: a made-up hand points instead of the camera. */
   const synthetic = params.get('hands') === 'demo';
   if (synthetic || params.get('start') === 'skip') stage.classList.remove('starting');
+  // The hand tracker downloads while the start card shows, so "Use my finger" starts at once.
+  if (!synthetic) void HandTracker.preload().catch((e) => console.warn('hand tracker preload:', e));
+  document.getElementById('phone-line')!.hidden = !onPhone();
+  const coach = new Coach();
+  const coachEl = document.getElementById('coach')!;
+  let coachShown = '';
   const keys = new KeyPanel(document.getElementById('models-list')!);
-  showInfo(keys);
+  showInfo(keys, (ok) => coach.server(ok));
   const [mj, files] = await Promise.all([
     mujoco(),
     fetchPack('/so101.pack', (f) =>
@@ -137,7 +153,22 @@ async function start(): Promise<void> {
       goBtn.disabled = s.kind !== 'preview';
       if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
     },
+    event: (kind, data) => {
+      // For the server's log: M30 (right first time) and M31 (last word to the guess).
+      const extra: { latency_s?: number; via?: string } = {};
+      if (kind === 'preview' && lastWordT1 !== null) extra.latency_s = Math.round((now() - lastWordT1) * 1000) / 1000;
+      if (kind === 'go') extra.via = goVia;
+      if (kind === 'go' || kind === 'cancel' || kind === 'stop') goVia = 'voice';
+      sendEvent({ kind, ...data, ...extra });
+      if (kind === 'done' && coach.moved(now())) {
+        document.getElementById('chips-label')!.textContent = 'Now say it your own way:';
+      }
+    },
   });
+  /** How the next "yes" came: by voice unless a button or a key says otherwise. */
+  let goVia = 'voice';
+  /** The page time the last spoken command's last word ended (null for typed commands). */
+  let lastWordT1: number | null = null;
 
   // The thinking strip and the details panel (plan 5.2).
   const stripEl = document.getElementById('strip')!;
@@ -156,9 +187,16 @@ async function start(): Promise<void> {
 
   const failed = (e: unknown) => {
     console.error(e);
+    showStrip(HINT);
+    if (e instanceof ServerDown) {
+      coach.server(false); // item 14: "The robot's brain isn't answering right now."
+      sendEvent({ kind: 'server_down' });
+      void flow.handle({ result: null, say: COACH.serverDown });
+      say(COACH.serverDown);
+      return;
+    }
     void flow.handle({ result: null, say: "Sorry, that didn't work. Please try again." });
     say(`Something went wrong (${e instanceof Error ? e.message : e}).`);
-    showStrip(HINT);
   };
 
   let lastReply: CommandReply | null = null;
@@ -169,9 +207,12 @@ async function start(): Promise<void> {
   const runCommand = async (meta: CommandMeta, wav?: ArrayBuffer, prefix = '') => {
     usedClicksUntil = meta.t ?? now();
     flow.thinking();
+    coach.sent();
     showStrip(wav ? 'Turning your voice into words…' : 'Thinking…', true);
     const reply = await sendCommand(meta, wav, ownKey(), () => say('One moment…'));
+    coach.server(true);
     lastReply = reply;
+    lastWordT1 = wav && reply.words.length ? reply.words[reply.words.length - 1].t1 : null;
     const keyNote = keys.reply(reply);
     const heard = reply.words.map((w) => w.text).join(' ');
     showStrip(heard ? stripModel(reply.words, reply.result) : HINT);
@@ -189,20 +230,35 @@ async function start(): Promise<void> {
     return pointAt(view, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, blockOfGeom);
   };
   // The finger (plan W4). (Keys for development: L records the hand, [ and ] set the gain.)
-  const fingerHelp = 'Point with one finger: the pink dot follows it.';
+  const fingerHelp = 'Point with one finger: the amber dot follows it.';
   let tracker: HandTracker | null = null;
-  const startCamera = async (): Promise<string> => {
+  /** The camera, from the stream of the one prompt (or asked for alone: "Try again"). */
+  const startCamera = async (given?: MediaStream): Promise<string> => {
     try {
-      tracker = await HandTracker.start(video);
-      tracker.onFrame = (f) => pointer.onFrame(f);
+      tracker = await HandTracker.start(video, given);
+      tracker.onFrame = (f) => {
+        coach.hand(f.hands.length > 0, f.t);
+        pointer.onFrame(f);
+      };
       camBox.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
       pointer.inset = inset;
       stage.classList.add('camera-on');
+      coach.clear();
+      coach.started('finger', now());
       return fingerHelp;
     } catch (e) {
       console.error(e);
-      return `No camera (${e instanceof Error ? e.message : e}); the mouse points instead.`;
+      given?.getVideoTracks().forEach((t) => t.stop());
+      cameraFailed(e);
+      return COACH.noCamera;
     }
+  };
+  /** Item 7: one plain line, and "Try the camera again"; the mouse points meanwhile. */
+  const cameraFailed = (e: unknown) => {
+    coach.started('mouse', now());
+    coach.tell(COACH.noCamera, now(), 'retry-camera');
+    cameraBtn.textContent = 'Try the camera again';
+    sendEvent({ kind: 'camera_error', why: e instanceof Error ? e.name : String(e) });
   };
 
   // The mouse as the pointer while the camera is off (plan 5.3): sampled like a fingertip
@@ -258,8 +314,8 @@ async function start(): Promise<void> {
   let mic: MicCapture | null = null;
   let micStarting: Promise<string> | null = null;
   let lastClip: Clip | null = null;
-  const startMic = (): Promise<string> =>
-    (micStarting ??= MicCapture.start().then(
+  const startMic = (given?: MediaStream): Promise<string> =>
+    (micStarting ??= MicCapture.start(given).then(
       (m) => {
         mic = m;
         talkBtn.classList.add('ready');
@@ -269,7 +325,9 @@ async function start(): Promise<void> {
         micStarting = null;
         console.error(e);
         setTyping(true);
-        return `No microphone (${e instanceof Error ? e.message : e}), so type instead: click a block, click a spot, then type “put that here”.`;
+        coach.tell(COACH.noMic, now());
+        sendEvent({ kind: 'mic_error', why: e instanceof Error ? e.name : String(e) });
+        return COACH.noMic;
       },
     ));
   typeToggle.addEventListener('click', () => {
@@ -314,6 +372,14 @@ async function start(): Promise<void> {
         .end(t)
         .then(async (clip) => {
           lastClip = clip;
+          if (clip.peakDb < SILENT_DB) {
+            // Item 13: a muted or wrong microphone records silence; don't send it.
+            coach.tell(COACH.silent, now());
+            say(COACH.silent);
+            showStrip(HINT);
+            sendEvent({ kind: 'silent' });
+            return;
+          }
           say(`${long}Thinking…`);
           // The pointing from 2.5 s before the speech to 0.8 s after it (plan 4.2); the clip
           // already starts 0.5 s early and ends 0.4 s late.
@@ -347,18 +413,45 @@ async function start(): Promise<void> {
   talkBtn.addEventListener('pointercancel', () => talk.release(now()));
   talkBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
+  /** "Use my finger": one browser prompt for the camera and the microphone together (item
+   * 6). If that fails: the microphone alone (the mouse points), and "Try the camera again". */
   const useCamera = async () => {
     cameraBtn.disabled = true;
+    sendEvent({ kind: 'start', via: 'finger' });
     say('Starting the camera and the microphone…');
-    const [cam, voice] = await Promise.all([startCamera(), startMic()]);
+    let both: MediaStream | null = null;
+    if (!mic) {
+      try {
+        both = await navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS, audio: AUDIO_CONSTRAINTS });
+      } catch (e) {
+        console.error(e);
+        cameraFailed(e);
+        const voice = await startMic(); // the microphone alone, so the mouse can be used
+        cameraBtn.disabled = false;
+        say(`${COACH.noCamera} ${mic ? '' : voice}`.trim());
+        return;
+      }
+    }
+    const [cam, voice] = await Promise.all([
+      startCamera(both ? new MediaStream(both.getVideoTracks()) : undefined),
+      mic ? Promise.resolve('') : startMic(both ? new MediaStream(both.getAudioTracks()) : undefined),
+    ]);
     if (!tracker) cameraBtn.disabled = false;
-    say(`${cam} ${voice}`);
+    say(`${cam} ${voice}`.trim());
   };
   const useMouse = async () => {
+    sendEvent({ kind: 'start', via: 'mouse' });
+    coach.started('mouse', now());
     say('Starting the microphone…');
     const voice = await startMic();
     say(mic ? 'Point with the mouse (a click counts too), hold Talk or the space bar, and say “put that here”.' : voice);
   };
+  coachEl.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).dataset.action === 'retry-camera') {
+      coach.clear();
+      void useCamera();
+    }
+  });
   cameraBtn.addEventListener('click', () => void useCamera());
 
   // The start card (plan 5.1): the two ways in, and the models list.
@@ -390,7 +483,10 @@ async function start(): Promise<void> {
     reset();
     flow.reset();
   };
-  goBtn.addEventListener('click', () => void flow.go());
+  goBtn.addEventListener('click', () => {
+    goVia = 'button';
+    void flow.go();
+  });
   document.getElementById('undo-btn')!.addEventListener('click', () => void flow.undo());
   document.getElementById('reset-btn')!.addEventListener('click', newBlocks);
   document.getElementById('stop-btn')!.addEventListener('click', stopAll);
@@ -410,7 +506,10 @@ async function start(): Promise<void> {
       return;
     }
     if (typing(e)) return;
-    if (e.key === 'Enter') void flow.go();
+    if (e.key === 'Enter') {
+      goVia = 'key';
+      void flow.go();
+    }
     if (e.key === 'r') newBlocks();
     if (e.key === '[' || e.key === ']') {
       const w = pointer.box.width + (e.key === '[' ? -0.05 : 0.05);
@@ -426,6 +525,26 @@ async function start(): Promise<void> {
       }
     }
   });
+
+  /** The look check holds the hover outline still (`__sim.markBlock`). */
+  let marked = false;
+  const drawCoach = (t: number) => {
+    const line = stage.classList.contains('starting') ? null : coach.line(t);
+    const key = line ? `${line.text}|${line.action ?? ''}` : '';
+    if (key === coachShown) return;
+    coachShown = key;
+    coachEl.hidden = !line;
+    coachEl.replaceChildren();
+    if (!line) return;
+    coachEl.append(line.text);
+    if (line.action === 'retry-camera') {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.action = 'retry-camera';
+      b.textContent = 'Try the camera again';
+      coachEl.append(b);
+    }
+  };
 
   // Physics in real time: 5 ms steps, as many as the frame took (at most 0.1 s' worth).
   const dt = model.opt.timestep;
@@ -443,6 +562,12 @@ async function start(): Promise<void> {
     }
     talk.tick(now / 1000);
     if (talk.listening && mic) talkBtn.style.setProperty('--level', Math.min(1, mic.level * 8).toFixed(2));
+    // What the dot (or the mouse) is on: a thin amber outline (item 3).
+    const hit = tracker || synthetic ? pointer.hit : mouse.hit;
+    const on = hit?.block ?? null;
+    if (!marked) view.hover(on ? arm.blocks.get(on)!.geom : null);
+    coach.hover(on !== null);
+    drawCoach(now / 1000);
     view.sync(data);
     view.render();
     requestAnimationFrame(loop);
@@ -460,12 +585,22 @@ async function start(): Promise<void> {
       lastClip: () => lastClip,
       lastReply: () => lastReply,
       startMic,
+      /** For the look check (M34): the dot, the hover outline and the guess on one block. */
+      markBlock: (id: BlockId, guess = true) => {
+        marked = true;
+        const b = arm.block(id);
+        const [X, Y] = tableToWorld(b.tableMm[0], b.tableMm[1]);
+        const p = view.camera.position.clone().set(X, Y, (b.heightMm + 4) / 1000).project(view.camera);
+        overlay.dotAt((p.x + 1) / 2, (1 - p.y) / 2);
+        view.hover(arm.blocks.get(id)!.geom);
+        for (const other of BLOCK_IDS) view.glow(arm.blocks.get(other)!.geom, guess && other === id);
+      },
     },
   });
 }
 
 /** The page's name, the models list (plan 8.4) and the day's limits (8.1), from the server. */
-function showInfo(keys: KeyPanel): void {
+function showInfo(keys: KeyPanel, server: (ok: boolean) => void): void {
   const list = document.getElementById('models-list')!;
   const models = document.getElementById('models') as HTMLDetailsElement;
   document.getElementById('start-models')!.addEventListener('click', (e) => {
@@ -475,13 +610,18 @@ function showInfo(keys: KeyPanel): void {
   });
   getInfo().then(
     (info) => {
+      server(true);
       fillModels(list, info);
+      // The "use your own Nebius key" box is hidden for the judges' demo (item 16).
+      document.getElementById('own-key')!.hidden = !info.show_own_key;
+      keys.allowOwnKey = !!info.show_own_key;
       keys.show(info.limits);
       for (const el of document.querySelectorAll('.page-title')) el.textContent = info.title;
       document.title = `${info.title}: put that here`;
     },
     (e) => {
       console.error(e);
+      if (e instanceof ServerDown) server(false);
       modelsUnavailable(list);
     },
   );

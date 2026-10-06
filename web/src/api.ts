@@ -22,6 +22,18 @@ export interface AgentSummary {
   raw: unknown[];
   errors: string[];
   attempts: number;
+  /** Token Factory's counts for this command (empty when no model was asked). */
+  usage?: { prompt?: number; cached?: number; completion?: number };
+}
+
+/** What the simple word rules alone would have done with the same words (item 18). */
+export interface WordRules {
+  understood: boolean;
+  /** In plain words: "move the red one to where you pointed (“here”)", "not understood". */
+  words: string;
+  calls: { name: string; args: Record<string, unknown> }[];
+  /** The same calls as Nemotron's. */
+  same: boolean;
 }
 
 export interface Timings {
@@ -50,6 +62,9 @@ export interface Limits {
 
 export interface CommandReply {
   words: HeardWord[];
+  word_rules?: WordRules;
+  /** This command's tokens at Token Factory's list price, US$. */
+  cost_usd?: number;
   agent: AgentSummary;
   result: CoreResponse | null;
   error: string | null;
@@ -83,6 +98,7 @@ export interface CommandMeta {
 }
 
 async function check<T>(r: Response): Promise<T> {
+  if (r.status >= 500) throw new ServerDown(`the server said ${r.status}`);
   if (!r.ok) {
     const detail = await r
       .json()
@@ -112,7 +128,7 @@ export async function sendCommand(
   if (wav) form.append('audio', new Blob([wav], { type: 'audio/wav' }), 'clip.wav');
   const headers: Record<string, string> = key ? { 'X-Nebius-Key': key } : {};
   for (let tries = 0; ; tries++) {
-    const r = await fetch('/api/command', { method: 'POST', body: form, headers });
+    const r = await reach('/api/command', { method: 'POST', body: form, headers });
     if (r.status !== 429 || tries >= 2) return check(r);
     const body = (await r.json().catch(() => ({}))) as { wait_s?: number };
     const s = Math.min(5, Math.max(0.05, Number(body.wait_s ?? r.headers.get('Retry-After') ?? 1)));
@@ -143,15 +159,48 @@ export interface Info {
   models: ModelLine[];
   not_used: { name: string; why: string }[];
   limits: Limits;
+  /** Show the "use your own Nebius key" box (hidden for the judges' demo, item 16). */
+  show_own_key?: boolean;
 }
 
+/** The server can't be reached, or answers with a server error (item 14). */
+export class ServerDown extends Error {}
+
 export async function getInfo(): Promise<Info> {
-  return check(await fetch('/api/info'));
+  return check(await reach('/api/info'));
+}
+
+/** fetch, with a network failure as `ServerDown`. */
+async function reach(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (e) {
+    throw new ServerDown(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface PageEvent {
+  kind: string;
+  via?: string;
+  why?: string;
+  latency_s?: number;
+  block?: string;
+}
+
+/** What happened on the page (the guess shown, yes, done...), for the server's log only.
+ * Never in the way: a failure is ignored. */
+export function sendEvent(e: PageEvent): void {
+  void fetch('/api/event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(e),
+    keepalive: true,
+  }).catch(() => {});
 }
 
 export async function sendAnswer(candidate: number): Promise<AnswerReply> {
   return check(
-    await fetch('/api/answer', {
+    await reach('/api/answer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate }),

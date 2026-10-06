@@ -24,7 +24,9 @@ const CONNECTIONS: [number, number][] = [
   [13, 17], [0, 17], [17, 18], [18, 19], [19, 20],
 ]; // prettier-ignore
 
-const PINK = '255 64 129';
+/** One look (final/web-demo.md): what you do is filled amber, with a thin dark edge. */
+const AMBER = '255 176 0';
+const EDGE = 'rgb(26 26 26 / 0.95)';
 
 /** A 2D canvas sized to its element, in CSS pixels. */
 class Layer {
@@ -77,18 +79,25 @@ function drawBones(ctx: CanvasRenderingContext2D, pts: (readonly [number, number
   }
 }
 
-/** The dot: filled and glowing while pointing, a ring when not. */
+/** The dot: filled amber with a dark edge while pointing; an amber ring when not. */
 function drawDot(ctx: CanvasRenderingContext2D, x: number, y: number, pointing: boolean, r: number): void {
+  const rr = pointing ? r : r * 0.8;
   ctx.beginPath();
-  ctx.arc(x, y, pointing ? r : r * 0.8, 0, Math.PI * 2);
-  ctx.lineWidth = Math.max(2, r * 0.27);
-  ctx.strokeStyle = 'rgb(255 255 255 / 0.95)';
-  ctx.fillStyle = `rgb(${PINK} / ${pointing ? 0.95 : 0})`;
-  ctx.shadowColor = `rgb(${PINK} / 0.8)`;
-  ctx.shadowBlur = pointing ? r * 1.4 : 0;
-  ctx.fill();
+  ctx.arc(x, y, rr, 0, Math.PI * 2);
+  if (pointing) {
+    ctx.fillStyle = `rgb(${AMBER})`;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.5, r * 0.2);
+    ctx.strokeStyle = EDGE;
+    ctx.stroke();
+    return;
+  }
+  ctx.lineWidth = Math.max(3, r * 0.35);
+  ctx.strokeStyle = EDGE;
   ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.lineWidth = Math.max(1.5, r * 0.2);
+  ctx.strokeStyle = `rgb(${AMBER})`;
+  ctx.stroke();
 }
 
 export class HandOverlay {
@@ -112,6 +121,13 @@ export class HandOverlay {
     this.layer.clear();
     this.fx.reset();
     this.fy.reset();
+  }
+
+  /** The pointing dot alone at a canvas point (fractions 0..1): screenshots and checks. */
+  dotAt(u: number, v: number): void {
+    const { ctx, width: w, height: h } = this.layer;
+    this.layer.clear();
+    drawDot(ctx, u * w, v * h, true, 11);
   }
 
   /** Draw the chosen hand (or nothing) for a frame at time t (seconds). */

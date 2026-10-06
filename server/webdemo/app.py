@@ -34,7 +34,7 @@ from deixis.mcp import DeixisClient
 from deixis.profile import load_profile
 from deixis.refs import DEMONSTRATIVES, norm_word
 from webdemo import __version__
-from webdemo.agent import AgentResult, ArmAgent, Context
+from webdemo.agent import AgentResult, ArmAgent, Context, rules
 from webdemo.command import (
     Meta,
     Sessions,
@@ -47,6 +47,7 @@ from webdemo.command import (
 )
 from webdemo.limits import NO_KEY_WHY, Caps, Limits, Mode, Why, view
 from webdemo.models import NOT_USED, models_in_use
+from webdemo.record import CommandLog, cost_usd, in_words
 from webdemo.settings import Settings
 from webdemo.speech import ClipError, Speech
 
@@ -100,6 +101,22 @@ def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[st
     log.info('command: "%s" -> %s [%s] -> %s%s', said, calls, source, outcome, extra)
 
 
+EVENTS = {
+    "start", "preview", "refused", "go", "done", "failed", "cancel", "stop", "undo", "reset",
+    "camera_error", "mic_error", "silent", "no_hand", "server_down",
+}  # fmt: skip
+
+
+class EventBody(BaseModel):
+    """`POST /api/event`: what happened on the page after a command (for the log only)."""
+
+    kind: str
+    via: str | None = None  # voice, button, key, click
+    why: str | None = None  # a refusal's or an error's reason, in a few words
+    latency_s: float | None = None  # a preview: from the last word to the guess on screen
+    block: str | None = None
+
+
 class AnswerBody(BaseModel):
     """`POST /api/answer`: the person chose one of the last question's candidates."""
 
@@ -119,6 +136,7 @@ def create_app(
     settings = settings or Settings()
     profile = load_profile(settings.profile)
     sessions = Sessions()
+    record = CommandLog(settings.command_log)
     limits = limits or Limits(
         Caps(visitor=settings.cap_visitor_per_day, address=settings.cap_address_per_day,
              total=settings.cap_total_per_day, burst_s=settings.burst_s,
@@ -221,6 +239,7 @@ def create_app(
             "models": models,
             "not_used": NOT_USED,
             "limits": lim,
+            "show_own_key": settings.show_own_key,
         }  # fmt: skip
 
     async def resolve(request: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -401,8 +420,30 @@ def create_app(
         if key_refused:
             whose = f"own key refused, {whose}"
         log_command(words, agent_res, result, error, notes, whose)
+        # What the simple word rules alone would have done with the same words (item 18):
+        # the rule parser runs in well under a millisecond, beside Nemotron.
+        plain = rules(agent.profile, texts, context) if texts else None
+        plain_calls = [c.to_dict() for c in plain.calls] if plain else []
+        word_rules = {
+            "understood": bool(plain_calls),
+            "words": in_words(plain_calls),
+            "calls": plain_calls,
+            "same": plain_calls == calls,
+        }
+        cost = cost_usd(agent_res.usage, settings.price_in_per_m, settings.price_out_per_m)
+        record.write(
+            "command", sid, said=" ".join(texts), typed=audio is None, mode=mode,
+            source=agent_res.source, model=agent_res.model, attempts=agent_res.attempts,
+            calls=calls, status=(result or {}).get("status") if not error else "error",
+            ask=((result or {}).get("ask") or {}).get("reason"), error=error,
+            timings=timings, usage=agent_res.usage, cost_usd=cost,
+            word_rules={"understood": word_rules["understood"], "same": word_rules["same"]},
+            last_word_t1=words[-1]["t1"] if words else None,
+        )  # fmt: skip
         return {
             "words": words,
+            "word_rules": word_rules,
+            "cost_usd": cost,
             "agent": agent_res.summary(),
             "result": result,
             "error": error,
@@ -412,6 +453,21 @@ def create_app(
             "limits": limits_now(sid, addr, mode, why),
             "key_refused": key_refused,
         }
+
+    @app.post("/api/event")
+    def event(
+        body: EventBody, response: Response, sid: Annotated[str | None, Cookie()] = None
+    ) -> dict[str, bool]:
+        """What happened on the page after a command: the guess shown (and how long after the
+        last word), refused, yes, done, no, stop... Only logged (M30, M31)."""
+        if body.kind not in EVENTS:
+            raise HTTPException(400, "unknown event")
+        sid = visitor(response, sid)
+        data = body.model_dump(exclude_none=True, exclude={"kind"})
+        if "why" in data:
+            data["why"] = data["why"][:120]
+        record.write("event", sid, event=body.kind, **data)
+        return {"ok": True}
 
     @app.post("/api/answer")
     async def answer(

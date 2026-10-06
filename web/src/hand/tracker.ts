@@ -33,6 +33,16 @@ export interface HandFrame {
 const WASM_PATH = '/mediapipe';
 const MODEL_PATH = '/models/hand_landmarker.task';
 
+/** The camera we ask for (with the microphone, in one prompt: web demo item 6). */
+export const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
+  facingMode: 'user',
+};
+
+type Loaded = { landmarker: HandLandmarker; delegate: 'GPU' | 'CPU' };
+let loading: Promise<Loaded> | null = null;
+
 type VideoFrameMeta = { captureTime?: number; expectedDisplayTime?: number };
 type VideoWithRvfc = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: (now: number, meta: VideoFrameMeta) => void) => number;
@@ -77,22 +87,20 @@ export class HandTracker {
   }
 
   /**
-   * Ask for the camera, load MediaPipe and start. Throws if the camera is denied or missing
-   * (the page then offers the mouse).
+   * Download MediaPipe and the hand model, and make the landmarker, without the camera: the
+   * page starts this while the start card shows, so "Use my finger" starts at once (item 9).
+   * Safe to call more than once.
    */
-  static async start(video: HTMLVideoElement): Promise<HandTracker> {
-    const [stream, fileset] = await Promise.all([
-      navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
-        audio: false,
-      }),
-      FilesetResolver.forVisionTasks(WASM_PATH),
-    ]);
-    video.srcObject = stream;
-    video.muted = true;
-    video.playsInline = true;
-    await video.play();
+  static preload(): Promise<Loaded> {
+    loading ??= HandTracker.load().catch((e) => {
+      loading = null; // try again on the next call
+      throw e;
+    });
+    return loading;
+  }
 
+  private static async load(): Promise<Loaded> {
+    const fileset = await FilesetResolver.forVisionTasks(WASM_PATH);
     const options = (delegate: 'GPU' | 'CPU') => ({
       baseOptions: { modelAssetPath: MODEL_PATH, delegate },
       runningMode: 'VIDEO' as const,
@@ -101,16 +109,29 @@ export class HandTracker {
       minHandPresenceConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });
-    let delegate: 'GPU' | 'CPU' = 'GPU';
-    let landmarker: HandLandmarker;
     try {
-      landmarker = await HandLandmarker.createFromOptions(fileset, options('GPU'));
+      return { landmarker: await HandLandmarker.createFromOptions(fileset, options('GPU')), delegate: 'GPU' };
     } catch (e) {
       console.warn('hand tracking: no GPU delegate, using the CPU', e);
-      delegate = 'CPU';
-      landmarker = await HandLandmarker.createFromOptions(fileset, options('CPU'));
+      return { landmarker: await HandLandmarker.createFromOptions(fileset, options('CPU')), delegate: 'CPU' };
     }
-    const tracker = new HandTracker(video, landmarker, delegate, stream);
+  }
+
+  /**
+   * Start on the camera: `stream` if the page already has it (one prompt for the camera and
+   * the microphone), else ask for the camera alone. Throws if the camera is denied, missing
+   * or busy (the page then offers the mouse).
+   */
+  static async start(video: HTMLVideoElement, stream?: MediaStream): Promise<HandTracker> {
+    const [s, { landmarker, delegate }] = await Promise.all([
+      stream ?? navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS, audio: false }),
+      HandTracker.preload(),
+    ]);
+    video.srcObject = s;
+    video.muted = true;
+    video.playsInline = true;
+    await video.play();
+    const tracker = new HandTracker(video, landmarker, delegate, s);
     tracker.running = true;
     tracker.next();
     return tracker;
@@ -120,6 +141,7 @@ export class HandTracker {
     this.running = false;
     for (const track of this.stream.getTracks()) track.stop();
     this.landmarker.close();
+    loading = null;
   }
 
   private next(): void {

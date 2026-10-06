@@ -1,0 +1,22 @@
+# Never into the image: keys, logs, caches, local builds (web demo item 17)
+.env
+.env.*
+**/.env
+.git
+.venv
+.cache
+.pytest_cache
+.ruff_cache
+**/__pycache__
+out
+logs
+recordings
+tests
+web/node_modules
+web/dist
+web/public/so101.pack
+web/public/mediapipe
+web/public/models
+web/test-results
+web/playwright-report
+deploy

@@ -4,7 +4,7 @@
  * real plotter and the real vacuum act on), and how long each step took.
  */
 
-import type { AgentSummary, HeardWord, Limits, Timings } from '../api';
+import type { AgentSummary, HeardWord, Limits, Timings, WordRules } from '../api';
 import type { CoreResponse } from '../core';
 
 export interface DetailsInput {
@@ -15,6 +15,8 @@ export interface DetailsInput {
   result: CoreResponse | null;
   error?: string | null;
   timings: Timings;
+  word_rules?: WordRules;
+  cost_usd?: number;
 }
 
 /** Who understood the words, in plain words; `mode`: whose key (plan 8.1, 8.2). */
@@ -52,13 +54,27 @@ export function coreJson(result: CoreResponse): string {
   return JSON.stringify(drop(rest), null, 2);
 }
 
-export function timingsLine(t: Timings): string {
+/** Each step's time next to what did it: "Parakeet 0.20 s · Nemotron 1.10 s · core 0.010 s". */
+export function timingsLine(t: Timings, agent?: AgentSummary): string {
   const parts: string[] = [];
-  if (t.asr_s !== undefined) parts.push(`speech to words ${t.asr_s.toFixed(2)} s`);
-  if (t.agent_s !== undefined) parts.push(`understanding ${t.agent_s.toFixed(2)} s`);
-  if (t.core_s !== undefined) parts.push(`the core ${t.core_s.toFixed(3)} s`);
+  if (t.asr_s !== undefined) parts.push(`Parakeet ${t.asr_s.toFixed(2)} s`);
+  if (t.agent_s !== undefined) {
+    const who = agent?.source === 'nemotron' ? 'Nemotron' : agent?.source === 'answer' ? 'answer' : 'word matcher';
+    parts.push(`${who} ${t.agent_s.toFixed(2)} s`);
+  }
+  if (t.core_s !== undefined) parts.push(`core ${t.core_s.toFixed(3)} s`);
   parts.push(`server in all ${t.total_s.toFixed(2)} s`);
   return parts.join(' · ');
+}
+
+/** "7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price" (item 11). */
+export function costLine(agent: AgentSummary | undefined, cost: number | undefined): string | null {
+  const u = agent?.usage;
+  if (!u || !u.prompt) return null;
+  const n = (x: number | undefined) => (x ?? 0).toLocaleString('en-GB');
+  const cached = u.cached ? ` (${n(u.cached)} cached)` : '';
+  const usd = cost === undefined ? '' : `: $${cost < 0.001 ? cost.toFixed(5) : cost.toFixed(4)} at list price`;
+  return `${n(u.prompt)} tokens in${cached}, ${n(u.completion)} out${usd}`;
 }
 
 function section(title: string, body: HTMLElement | string): HTMLElement {
@@ -93,6 +109,22 @@ export function fillDetails(body: HTMLElement, d: DetailsInput): void {
   if (d.agent && d.agent.calls.length) {
     parts.push(section('The tool calls it wrote (words, never coordinates)', pre(d.agent.calls.map(callLine).join('\n'))));
   }
+  if (d.word_rules && d.agent?.source === 'nemotron') {
+    const wr = d.word_rules;
+    const box = document.createElement('div');
+    const p = document.createElement('p');
+    p.className = 'rules-line';
+    p.textContent = wr.understood
+      ? `understood: ${wr.words}${wr.same ? ' (the same as Nemotron)' : ''}`
+      : 'not understood';
+    box.append(p);
+    if (wr.calls.length) {
+      const small = pre(wr.calls.map(callLine).join('\n'));
+      small.classList.add('small-pre');
+      box.append(small);
+    }
+    parts.push(section('Simple word rules (no AI model), on the same words', box));
+  }
   if (d.result) {
     const title =
       d.result.status === 'ask'
@@ -102,6 +134,8 @@ export function fillDetails(body: HTMLElement, d: DetailsInput): void {
   } else if (d.error) {
     parts.push(section('The deixis core', `It refused the request: ${d.error}`));
   }
-  parts.push(section('Time', timingsLine(d.timings)));
+  parts.push(section('Time', timingsLine(d.timings, d.agent)));
+  const cost = costLine(d.agent, d.cost_usd);
+  if (cost) parts.push(section('Tokens and cost on Nebius Token Factory', cost));
   body.replaceChildren(...parts);
 }

@@ -1,0 +1,3 @@
+
+# deploy scripts run on the Linux server
+deploy/*.sh text eol=lf

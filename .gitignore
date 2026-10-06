@@ -36,3 +36,7 @@ web/public/models/
 
 # Planning docs live in the private deixis-planning repo, never here (5 Oct 2026)
 docs/
+
+# The core wheel the Docker build installs (deploy/run.sh builds it on the server)
+wheels/*.whl
+deploy/.host

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { HeardWord } from '../src/api';
 import type { CoreResponse } from '../src/core';
-import { callLine, coreJson, timingsLine, understoodBy } from '../src/ui/details';
+import { callLine, coreJson, costLine, timingsLine, understoodBy } from '../src/ui/details';
 import { layoutWords, stripModel } from '../src/ui/strip';
 
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'replies.json'), 'utf8')) as {
@@ -95,8 +95,19 @@ describe('the details panel', () => {
     expect(understoodBy({ ...agent, source: 'nemotron' })).toContain('Nemotron 3.5 Lightning');
     expect(understoodBy({ ...agent, source: 'rules', errors: ['timeout'] })).toContain('timeout');
     expect(understoodBy(undefined)).toContain('answer');
-    expect(timingsLine({ asr_s: 0.41, agent_s: 1.2, core_s: 0.012, total_s: 1.7 })).toBe(
-      'speech to words 0.41 s · understanding 1.20 s · the core 0.012 s · server in all 1.70 s',
+    const t = { asr_s: 0.41, agent_s: 1.2, core_s: 0.012, total_s: 1.7 };
+    expect(timingsLine(t, { ...agent, source: 'nemotron' })).toBe(
+      'Parakeet 0.41 s · Nemotron 1.20 s · core 0.012 s · server in all 1.70 s',
     );
+    expect(timingsLine(t)).toContain('word matcher 1.20 s');
+  });
+
+  test('tokens and cost at list price (item 11)', () => {
+    const agent = {
+      source: 'nemotron' as const, model: 'm', calls: [], raw: [], errors: [], attempts: 1,
+      usage: { prompt: 7051, cached: 4192, completion: 64 },
+    };
+    expect(costLine(agent, 0.00043842)).toBe('7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price');
+    expect(costLine({ ...agent, usage: {} }, 0)).toBeNull();
   });
 });

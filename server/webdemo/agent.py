@@ -67,6 +67,8 @@ class AgentResult:
     latency_s: float = 0.0
     asked_model: bool = False  # Nemotron was asked (it costs, even when it failed)
     key_refused: bool = False  # Token Factory refused the key
+    # Token Factory's counts over all attempts: prompt, cached (part of prompt), completion
+    usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -80,6 +82,7 @@ class AgentResult:
             "raw": self.raw,
             "errors": self.errors,
             "attempts": self.attempts,
+            "usage": self.usage,
         }
 
 
@@ -95,7 +98,8 @@ Rules:
 - The object: a pointed block {"deixis": "that", "word_index": N}; a block by colour
   {"label": "blue one"}; "it" (the block just moved) {"last": true}.
 - The place: a pointed spot {"deixis": "here", "word_index": N}; next to, on, left of, right
-  of, behind or in front of a block {"relation": "next_to", "target": <object>}.
+  of, behind or in front of a block {"relation": "next_to", "target": <object>}; between two
+  blocks {"relation": "between", "target": <object>, "target2": <object>}.
 - "put that here", "move this there" -> move(object=..., place=...).
 - "yes", "ok", "go", "do it" -> confirm(). "no", "cancel", "never mind" -> cancel().
 - "stop", "halt", "wait", "freeze" -> stop(). "go home", "go back", "rest" -> home().
@@ -112,6 +116,9 @@ move({"object": {"label": "blue one"}, "place": {"relation": "next_to", "target"
 
 Words: 0:put 1:that 2:on 3:that
 move({"object": {"deixis": "that", "word_index": 1}, "place": {"relation": "on", "target": {"deixis": "that", "word_index": 3}}})
+
+Words: 0:put 1:the 2:red 3:cube 4:between 5:the 6:yellow 7:and 8:the 9:blue
+move({"object": {"label": "red one"}, "place": {"relation": "between", "target": {"label": "yellow one"}, "target2": {"label": "blue one"}}})
 
 Words: 0:put 1:it 2:there
 move({"object": {"last": true}, "place": {"deixis": "there", "word_index": 2}})
@@ -306,6 +313,28 @@ def calls_from_text(text: str, names: set[str]) -> list[dict[str, Any]]:
     return out
 
 
+def add_usage(total: dict[str, int], usage: Any) -> None:
+    """Add one reply's token counts (OpenAI-style `usage`) to `total`."""
+    if usage is None:
+        return
+    details = getattr(usage, "prompt_tokens_details", None)
+    cached = getattr(details, "cached_tokens", None) if details is not None else None
+    for k, v in (("prompt", getattr(usage, "prompt_tokens", None)), ("cached", cached),
+                 ("completion", getattr(usage, "completion_tokens", None))):  # fmt: skip
+        if isinstance(v, int):
+            total[k] = total.get(k, 0) + v
+
+
+def plain_yes_no(words: Sequence[str]) -> bool:
+    """A plain "yes" or "no" (fillers allowed, nothing else): answered at once by the rule
+    parser, without the model, like "stop" (web demo item 12). "No, there" is not plain."""
+    ws = [w for w in _norm(words) if w and w not in FILLERS and w not in ("thanks", "thank")]
+    if not ws or len(ws) > 3:
+        return False
+    said = " ".join(ws)
+    return said in YES_PHRASES or all(w in YES for w in ws) or all(w in NO for w in ws)
+
+
 def _scrub(text: str, key: str | None) -> str:
     """An error message without the key (or any part an API echoed back)."""
     if key:
@@ -363,6 +392,7 @@ class ArmAgent:
                     raise KeyRefused("the Nebius key was refused") from None
                 raise AgentUnavailable(_scrub(f"{type(e).__name__}: {e}", key)) from None
             result.attempts = attempt + 1
+            add_usage(result.usage, getattr(resp, "usage", None))
             msg = resp.choices[0].message
             tool_calls = list(getattr(msg, "tool_calls", None) or [])
             raw = [{"name": c.function.name, "args": c.function.arguments} for c in tool_calls]
@@ -397,7 +427,7 @@ class ArmAgent:
         """Nemotron if it answers with calls, else the rule parser (with why in `errors`).
         "Stop" never waits for the model (about a second): the rule parser answers at once.
         `no_key_why` is the reason given when there is no key (simple mode, plan 8.1)."""
-        if parse(words, context) == [{"name": "stop", "args": {}}]:
+        if parse(words, context) == [{"name": "stop", "args": {}}] or plain_yes_no(words):
             return rules(self.profile, words, context)
         why = no_key_why
         refused = False

@@ -132,7 +132,7 @@ def test_outside_the_area_asks_and_never_moves_it(core):
             calls=[call("move", object={"deixis": "that", "word_index": 1},
                         place={"deixis": "here", "word_index": 2})])  # fmt: skip
     assert r.status == "ask" and r.ask.reason == "outside_area"
-    assert r.ask.question == "I can't reach there. Please point somewhere closer."
+    assert r.ask.question == "I can't reach there. Please move the dot closer."
     assert math.dist(r.ask.candidates[0].mean_mm, (540, 120)) < 5  # as pointed, not moved
 
 
