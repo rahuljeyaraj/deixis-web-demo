@@ -111,7 +111,7 @@ def test_past_the_share_the_word_matcher_answers(settings, core):
     llm = FakeLLM(YES, YES)
     with app(settings, core, llm, caps(visitor=2)) as c:
         assert c.get("/api/info").json()["limits"]["left_today"] == 2
-        first, second, third = (say(c, "yes").json() for _ in range(3))
+        first, second, third = (say(c, "confirm it").json() for _ in range(3))
         info = c.get("/api/info").json()
     assert llm.keys == [OURS, OURS]
     sources = [r["agent"]["source"] for r in (first, second, third)]
@@ -131,12 +131,12 @@ def test_past_the_share_the_word_matcher_answers(settings, core):
 def test_clearing_cookies_doesnt_reset_the_share(settings, core):
     llm = FakeLLM(YES, YES, YES)
     with app(settings, core, llm, caps(visitor=2, address=3)) as c:
-        say(c, "yes")
-        say(c, "yes")
+        say(c, "confirm it")
+        say(c, "confirm it")
         c.cookies.clear()  # a new visitor id, the same address
-        assert say(c, "yes").json()["limits"]["mode"] == "ours"
+        assert say(c, "confirm it").json()["limits"]["mode"] == "ours"
         c.cookies.clear()
-        r = say(c, "yes").json()
+        r = say(c, "confirm it").json()
     assert r["limits"]["why"] == "address" and len(llm.keys) == 3
 
 
@@ -146,7 +146,7 @@ def test_everyones_budget(settings, core):
     with app(settings, core, llm, caps(total=2)) as c:
         for n in range(3):
             c.cookies.clear()
-            r = say(c, "yes", **{"X-Forwarded-For": f"198.51.100.{n}"}).json()
+            r = say(c, "confirm it", **{"X-Forwarded-For": f"198.51.100.{n}"}).json()
     assert r["limits"]["why"] == "total"
     assert r["limits"]["banner"].startswith("Today’s AI budget is used up")
 
@@ -156,9 +156,9 @@ def test_behind_a_proxy_the_left_of_forwarded_for_is_ignored(settings, core):
     settings.proxy_hops = 1
     llm = FakeLLM(YES)
     with app(settings, core, llm, caps(visitor=5, address=1)) as c:
-        say(c, "yes", **{"X-Forwarded-For": "1.1.1.1, 198.51.100.7"})
+        say(c, "confirm it", **{"X-Forwarded-For": "1.1.1.1, 198.51.100.7"})
         c.cookies.clear()
-        r = say(c, "yes", **{"X-Forwarded-For": "2.2.2.2, 198.51.100.7"}).json()
+        r = say(c, "confirm it", **{"X-Forwarded-For": "2.2.2.2, 198.51.100.7"}).json()
     assert r["limits"]["why"] == "address"
 
 
@@ -172,9 +172,9 @@ def test_stop_costs_nothing(settings, core):
 def test_an_own_key_skips_the_share(settings, core):
     llm = FakeLLM(YES, YES)
     with app(settings, core, llm, caps(visitor=0)) as c:
-        a = say(c, "yes", key=THEIRS).json()
-        b = say(c, "yes", key=THEIRS).json()
-        mine = say(c, "yes").json()  # without it: past the share
+        a = say(c, "confirm it", key=THEIRS).json()
+        b = say(c, "confirm it", key=THEIRS).json()
+        mine = say(c, "confirm it").json()  # without it: past the share
     assert llm.keys == [THEIRS, THEIRS]
     assert a["agent"]["source"] == b["agent"]["source"] == "nemotron"
     assert a["limits"]["mode"] == "own" and a["limits"]["banner"] is None
@@ -185,7 +185,7 @@ def test_a_refused_key_falls_back_to_ours_and_says_so(settings, core, caplog):
     caplog.set_level(logging.DEBUG)
     llm = FakeLLM(Refused(f"Incorrect API key provided: {THEIRS}"), YES)
     with app(settings, core, llm, caps(visitor=2)) as c:
-        r = say(c, "yes", key=THEIRS)
+        r = say(c, "confirm it", key=THEIRS)
     body = r.json()
     assert llm.keys == [THEIRS, OURS]
     assert body["key_refused"] is True
@@ -197,7 +197,7 @@ def test_a_refused_key_falls_back_to_ours_and_says_so(settings, core, caplog):
 def test_a_refused_key_past_the_share_is_simple_mode(settings, core):
     llm = FakeLLM(Refused("401"))
     with app(settings, core, llm, caps(visitor=0)) as c:
-        body = say(c, "yes", key=THEIRS).json()
+        body = say(c, "confirm it", key=THEIRS).json()
     assert body["key_refused"] is True and body["limits"]["mode"] == "simple"
     assert llm.keys == [THEIRS]
 
@@ -206,7 +206,7 @@ def test_no_key_on_the_server(settings, core):
     llm = FakeLLM(YES)
     with app(settings, core, llm, caps(), key="") as c:
         info = c.get("/api/info").json()["limits"]
-        own = say(c, "yes", key=THEIRS).json()
+        own = say(c, "confirm it", key=THEIRS).json()
     assert info["why"] == "no_key" and info["own_key_helps"] is True and info["left_today"] == 0
     assert own["agent"]["source"] == "nemotron" and own["limits"]["mode"] == "own"
 
@@ -215,7 +215,7 @@ def test_rules_mode_ignores_every_key(settings, core):
     settings.ai = "rules"
     llm = FakeLLM()
     with app(settings, core, llm, caps()) as c:
-        r = say(c, "yes", key=THEIRS).json()
+        r = say(c, "confirm it", key=THEIRS).json()
     assert not llm.keys and r["limits"]["why"] == "rules" and r["limits"]["own_key_helps"] is False
 
 
@@ -224,11 +224,11 @@ def test_the_burst_limit_on_the_route(settings, core):
     clock = Clock()
     llm = FakeLLM(YES, YES)
     with app(settings, core, llm, Caps(burst_s=1.5, address_burst_s=0.5), clock) as c:
-        assert say(c, "yes", key=THEIRS).status_code == 200
+        assert say(c, "confirm it", key=THEIRS).status_code == 200
         clock.t += 1.0
-        busy = say(c, "yes", key=THEIRS)  # an own key too
+        busy = say(c, "confirm it", key=THEIRS)  # an own key too
         clock.t += 0.6
-        again = say(c, "yes", key=THEIRS)
+        again = say(c, "confirm it", key=THEIRS)
     assert busy.status_code == 429 and busy.headers["retry-after"] == "1"
     assert busy.json()["wait_s"] == pytest.approx(0.5)
     assert again.status_code == 200 and len(llm.keys) == 2
@@ -237,9 +237,9 @@ def test_the_burst_limit_on_the_route(settings, core):
 def test_a_first_visit_that_waits_still_gets_its_cookie(settings, core):
     clock = Clock()
     with app(settings, core, FakeLLM(YES), Caps(burst_s=1.5, address_burst_s=0.5), clock) as c:
-        say(c, "yes")
+        say(c, "confirm it")
         c.cookies.clear()
-        busy = say(c, "yes")  # a new visitor on the same address, at once
+        busy = say(c, "confirm it")  # a new visitor on the same address, at once
     assert busy.status_code == 429 and "sid=" in busy.headers["set-cookie"]
 
 
@@ -256,10 +256,10 @@ def test_the_key_is_never_sent_back_logged_or_kept(settings, core, caplog):
     )
     with app(settings, core, llm, caps(visitor=5)) as c:
         replies = [
-            say(c, "yes", key=THEIRS),
+            say(c, "confirm it", key=THEIRS),
             say(c, "put that here", key=THEIRS),
-            say(c, "yes", key=THEIRS),
-            say(c, "yes", key=long_key),
+            say(c, "confirm it", key=THEIRS),
+            say(c, "confirm it", key=long_key),
             c.get("/api/info"),
             c.get("/healthz"),
         ]

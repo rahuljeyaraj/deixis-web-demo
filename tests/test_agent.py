@@ -138,7 +138,7 @@ def test_nemotron_tool_calls():
 
 def test_nemotron_calls_written_as_text_and_the_context():
     llm = FakeLLM("confirm({})")
-    res = agent(llm).understand(["yes"], "sk-ours", Context(previewing=True))
+    res = agent(llm).understand(["confirm", "it"], "sk-ours", Context(previewing=True))
     assert res.source == "nemotron" and [c.name for c in res.calls] == ["confirm"]
     assert "waits for the person's yes or no" in llm.requests[0]["messages"][1]["content"]
 
@@ -163,7 +163,7 @@ def test_a_timeout_falls_back_to_the_rules_without_the_key():
 def test_a_refused_key_says_so():
     err = Exception("Incorrect API key provided: sk-vis****789")
     err.status_code = 401
-    res = agent(FakeLLM(err)).understand(["yes"], "sk-visitor-123456789")
+    res = agent(FakeLLM(err)).understand(["confirm", "it"], "sk-visitor-123456789")
     assert res.source == "rules" and res.errors[0] == "the Nebius key was refused"
 
 
@@ -175,7 +175,7 @@ def test_stop_never_waits_for_the_model():
 
 
 def test_no_key_is_simple_mode():
-    res = agent(FakeLLM()).understand(["yes"], None)
+    res = agent(FakeLLM()).understand(["confirm", "it"], None)
     assert res.source == "rules" and res.errors[0] == "no Nebius key: simple mode"
 
 
@@ -272,10 +272,11 @@ def test_the_visitors_key_is_used_for_their_call_only(settings, core, caplog):
     llm = FakeLLM(reply, reply, TimeoutError("boom sk-visitor-9999999999 boom"))
     caplog.set_level(logging.DEBUG)
     with TestClient(create_app(settings, client=core, llm_factory=llm.factory)) as c:
-        a = c.post("/api/command", data={"meta": json.dumps({"text": "yes"})})
-        b = c.post("/api/command", data={"meta": json.dumps({"text": "yes"})},
+        # "confirm it", not a plain "yes": a plain yes never reaches the model (item 12)
+        a = c.post("/api/command", data={"meta": json.dumps({"text": "confirm it"})})
+        b = c.post("/api/command", data={"meta": json.dumps({"text": "confirm it"})},
                    headers={"X-Nebius-Key": "sk-visitor-9999999999"})  # fmt: skip
-        d = c.post("/api/command", data={"meta": json.dumps({"text": "yes"})},
+        d = c.post("/api/command", data={"meta": json.dumps({"text": "confirm it"})},
                    headers={"X-Nebius-Key": "sk-visitor-9999999999"})  # fmt: skip
     assert llm.keys == ["sk-ours-0000000000", "sk-visitor-9999999999", "sk-visitor-9999999999"]
     assert a.json()["agent"]["source"] == b.json()["agent"]["source"] == "nemotron"
