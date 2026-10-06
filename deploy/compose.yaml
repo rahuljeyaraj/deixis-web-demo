@@ -1,0 +1,44 @@
+# The judges' demo on the rented server (web demo item 17): the app, and Caddy in front for
+# HTTPS (browsers allow the camera and the microphone only on HTTPS). Run by deploy/run.sh.
+#
+# The key: /etc/deixis/webdemo.env, owned by root, chmod 600, with one line
+#   NEBIUS_API_KEY=...
+# It is passed to the container when it starts; it is never in the image, the repo or a log.
+# DEMO_HOST (the HTTPS name) comes from deploy/.host, written by run.sh.
+
+services:
+  webdemo:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: deixis-webdemo:latest
+    restart: unless-stopped
+    env_file:
+      - /etc/deixis/webdemo.env
+    volumes:
+      - logs:/data/logs
+    expose:
+      - "8000"
+    # Parakeet and the core on 2 vCPU: leave room for Caddy and the system
+    cpus: 1.8
+    mem_limit: 3g
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_HOST: ${DEMO_HOST:?set DEMO_HOST (the HTTPS name)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - webdemo
+
+volumes:
+  logs:
+  caddy_data:
+  caddy_config:
