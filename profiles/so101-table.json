@@ -35,7 +35,7 @@
     "no_object.empty": "There are no blocks yet.",
     "ambiguous_object": "This one or that one?",
     "unknown_label": "I don't see a {label}. Which one? Point at it.",
-    "outside_area": "I can't reach there. Please point somewhere closer.",
+    "outside_area": "I can't reach there. Please move the dot closer.",
     "no_previous": "There's nothing to move right now."
   },
   "actions": [

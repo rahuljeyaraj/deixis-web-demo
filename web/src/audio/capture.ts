@@ -9,6 +9,14 @@ import { type Clip, ClipRecorder } from './clip';
 import { ClockMap } from './clock';
 import workletSource from './capture.worklet.js?raw';
 
+/** The microphone we ask for. */
+export const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
+  channelCount: 1,
+  echoCancellation: true,
+  noiseSuppression: true,
+  autoGainControl: true,
+};
+
 /** How often a new (context time, page time) pair is taken. */
 const CLOCK_EVERY_MS = 2000;
 
@@ -49,12 +57,10 @@ export class MicCapture {
     this.takeTime();
   }
 
-  /** Ask for the microphone and start. Throws if it is denied or missing. */
-  static async start(): Promise<MicCapture> {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      video: false,
-    });
+  /** Start on `stream` if the page already has it (one prompt for the camera and the
+   * microphone), else ask for the microphone. Throws if it is denied or missing. */
+  static async start(given?: MediaStream): Promise<MicCapture> {
+    const stream = given ?? (await navigator.mediaDevices.getUserMedia({ audio: AUDIO_CONSTRAINTS, video: false }));
     const ctx = new AudioContext({ latencyHint: 'interactive' });
     const url = URL.createObjectURL(new Blob([workletSource], { type: 'text/javascript' }));
     try {

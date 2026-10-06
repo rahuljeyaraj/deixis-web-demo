@@ -3,9 +3,11 @@
  * the arm. idle -> thinking -> (preview | asking | acting | idle).
  *
  * A resolved move is checked robot-side first (the block can be picked, the place is free,
- * the arm can reach the block and the place); then the block glows, a ghost block shows the
- * place, and the robot asks "This one, here?". On yes (or Go) the arm runs the pick and place.
- * The core's `Where`s are the only places used: the page never makes up a coordinate.
+ * the arm can reach the block and the place); then the block is outlined, a ghost block shows
+ * the place, and the robot says what it understood: "Move the red block here?". On yes (or Go)
+ * the arm runs the pick and place, then says "Done.". A refused correction ("a bit further
+ * back" with a block there) keeps the guess on screen. The core's `Where`s are the only places
+ * used: the page never makes up a coordinate.
  */
 
 import type { Ask, CoreResponse, ResolvedCall, Thing, Where } from '../core';
@@ -32,7 +34,11 @@ export interface FlowView {
   ghost(block: BlockId | null, place?: Place): void;
   /** Something changed (redraw buttons, the state line). */
   changed?(state: FlowState): void;
+  /** What happened, for the server's log (M30, M31): a guess shown, refused, yes, done... */
+  event?(kind: FlowEvent, data?: { why?: string; block?: string }): void;
 }
+
+export type FlowEvent = 'preview' | 'refused' | 'go' | 'done' | 'failed' | 'cancel' | 'stop' | 'undo';
 
 export interface FlowOptions {
   /** Ask "This one, here?" and wait for yes before moving (open decision D3: keep). */
@@ -41,8 +47,10 @@ export interface FlowOptions {
 }
 
 export const SAY = {
-  confirm: 'This one, here?',
-  cantReach: "I can't reach there. Please point somewhere closer.",
+  confirm: 'Move the {block} block here?',
+  confirmOnto: 'Put the {block} block on the {onto} one?',
+  done: 'Done.',
+  cantReach: "I can't reach there. Please move the dot closer.",
   inTheWay: 'The {block} block is in the way there.',
   tooHigh: "That stack is too high for me there. I can stack higher a bit further from me.",
   coveredObject: "There's a block on top of that one. Move that one first.",
@@ -95,7 +103,7 @@ export class Flow {
       },
       state: {
         previewing: s.kind === 'preview',
-        question: s.kind === 'asking' ? s.ask.question : null,
+        question: s.kind === 'asking' ? askLine(s.ask) : null, // as the robot said it
       },
     };
   }
@@ -118,7 +126,7 @@ export class Flow {
       this.set({ kind: 'asking', ask: r.ask });
       const ids = r.ask.candidates.map((c) => c.thing).filter((t): t is BlockId => isBlock(t));
       this.view.glow(ids);
-      this.view.speak(r.ask.question);
+      this.view.speak(askLine(r.ask));
       return;
     }
     this.set(this.settled());
@@ -142,14 +150,18 @@ export class Flow {
     }
     const from = this.placeOf(s.block);
     this.set({ kind: 'acting', block: s.block });
+    this.view.event?.('go', { block: s.block });
     const res = await this.arm.move(s.block, s.place);
     this.clearShow();
     if (res.ok) {
       this.lastThing = s.block;
       this.movedAt.set(s.block, this.opts.now());
       this.history.push({ block: s.block, from, to: s.where });
+      this.view.speak(SAY.done);
+      this.view.event?.('done', { block: s.block });
     } else {
       this.view.speak(res.reason === 'stopped' ? SAY.stopped : res.reason === 'slipped' ? SAY.slipped : SAY.failed);
+      this.view.event?.('failed', { why: res.reason });
     }
     this.set({ kind: 'idle' });
     return res;
@@ -160,6 +172,7 @@ export class Flow {
     this.clearShow();
     this.set({ kind: 'idle' });
     this.view.speak(SAY.ok);
+    this.view.event?.('cancel');
   }
 
   /** Stop: freeze the arm where it is and drop everything waiting. */
@@ -167,6 +180,7 @@ export class Flow {
     this.arm.stop();
     this.clearShow();
     this.set({ kind: 'idle' });
+    this.view.event?.('stop');
   }
 
   async home(): Promise<MoveResult> {
@@ -262,6 +276,12 @@ export class Flow {
       return null;
     })();
     if (why) {
+      this.view.event?.('refused', { why, block });
+      if (this.state.kind === 'preview') {
+        // A correction that can't be done: say why, and keep the guess (item 8).
+        this.view.speak(why);
+        return;
+      }
       this.clearShow();
       this.set({ kind: 'idle' });
       this.view.speak(why);
@@ -270,7 +290,8 @@ export class Flow {
     this.view.glow([block]);
     this.view.ghost(block, place);
     this.set({ kind: 'preview', block, place, where, onto });
-    if (this.opts.confirmFirst) this.view.speak(SAY.confirm);
+    this.view.event?.('preview', { block });
+    if (this.opts.confirmFirst) this.view.speak(guessLine(block, onto));
     else void this.go();
   }
 
@@ -293,6 +314,23 @@ export class Flow {
     this.state = s;
     this.view.changed?.(s);
   }
+}
+
+/** What the robot understood, said back: "Move the red block here?" (web demo item 1). */
+export function guessLine(block: BlockId, onto: BlockId | null): string {
+  return (onto ? SAY.confirmOnto : SAY.confirm).replace('{block}', block).replace('{onto}', onto ?? '');
+}
+
+/** The robot's question, naming the blocks when it asks which one: "The red one or the
+ * yellow one?" (item 1); any other question as the core worded it. */
+export function askLine(ask: Ask): string {
+  const blocks = ask.candidates.map((c) => c.thing).filter((t): t is BlockId => isBlock(t));
+  if (ask.reason !== 'ambiguous_object' || blocks.length < 2 || blocks.length !== ask.candidates.length) {
+    return ask.question;
+  }
+  const names = blocks.map((b) => `the ${b} one`);
+  const list = names.length === 2 ? names.join(' or ') : `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
+  return list.charAt(0).toUpperCase() + list.slice(1) + '?';
 }
 
 function isBlock(v: unknown): v is BlockId {

@@ -9,6 +9,43 @@ import { AREA_MM, BASE_MM, REACH_MM, tableToWorld } from './table';
 
 const VISIBLE_GROUPS = new Set([0, 1, 2]); // 3 and 4 are the arm's collision shapes
 
+/** One look on every robot (final/web-demo.md): you are amber, the robot's guess is blue. */
+export const LOOK = { amber: 0xffb000, guess: 0x1e88e5, edge: 0x1a1a1a } as const;
+
+/** A square ring between half-widths `inner` and `outer`, solid or as dashes (`grow`: how much
+ * longer each dash is at both ends, for the dark edge under it). */
+export function ringShapes(inner: number, outer: number, dashed: boolean, grow: number): THREE.Shape[] {
+  const rect = (x0: number, y0: number, x1: number, y1: number) =>
+    new THREE.Shape([
+      new THREE.Vector2(x0, y0), new THREE.Vector2(x1, y0), new THREE.Vector2(x1, y1), new THREE.Vector2(x0, y1),
+    ]); // prettier-ignore
+  if (!dashed) {
+    const sq = (s: number) => [new THREE.Vector2(-s, -s), new THREE.Vector2(s, -s), new THREE.Vector2(s, s), new THREE.Vector2(-s, s)];
+    const shape = new THREE.Shape(sq(outer));
+    shape.holes.push(new THREE.Path(sq(inner).reverse()));
+    return [shape];
+  }
+  // Each side: dashes about 6 mm long with 4 mm gaps, a full dash on each corner.
+  const out: THREE.Shape[] = [];
+  const len = 2 * outer;
+  const n = Math.max(2, Math.round(len / 0.01));
+  const step = len / n;
+  const dash = step * 0.6;
+  for (let side = 0; side < 4; side++) {
+    for (let k = 0; k <= n; k += 1) {
+      const c = -outer + k * step;
+      const a = Math.max(-outer, c - dash / 2) - grow;
+      const b = Math.min(outer, c + dash / 2) + grow;
+      // side 0: bottom, 1: top, 2: left, 3: right (the bands between inner and outer)
+      if (side === 0) out.push(rect(a, -outer, b, -inner));
+      else if (side === 1) out.push(rect(a, inner, b, outer));
+      else if (side === 2) out.push(rect(-outer, a, -inner, b));
+      else out.push(rect(inner, a, outer, b));
+    }
+  }
+  return out;
+}
+
 export interface ViewOptions {
   /** Draw over a transparent background (the webcam shows through). */
   transparent?: boolean;
@@ -60,48 +97,61 @@ export class TableView {
     return geom === this.tableGeom;
   }
 
-  /** Make a geom glow (the block "that" means) or stop glowing. */
+  /**
+   * The robot's guess (web demo item 10, one look): a dashed blue ring with a dark edge on
+   * the table around the block, and the block lit a little from inside in its own colour.
+   */
   glow(geom: number, on: boolean): void {
     const mesh = this.meshOfGeom.get(geom);
     if (!mesh) return;
-    // Lit from inside in its own colour, so a chosen block reads as brighter, not paler; and a
-    // pulsing pink ring on the table around it (the fingertip dot's colour).
     const m = mesh.material as THREE.MeshStandardMaterial;
     m.emissive.copy(on ? m.color : new THREE.Color(0x000000));
-    m.emissiveIntensity = on ? 0.45 : 0;
-    const halo = this.haloOf(mesh);
-    halo.visible = on;
-    if (on) this.halos.add(halo);
-    else this.halos.delete(halo);
+    m.emissiveIntensity = on ? 0.3 : 0;
+    this.ringOf(mesh, 'guess').visible = on;
   }
 
-  private readonly halos = new Set<THREE.Mesh>();
+  /** What the dot is on (hover): a thin amber ring with a dark edge; null: none. */
+  hover(geom: number | null): void {
+    if (geom === this.hovered) return;
+    if (this.hovered !== null) {
+      const old = this.meshOfGeom.get(this.hovered);
+      if (old) this.ringOf(old, 'hover').visible = false;
+    }
+    this.hovered = geom;
+    const mesh = geom === null ? undefined : this.meshOfGeom.get(geom);
+    if (mesh) this.ringOf(mesh, 'hover').visible = true;
+  }
 
-  /** A flat square ring under the block (it moves and turns with the block). */
-  private haloOf(mesh: THREE.Mesh): THREE.Mesh {
-    let halo = mesh.userData.halo as THREE.Mesh | undefined;
-    if (!halo) {
+  private hovered: number | null = null;
+
+  /** A flat ring under the block (it moves and turns with the block): `guess` dashed blue,
+   * `hover` thin amber, each over a slightly wider dark edge. */
+  private ringOf(mesh: THREE.Mesh, kind: 'guess' | 'hover'): THREE.Group {
+    let ring = mesh.userData[kind] as THREE.Group | undefined;
+    if (!ring) {
       const box = (mesh.geometry as THREE.BoxGeometry).parameters;
       const half = box.width / 2;
-      const outer = half + 0.009;
-      const inner = half + 0.0015;
-      const square = (s: number) => [
-        new THREE.Vector2(-s, -s), new THREE.Vector2(s, -s), new THREE.Vector2(s, s), new THREE.Vector2(-s, s),
-      ]; // prettier-ignore
-      const shape = new THREE.Shape(square(outer));
-      shape.holes.push(new THREE.Path(square(inner).reverse()));
-      halo = new THREE.Mesh(
-        new THREE.ShapeGeometry(shape),
-        new THREE.MeshBasicMaterial({ color: 0xff4081, transparent: true, depthWrite: false }),
-      );
-      halo.position.z = -box.depth / 2 + 0.0012; // just above what the block stands on
-      halo.raycast = () => {}; // pointing goes to the block, not its ring
-      halo.renderOrder = 1;
-      halo.visible = false;
-      mesh.add(halo);
-      mesh.userData.halo = halo;
+      const [inner, outer] = kind === 'guess' ? [half + 0.004, half + 0.009] : [half + 0.0015, half + 0.004];
+      const colour = kind === 'guess' ? LOOK.guess : LOOK.amber;
+      ring = new THREE.Group();
+      const layer = (shapes: THREE.Shape[], c: number, order: number) => {
+        const m = new THREE.Mesh(
+          new THREE.ShapeGeometry(shapes),
+          new THREE.MeshBasicMaterial({ color: c, transparent: true, depthWrite: false }),
+        );
+        m.renderOrder = order;
+        m.raycast = () => {}; // pointing goes to the block, not its ring
+        ring!.add(m);
+      };
+      const e = 0.0012; // the dark edge, each side
+      layer(ringShapes(inner - e, outer + e, kind === 'guess', e), LOOK.edge, 1);
+      layer(ringShapes(inner, outer, kind === 'guess', 0), colour, 2);
+      ring.position.z = -box.depth / 2 + (kind === 'guess' ? 0.0012 : 0.0016);
+      ring.visible = false;
+      mesh.add(ring);
+      mesh.userData[kind] = ring;
     }
-    return halo;
+    return ring;
   }
 
   /**
@@ -169,11 +219,6 @@ export class TableView {
   }
 
   render(): void {
-    const k = 0.5 + 0.5 * Math.sin(performance.now() / 160);
-    for (const halo of this.halos) {
-      halo.scale.set(1 + 0.15 * k, 1 + 0.15 * k, 1);
-      (halo.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.45 * k;
-    }
     this.renderer?.render(this.scene, this.camera);
   }
 

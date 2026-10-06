@@ -4,21 +4,26 @@
   --muted: #6b7280;
   --line: #d4d9e1;
   --stage: #dfe5ee;
-  --accent: #ff4081;
-  --accent-ink: #b0124f;
-  --accent-soft: #ffe1ec;
+  /* One look (final/web-demo.md): you are filled amber, the robot's guess is dashed blue,
+     both with a thin dark edge. */
+  --accent: #ffb000;
+  --accent-ink: #7a4b00;
+  --accent-soft: #ffe7a8;
+  --edge: #1a1a1a;
+  --guess: #1e88e5;
   --blue: #1d4ed8;
-  --hold: #3b82f6;
+  --hold: #ffb000;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
   font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-/* The scene, the buttons and the strip fit one screen: the width follows the window's height. */
-#app { max-width: min(1280px, max(640px, calc((100vh - 276px) * 16 / 9))); margin: 0 auto;
-  padding: 12px 16px 24px; }
+/* The scene, the buttons and the strip fit one screen, down to a 1366 x 768 laptop (Chrome's
+   page there is about 1366 x 657; web demo item 5): the page uses the width for the chips and
+   the buttons (one line each), and only the scene's width follows the window's height. */
+#app { max-width: 1280px; margin: 0 auto; padding: 12px 16px 24px; }
 a { color: var(--blue); }
-#stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: var(--stage);
-  border-radius: 12px; overflow: hidden; }
+#stage { position: relative; width: 100%; max-width: max(560px, calc((100vh - 300px) * 16 / 9));
+  margin: 0 auto; aspect-ratio: 16 / 9; background: var(--stage); border-radius: 12px; overflow: hidden; }
 #scene, #hand { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #hand { pointer-events: none; }
 
@@ -76,9 +81,9 @@ button.big:disabled { opacity: 0.5; cursor: default; }
 #talk-btn { --level: 0; padding: 12px 28px; border: 0; border-radius: 10px; background: var(--blue);
   color: white; font: inherit; font-weight: 600; font-size: 17px; cursor: pointer;
   user-select: none; -webkit-user-select: none; touch-action: none;
-  box-shadow: 0 0 0 calc(var(--level) * 10px) rgb(255 64 129 / 0.45); }
+  box-shadow: 0 0 0 calc(var(--level) * 10px) rgb(255 176 0 / 0.6); }
 #talk-btn:not(.ready) { background: #4b5563; }
-#talk-btn.on { background: var(--accent); }
+#talk-btn.on { background: var(--accent); color: var(--edge); }
 
 /* Typing instead of talking (plan 5.3): shown when there is no microphone, or on request. */
 #type-form { display: none; gap: 8px; flex: 1 1 320px; max-width: 520px; }
@@ -110,20 +115,20 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
   color: white; font-weight: 600; }
 
 /* The thinking strip (plan 5.2). */
-#strip { margin-top: 12px; padding: 8px 14px 4px; border: 1px solid var(--line); border-radius: 12px;
+#strip { margin-top: 10px; padding: 6px 14px 2px; border: 1px solid var(--line); border-radius: 12px;
   background: white; }
 #strip h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
-#strip-svg { display: block; width: 100%; height: 96px; overflow: visible; }
+#strip-svg { display: block; width: 100%; height: 84px; overflow: visible; }
 #strip-svg .row-label { font-size: 12px; fill: var(--muted); }
 #strip-svg .note { font-size: 15px; fill: var(--muted); }
 #strip-svg .word { font-size: 16px; fill: var(--ink); }
-#strip-svg .word.pointing { font-weight: 700; fill: var(--accent-ink); }
-#strip-svg .pill { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+#strip-svg .word.pointing { font-weight: 700; fill: var(--edge); }
+#strip-svg .pill { fill: var(--accent); stroke: var(--edge); stroke-width: 1; }
 #strip-svg .axis { stroke: var(--line); stroke-width: 2; }
 #strip-svg .tick { stroke: #b8c0cc; stroke-width: 1.5; }
-#strip-svg .hold { fill: var(--hold); }
-#strip-svg .hold.click { fill: #6366f1; }
-#strip-svg .link { fill: none; stroke: var(--accent); stroke-width: 2; }
+#strip-svg .hold { fill: var(--hold); stroke: var(--edge); stroke-width: 1; }
+#strip-svg .hold.click { fill: var(--hold); }
+#strip-svg .link { fill: none; stroke: var(--edge); stroke-width: 1.5; }
 #strip.busy .note { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
 
@@ -137,13 +142,14 @@ details[open] > summary { border-bottom: 1px solid var(--line); }
 #details-body p { margin: 0; }
 #details-body pre { margin: 2px 0 0; padding: 8px 10px; max-height: 260px; overflow: auto;
   background: #f3f4f6; border-radius: 8px; font-size: 12.5px; line-height: 1.35; }
+#details-body pre.small-pre { font-size: 11px; padding: 4px 8px; color: var(--muted); }
 
 /* Try saying (plan 5.2): a chip only shows the words; it doesn't run them. */
 #chips { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
   margin-bottom: 10px; }
 .chips-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
-.chip { padding: 5px 12px; border: 1.5px solid #8b91f0; border-radius: 9px; background: #eef0ff;
-  color: var(--ink); font: inherit; font-size: 15px; cursor: pointer; }
+.chip { padding: 4px 11px; border: 1.5px solid #8b91f0; border-radius: 9px; background: #eef0ff;
+  color: var(--ink); font: inherit; font-size: 14.5px; cursor: pointer; }
 
 /* Footer (plan 5.2): the models (8.4), privacy, links. */
 footer { display: flex; gap: 10px; align-items: flex-start; flex-wrap: wrap; margin-top: 14px; }
@@ -183,3 +189,15 @@ footer details .off { color: #b45309; font-weight: 600; }
 #key-status { min-height: 1.2em; font-weight: 600; color: #166534; }
 #key-status:empty { display: none; }
 #key-status.bad { color: #b42318; }
+
+/* The coach line (items 2, 7, 13, 19): one plain line in the scene, bottom centre. */
+#coach { position: absolute; left: 50%; bottom: 46px; z-index: 4; transform: translateX(-50%);
+  max-width: min(88%, 720px); padding: 9px 16px; border-radius: 12px; background: rgb(26 26 26 / 0.86);
+  color: white; font-size: 18px; font-weight: 600; text-align: center; text-wrap: balance; }
+#coach[hidden] { display: none; }
+#coach button { margin-left: 10px; padding: 5px 12px; border: 0; border-radius: 8px; background: var(--accent);
+  color: var(--edge); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+#start .phone { margin: -12px 0 18px; padding: 8px 12px; border-radius: 10px; background: #fff4dc;
+  color: #6b3d00; font-weight: 600; }
+#start .phone[hidden] { display: none; }
+#own-key[hidden] { display: none; }

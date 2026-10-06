@@ -95,7 +95,7 @@ def test_in_words():
     between = {"relation": "between", "target": {"label": "yellow one"},
                "target2": {"label": "blue one"}}  # fmt: skip
     move = {"name": "move", "args": {"object": {"label": "red one"}, "place": between}}
-    assert in_words([move]) == "move the red one to between the yellow one and the blue one"
+    assert in_words([move]) == "move the red one between the yellow one and the blue one"
     assert cost_usd({"prompt": 1_000_000, "completion": 1_000_000}, 0.06, 0.24) == 0.30
     assert visitor_tag("a") != visitor_tag("b")
 

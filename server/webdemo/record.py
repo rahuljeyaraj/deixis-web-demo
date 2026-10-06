@@ -56,9 +56,9 @@ def _place(ref: Any) -> str:
     if not isinstance(ref, dict):
         return "somewhere"
     if "deixis" in ref:
-        return f"where you pointed (“{ref['deixis']}”)"
+        return f"to where you pointed (“{ref['deixis']}”)"
     if ref.get("pointed"):
-        return "where you pointed"
+        return "to where you pointed"
     if "relation" in ref:
         words = RELATION_WORDS.get(ref["relation"], ref["relation"].replace("_", " "))
         first = _object(ref.get("target"))
@@ -82,7 +82,7 @@ def in_words(calls: list[dict[str, Any]]) -> str:
                 a = {}
         name = c.get("name")
         if name == "move":
-            out.append(f"move {_object(a.get('object'))} to {_place(a.get('place'))}")
+            out.append(f"move {_object(a.get('object'))} {_place(a.get('place'))}")
         elif name == "adjust":
             out.append("move it a bit")
         elif name == "confirm":

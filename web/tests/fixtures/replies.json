@@ -1069,7 +1069,7 @@
       "ask": {
        "version": "1.0",
        "reason": "outside_area",
-       "question": "I can't reach there. Please point somewhere closer.",
+       "question": "I can't reach there. Please move the dot closer.",
        "call": 0,
        "arg": "place",
        "candidates": [
@@ -1306,7 +1306,7 @@
        }
       ]
      },
-     "say": "I can't reach there. Please point somewhere closer.",
+     "say": "I can't reach there. Please move the dot closer.",
      "error": null
     }
    }

@@ -49,6 +49,8 @@ export function limitsShown(l: Limits | null, hasKey: boolean): LimitsShown {
 /** The panel, the banner and the models line, kept in step. */
 export class KeyPanel {
   private limits: Limits | null = null;
+  /** Offer "add your own key" (off for the judges' demo, item 16). */
+  allowOwnKey = true;
   private readonly panel = document.getElementById('own-key') as HTMLDetailsElement;
   private readonly box = document.getElementById('key-box') as HTMLInputElement;
   private readonly status = document.getElementById('key-status')!;
@@ -122,7 +124,7 @@ export class KeyPanel {
     this.panel.classList.toggle('has-key', key !== null);
     this.banner.hidden = !s.banner;
     this.bannerText.textContent = s.banner ?? '';
-    this.bannerKey.hidden = !s.offerKey;
+    this.bannerKey.hidden = !(s.offerKey && this.allowOwnKey);
     this.leftLine.textContent = s.left;
     setModelOff(this.models, 'nemotron', s.off);
   }

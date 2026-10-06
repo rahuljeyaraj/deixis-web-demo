@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { CoreResponse, Thing } from '../src/core';
-import { Flow, type FlowView, SAY } from '../src/flow/flow';
+import { Flow, type FlowView, SAY, askLine, guessLine } from '../src/flow/flow';
 import { blockedBy, distanceToBlock, footprint, thingsFor } from '../src/flow/things';
 import { Arm, BLOCK_IDS, type BlockId, type BlockState } from '../src/sim/arm';
 import { nodeScene } from './scene';
@@ -74,9 +74,9 @@ describe('the flow on the server replies', async () => {
   const at = (id: BlockId) => arm.block(id);
   const near = (b: BlockState, x: number, y: number) => Math.hypot(b.tableMm[0] - x, b.tableMm[1] - y);
 
-  test('put that here: preview, "This one, here?", yes, the red block is there', async () => {
+  test('put that here: preview, "Move the red block here?", yes, "Done."', async () => {
     const { flow, view } = await play('put that here');
-    expect(view.said).toEqual([SAY.confirm]);
+    expect(view.said).toEqual(['Move the red block here?', SAY.done]);
     expect(flow.state.kind).toBe('idle');
     expect(near(at('red'), ...FIXTURE.here)).toBeLessThan(3);
     expect(at('red').heightMm).toBeCloseTo(30, 0);
@@ -104,20 +104,20 @@ describe('the flow on the server replies', async () => {
 
   test('a bit left: the ghost moves 20 mm to the left, then yes', async () => {
     const { view } = await play('a bit left');
-    expect(view.said).toEqual([SAY.confirm, SAY.confirm]);
+    expect(view.said).toEqual([guessLine('red', null), guessLine('red', null), SAY.done]);
     expect(near(at('red'), FIXTURE.here[0] - 20, FIXTURE.here[1])).toBeLessThan(3);
   });
 
   test('outside the area: the question, and nothing moves', async () => {
     const { flow, view } = await play('outside the area');
     const before = centre(FIXTURE.things.find((t) => t.id === 'red')!);
-    expect(view.said).toEqual(["I can't reach there. Please point somewhere closer."]);
+    expect(view.said).toEqual(["I can't reach there. Please move the dot closer."]);
     expect(flow.state.kind).toBe('asking');
     expect(flow.request().state.question).toBe(view.said[0]);
     expect(near(at('red'), ...before)).toBeLessThan(0.5);
   });
 
-  test('between two blocks: "This one or that one?", both glow; a click on yellow; yes', async () => {
+  test('between two blocks: "The red one or the yellow one?", both outlined; a click on yellow', async () => {
     const steps = FIXTURE.scenes['between two blocks, then a click'];
     arm.goHomeNow();
     for (const t of FIXTURE.things) arm.putBlock(t.id as BlockId, ...centre(t), 0);
@@ -126,7 +126,8 @@ describe('the flow on the server replies', async () => {
     const flow = new Flow(arm, view, { confirmFirst: true, now: () => 1 });
     flow.thinking();
     await flow.handle(steps[0].reply!);
-    expect(view.said).toEqual(['This one or that one?']);
+    expect(view.said).toEqual(['The red one or the yellow one?']);
+    expect(flow.request().state.question).toBe('The red one or the yellow one?');
     expect([...view.glowing].sort()).toEqual(['red', 'yellow']);
     expect(flow.candidateOf('yellow')).not.toBeNull();
     expect(flow.candidateOf('blue')).toBeNull();
@@ -265,6 +266,31 @@ describe('robot-side checks before a preview', async () => {
     const { view, flow } = await fresh();
     await flow.handle(reply({ object: thing('red'), place: spot(180, 100, 30, 'red') }));
     expect(view.said).toEqual([SAY.onItself]);
+  });
+
+  test('a refused correction keeps the guess on screen (item 8)', async () => {
+    const { view, flow } = await fresh();
+    await flow.handle(reply({ object: thing('red'), place: spot(260, 110) }));
+    expect(flow.state.kind).toBe('preview');
+    const adjust = (where: unknown): { result: CoreResponse } => ({
+      result: { status: 'ok', calls: [{ index: 0, name: 'adjust', args: { place: where } }] },
+    });
+    flow.thinking();
+    await flow.handle(adjust(spot(300, 90))); // onto the blue block's spot
+    expect(view.said.at(-1)).toBe('The blue block is in the way there.');
+    expect(flow.state.kind).toBe('preview');
+    expect(view.ghostOf).toBe('red');
+    expect(view.glowing).toEqual(['red']);
+  });
+
+  test('what the robot understood, said back; the choices named', () => {
+    expect(guessLine('red', null)).toBe('Move the red block here?');
+    expect(guessLine('red', 'blue')).toBe('Put the red block on the blue one?');
+    const cand = (thing: string) => ({ frame: 'table', kind: 'thing', thing, source: 'gesture', mean_mm: [0, 0] });
+    const ask = (things: string[], reason = 'ambiguous_object') =>
+      ({ reason, question: 'This one or that one?', candidates: things.map(cand) }) as never;
+    expect(askLine(ask(['red', 'yellow', 'blue']))).toBe('The red one, the yellow one or the blue one?');
+    expect(askLine(ask(['red'], 'no_object'))).toBe('This one or that one?');
   });
 
   test('the footprint of a turned block, and a free place', () => {
