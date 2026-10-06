@@ -10,6 +10,8 @@
   and "go home" are answers, not new commands.
 - **M31, last word to the guess** (spoken commands only): from the end of the last word to
   the guess on screen, as the page measured it (`preview` events, `latency_s`).
+- **M29, arm move time** (a cross-check of the stopwatch): from "yes" (the `go` event) to
+  "Done." (the `done` event), per move.
 - **M33, tokens and cost per command**: Token Factory's counts for each command that asked
   Nemotron, and the cost at list price (cached tokens at the full input price).
 
@@ -95,6 +97,24 @@ def latency(rows: list[dict]) -> list[float]:
     return [r["latency_s"] for r in rows if r.get("event") == "preview" and "latency_s" in r]
 
 
+def move_times(rows: list[dict]) -> list[float]:
+    """Seconds from each `go` to the next `done` of the same visitor."""
+    from datetime import datetime
+
+    out, started = [], {}
+    for r in rows:
+        if r.get("kind") != "event":
+            continue
+        t = datetime.fromisoformat(r["utc"]).timestamp()
+        if r["event"] == "go":
+            started[r["visitor"]] = t
+        elif r["event"] in ("done", "failed", "stop") and r["visitor"] in started:
+            t0 = started.pop(r["visitor"])
+            if r["event"] == "done":
+                out.append(round(t - t0, 3))
+    return out
+
+
 def tokens(rows: list[dict]) -> dict:
     used = [r for r in rows if r.get("kind") == "command" and (r.get("usage") or {}).get("prompt")]
     if not used:
@@ -133,6 +153,9 @@ def summary(rows: list[dict]) -> dict:
                                      "median": round(statistics.median(lat), 3) if lat else None,
                                      "p90": round(pct(lat, 0.9), 3) if lat else None},
         "M33_tokens_and_cost": tokens(rows),
+        "M29_move_s": {"n": len(moves := move_times(rows)),
+                       "median": round(statistics.median(moves), 2) if moves else None,
+                       "max": max(moves) if moves else None},
     }  # fmt: skip
 
 
@@ -154,6 +177,10 @@ def lines(s: dict) -> list[str]:
             f"{m33['mean_completion']} out; ${m33['median_cost_usd']:.5f} a command, "
             f"${m33['per_1000_usd']:.2f} per 1,000, at list price ({m33['commands']} commands)"
         )
+    m29 = s["M29_move_s"]
+    if m29["n"]:
+        out.append(f"M29 arm move, yes to Done: median {m29['median']:.1f} s, "
+                   f"longest {m29['max']:.1f} s ({m29['n']} moves)")  # fmt: skip
     return out or ["nothing to measure in this log"]
 
 

@@ -58,5 +58,6 @@ def test_m30_m31_m33(tmp_path):
     assert s["M31_last_word_to_guess_s"] == {"n": 3, "median": 2.5, "p90": 3.0}
     m33 = s["M33_tokens_and_cost"]
     assert m33["commands"] == 2 and m33["mean_prompt"] == 5500 and m33["per_1000_usd"] == 0.35
+    assert s["M29_move_s"]["n"] == 1 and s["M29_move_s"]["median"] == 1.0  # go 3 -> done 4
     text = "\n".join(mw.lines(s))
     assert "M30 right first time: 2 of 7" in text and "M31" in text and "M33" in text
