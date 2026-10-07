@@ -35,8 +35,8 @@ export function thingsFor(blocks: BlockState[], movedAt: (id: string) => number)
   return blocks.map((b) => ({
     id: b.id,
     label: `${b.id} block`,
-    // The core matches every word said against the label and these values, so "the yellow
-    // box" and "the yellow cube" find the yellow block too (rahul, 5 Oct).
+    // The core matches every word said against the label and these values, so "the green
+    // box" and "the green cube" find the green block too (rahul, 5 Oct).
     attrs: { color: b.id, also: 'box cube' },
     box_mm: footprint(b),
     height_mm: Math.round(b.heightMm * 10) / 10,

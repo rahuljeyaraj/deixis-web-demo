@@ -13,7 +13,7 @@ test('inner edge', async () => {
   const { mj, model, data } = await nodeScene();
   const arm = new Arm(mj, model, data);
   arm.goHomeNow();
-  arm.putBlock('yellow', 470, 240);
+  arm.putBlock('green', 470, 240);
   arm.putBlock('blue', 30, 240);
   for (let r = 125; r <= 170; r += 5) {
     let n = 0;

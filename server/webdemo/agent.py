@@ -88,7 +88,7 @@ class AgentResult:
 
 SYSTEM = """You turn what a person says to a small robot arm into the arm's tool calls.
 The arm stands at a table with three 30 mm blocks (people also say boxes or cubes): red,
-yellow and blue. The person points at blocks and spots on the table with a finger (or
+green and blue. The person points at blocks and spots on the table with a finger (or
 a mouse) while talking.
 
 Rules:
@@ -117,8 +117,8 @@ move({"object": {"label": "blue one"}, "place": {"relation": "next_to", "target"
 Words: 0:put 1:that 2:on 3:that
 move({"object": {"deixis": "that", "word_index": 1}, "place": {"relation": "on", "target": {"deixis": "that", "word_index": 3}}})
 
-Words: 0:put 1:the 2:red 3:cube 4:between 5:the 6:yellow 7:and 8:the 9:blue
-move({"object": {"label": "red one"}, "place": {"relation": "between", "target": {"label": "yellow one"}, "target2": {"label": "blue one"}}})
+Words: 0:put 1:the 2:red 3:cube 4:between 5:the 6:green 7:and 8:the 9:blue
+move({"object": {"label": "red one"}, "place": {"relation": "between", "target": {"label": "green one"}, "target2": {"label": "blue one"}}})
 
 Words: 0:put 1:it 2:there
 move({"object": {"last": true}, "place": {"deixis": "there", "word_index": 2}})
@@ -151,7 +151,7 @@ HOME = {"home", "rest"}
 YES = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "correct", "go", "do"}
 NO = {"no", "nope", "cancel", "nevermind"}
 MOVE = {"put", "move", "place", "stack", "set", "take", "bring", "drop", "pick"}
-COLOURS = {"red", "yellow", "green", "blue"}
+COLOURS = {"red", "green", "green", "blue"}
 BLOCK_WORDS = ("block", "blocks", "cube", "cubes", "box", "boxes")
 POINTING = {"this", "that", "these", "those", "here", "there"}
 SPOTS = {"here", "there"}

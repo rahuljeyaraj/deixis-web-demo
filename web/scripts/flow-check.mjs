@@ -72,7 +72,7 @@ await page.evaluate(() => {
   const { arm, flow } = window.__sim;
   arm.goHomeNow();
   arm.putBlock('red', 180, 100, 0);
-  arm.putBlock('yellow', 225, 100, 0);
+  arm.putBlock('green', 225, 100, 0);
   arm.putBlock('blue', 300, 90, 0);
   flow.reset();
 });

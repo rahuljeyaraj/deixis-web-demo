@@ -7,7 +7,7 @@ test('probe: pick and place reach maps', async () => {
   const { mj, model, data } = await nodeScene();
   const arm = new Arm(mj, model, data);
   arm.goHomeNow();
-  arm.putBlock('yellow', 40, 230); arm.putBlock('blue', 470, 20);
+  arm.putBlock('green', 40, 230); arm.putBlock('blue', 470, 20);
   const maps: Record<string, string[]> = { place: [], pick: [] };
   const radii: Record<string, number[][]> = { place: [], pick: [] };
   for (let y = 240; y >= 0; y -= 10) {

@@ -10,8 +10,16 @@
 /** The arm's base in the table frame: the middle of the work area's far edge. */
 export const BASE_MM = { x: 250, y: 250 } as const;
 
-/** The work area the core knows (`area_mm` in the profile): x, y, w, h. */
-export const AREA_MM = { x: 0, y: 0, w: 500, h: 250 } as const;
+/**
+ * The work area the core knows (`area_mm` in the profile): x, y, w, h.
+ *
+ * The near edge is at y = -40, not 0: the area is 290 mm deep, 10 mm more than the arm's
+ * longest reach (REACH_MM.max = 280), so the whole reach mat fits inside it. Until 7 Oct it
+ * was 250 mm deep, which is less than the reach, so the mat's outer arc was cut off flat at
+ * the near edge (rahul saw it in the render). The base stays at y = 250 so every table
+ * coordinate already logged still means the same place.
+ */
+export const AREA_MM = { x: 0, y: -40, w: 500, h: 290 } as const;
 
 /**
  * The half ring around the base where the arm can both pick a block up and put one down, mm.

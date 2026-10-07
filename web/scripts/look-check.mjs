@@ -4,7 +4,7 @@
 //
 // 1. Layout at a 1366 x 768 laptop (Chrome's page is about 1366 x 657): after a typed
 //    command, is the strip "What the robot heard and saw" on screen without scrolling?
-// 2. The colour screenshot test: on each block (red, yellow, blue), the amber dot, the thin
+// 2. The colour screenshot test: on each block (red, green, blue), the amber dot, the thin
 //    amber hover outline and the dashed blue guess, seen normally and through Chrome's
 //    colour-blind simulations (protanopia, deuteranopia, tritanopia, achromatopsia).
 //    A person looks at the pictures (index.html): on any block where a mark is hard to see,
@@ -19,7 +19,7 @@ const out = path.resolve(process.argv[3] ?? path.join(import.meta.dirname, '..',
 fs.mkdirSync(out, { recursive: true });
 
 const VISIONS = ['none', 'protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'];
-const BLOCKS = ['red', 'yellow', 'blue'];
+const BLOCKS = ['red', 'green', 'blue'];
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-fake-device-for-media-stream'] });
 const report = { url, when: new Date().toISOString(), layout: {}, pictures: [] };
 
@@ -54,7 +54,7 @@ await page.evaluate(() => {
   const { arm, flow } = window.__sim;
   arm.goHomeNow();
   arm.putBlock('red', 180, 100, 0);
-  arm.putBlock('yellow', 245, 110, 0);
+  arm.putBlock('green', 245, 110, 0);
   arm.putBlock('blue', 300, 80, 0);
   flow.reset();
 });

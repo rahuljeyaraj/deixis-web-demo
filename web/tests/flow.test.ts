@@ -83,12 +83,12 @@ describe('the flow on the server replies', async () => {
     expect(flow.lastThing).toBe('red');
   });
 
-  test('put the blue one next to that: to the right of the yellow block', async () => {
+  test('put the blue one next to that: to the right of the green block', async () => {
     await play('put the blue one next to that');
     const blue = at('blue');
-    const yellow = at('yellow');
-    expect(blue.tableMm[0] - yellow.tableMm[0]).toBeGreaterThan(30 + 5);
-    expect(Math.abs(blue.tableMm[1] - yellow.tableMm[1])).toBeLessThan(3);
+    const green = at('green');
+    expect(blue.tableMm[0] - green.tableMm[0]).toBeGreaterThan(30 + 5);
+    expect(Math.abs(blue.tableMm[1] - green.tableMm[1])).toBeLessThan(3);
   });
 
   test('put that on that: stacked on the blue block, flat', async () => {
@@ -117,7 +117,7 @@ describe('the flow on the server replies', async () => {
     expect(near(at('red'), ...before)).toBeLessThan(0.5);
   });
 
-  test('between two blocks: "The red one or the yellow one?", both outlined; a click on yellow', async () => {
+  test('between two blocks: "The red one or the green one?", both outlined; a click on green', async () => {
     const steps = FIXTURE.scenes['between two blocks, then a click'];
     arm.goHomeNow();
     for (const t of FIXTURE.things) arm.putBlock(t.id as BlockId, ...centre(t), 0);
@@ -126,16 +126,16 @@ describe('the flow on the server replies', async () => {
     const flow = new Flow(arm, view, { confirmFirst: true, now: () => 1 });
     flow.thinking();
     await flow.handle(steps[0].reply!);
-    expect(view.said).toEqual(['The red one or the yellow one?']);
-    expect(flow.request().state.question).toBe('The red one or the yellow one?');
-    expect([...view.glowing].sort()).toEqual(['red', 'yellow']);
-    expect(flow.candidateOf('yellow')).not.toBeNull();
+    expect(view.said).toEqual(['The red one or the green one?']);
+    expect(flow.request().state.question).toBe('The red one or the green one?');
+    expect([...view.glowing].sort()).toEqual(['green', 'red']);
+    expect(flow.candidateOf('green')).not.toBeNull();
     expect(flow.candidateOf('blue')).toBeNull();
     await flow.handle(steps[1].reply!);
     expect(flow.state.kind).toBe('preview');
-    expect(view.glowing).toEqual(['yellow']);
+    expect(view.glowing).toEqual(['green']);
     await settle(flow.go());
-    expect(near(at('yellow'), ...FIXTURE.here)).toBeLessThan(3);
+    expect(near(at('green'), ...FIXTURE.here)).toBeLessThan(3);
   });
 
   test('no pointing: "Where? Point at the spot."', async () => {
@@ -184,7 +184,7 @@ describe('robot-side checks before a preview', async () => {
   async function fresh() {
     arm.goHomeNow();
     arm.putBlock('red', 180, 100, 0);
-    arm.putBlock('yellow', 225, 100, 0);
+    arm.putBlock('green', 225, 100, 0);
     arm.putBlock('blue', 300, 90, 0);
     for (let i = 0; i < 100; i++) mj.mj_step(model, data);
     const view = new Recorder();
@@ -232,14 +232,14 @@ describe('robot-side checks before a preview', async () => {
     let refused = 0;
     for (const [gx, gy] of [[300, 90], [250, 30], [330, 60], [360, 110]] as [number, number][]) {
       const { view, flow } = await fresh();
-      arm.putBlock('yellow', gx, gy, 0);
+      arm.putBlock('green', gx, gy, 0);
       arm.putBlock('red', 180, 120, 0);
       arm.putBlock('blue', 360, 160, 0);
       for (let i = 0; i < 100; i++) mj.mj_step(model, data);
-      await flow.handle(reply({ object: thing('red'), place: spot(gx, gy, 30, 'yellow') }));
+      await flow.handle(reply({ object: thing('red'), place: spot(gx, gy, 30, 'green') }));
       if (flow.state.kind !== 'preview') continue;
       const first = await settle(flow.go());
-      expect(first?.ok, `red onto yellow at ${gx}, ${gy}: ${first?.reason}`).toBe(true);
+      expect(first?.ok, `red onto green at ${gx}, ${gy}: ${first?.reason}`).toBe(true);
       const red = arm.block('red');
       expect(red.heightMm).toBeCloseTo(60, 0);
       await flow.handle(reply({ object: thing('blue'), place: spot(red.tableMm[0], red.tableMm[1], 60, 'red') }));
@@ -289,7 +289,7 @@ describe('robot-side checks before a preview', async () => {
     const cand = (thing: string) => ({ frame: 'table', kind: 'thing', thing, source: 'gesture', mean_mm: [0, 0] });
     const ask = (things: string[], reason = 'ambiguous_object') =>
       ({ reason, question: 'This one or that one?', candidates: things.map(cand) }) as never;
-    expect(askLine(ask(['red', 'yellow', 'blue']))).toBe('The red one, the yellow one or the blue one?');
+    expect(askLine(ask(['red', 'green', 'blue']))).toBe('The red one, the green one or the blue one?');
     expect(askLine(ask(['red'], 'no_object'))).toBe('This one or that one?');
   });
 

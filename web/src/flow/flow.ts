@@ -322,7 +322,7 @@ export function guessLine(block: BlockId, onto: BlockId | null): string {
 }
 
 /** The robot's question, naming the blocks when it asks which one: "The red one or the
- * yellow one?" (item 1); any other question as the core worded it. */
+ * green one?" (item 1); any other question as the core worded it. */
 export function askLine(ask: Ask): string {
   const blocks = ask.candidates.map((c) => c.thing).filter((t): t is BlockId => isBlock(t));
   if (ask.reason !== 'ambiguous_object' || blocks.length < 2 || blocks.length !== ask.candidates.length) {

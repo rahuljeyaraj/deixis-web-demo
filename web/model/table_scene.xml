@@ -39,9 +39,9 @@
       <freejoint name="red"/>
       <geom name="red" class="block" rgba="0.84 0.16 0.16 1"/>
     </body>
-    <body name="yellow" pos="0.20 0.02 0.015">
-      <freejoint name="yellow"/>
-      <geom name="yellow" class="block" rgba="0.95 0.76 0.05 1"/>
+    <body name="green" pos="0.20 0.02 0.015">
+      <freejoint name="green"/>
+      <geom name="green" class="block" rgba="0.18 0.65 0.28 1"/>
     </body>
     <body name="blue" pos="0.10 -0.16 0.015">
       <freejoint name="blue"/>

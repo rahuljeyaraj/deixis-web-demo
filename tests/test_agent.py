@@ -45,14 +45,14 @@ PHRASES = [
      {"object": that(1, "this"), "place": {"relation": "on", "target": that(5)}}),
     ("put it there", "move", {"object": {"last": True}, "place": that(2, "there")}),
     ("Put the red block here.", "move", {"object": {"label": "red one"}, "place": that(4, "here")}),
-    ("put the yellow box here", "move",
-     {"object": {"label": "yellow one"}, "place": that(4, "here")}),
+    ("put the green box here", "move",
+     {"object": {"label": "green one"}, "place": that(4, "here")}),
     ("put that on the blue cube", "move",
      {"object": that(1), "place": {"relation": "on", "target": {"label": "blue one"}}}),
     ("put that to the left of the blue one", "move",
      {"object": that(1), "place": {"relation": "left_of", "target": {"label": "blue one"}}}),
-    ("put that behind the yellow one", "move",
-     {"object": that(1), "place": {"relation": "behind", "target": {"label": "yellow one"}}}),
+    ("put that behind the green one", "move",
+     {"object": that(1), "place": {"relation": "behind", "target": {"label": "green one"}}}),
     ("pick up that and put it here", "move", {"object": that(2), "place": that(6, "here")}),
     ("move it a bit left", "adjust", {"dx": -1}),
     ("a bit to the right", "adjust", {"dx": 1}),
@@ -214,35 +214,35 @@ def test_not_understood(rules_api):
 
 
 def test_ask_then_click_the_answer(rules_api):
-    between = ((CENTRES["red"][0] + CENTRES["yellow"][0]) / 2, CENTRES["red"][1])
+    between = ((CENTRES["red"][0] + CENTRES["green"][0]) / 2, CENTRES["red"][1])
     meta = {"text": "put that here", "holds": [click(10, *between), click(11.5, *HERE)],
             "things": BLOCKS}  # fmt: skip
     first = post(rules_api, meta)
     assert first["result"]["status"] == "ask" and first["say"] == "This one or that one?"
     things = [c["thing"] for c in first["result"]["ask"]["candidates"]]
-    assert set(things) == {"red", "yellow"}
-    r = rules_api.post("/api/answer", json={"candidate": things.index("yellow")})
+    assert set(things) == {"red", "green"}
+    r = rules_api.post("/api/answer", json={"candidate": things.index("green")})
     assert r.status_code == 200, r.text
     second = r.json()["result"]
-    assert second["status"] == "ok" and second["calls"][0]["args"]["object"]["thing"] == "yellow"
+    assert second["status"] == "ok" and second["calls"][0]["args"]["object"]["thing"] == "green"
     # The question is closed now.
     assert rules_api.post("/api/answer", json={"candidate": 0}).status_code == 409
 
 
-@pytest.mark.parametrize("how", ["the yellow one", "this one"])
+@pytest.mark.parametrize("how", ["the green one", "this one"])
 def test_ask_then_say_the_answer(rules_api, how):
-    between = ((CENTRES["red"][0] + CENTRES["yellow"][0]) / 2, CENTRES["red"][1])
+    between = ((CENTRES["red"][0] + CENTRES["green"][0]) / 2, CENTRES["red"][1])
     meta = {"text": "put that here", "holds": [click(10, *between), click(11.5, *HERE)],
             "things": BLOCKS}  # fmt: skip
     first = post(rules_api, meta)
     assert first["result"]["status"] == "ask"
-    # Spoken: by colour, or "this one" while clicking (pointing at) the yellow block.
-    again = {"text": how, "things": BLOCKS, "holds": [click(20, *CENTRES["yellow"])], "t": 21,
+    # Spoken: by colour, or "this one" while clicking (pointing at) the green block.
+    again = {"text": how, "things": BLOCKS, "holds": [click(20, *CENTRES["green"])], "t": 21,
              "state": {"question": first["say"]}}  # fmt: skip
     second = post(rules_api, again)
     assert second["agent"]["source"] == "answer"
     res = second["result"]
-    assert res["status"] == "ok" and res["calls"][0]["args"]["object"]["thing"] == "yellow"
+    assert res["status"] == "ok" and res["calls"][0]["args"]["object"]["thing"] == "green"
     assert res["calls"][0]["args"]["place"]["mean_mm"] == pytest.approx(list(HERE), abs=0.5)
 
 
@@ -315,14 +315,14 @@ def test_spoken_put_that_here_with_the_finger(rules_api):
     assert args["place"]["mean_mm"] == pytest.approx(list(HERE), abs=3)
 
 
-def test_the_yellow_box_is_the_yellow_block(rules_api):
-    """rahul, 5 Oct: "yellow box" wasn't understood (the blocks are called blocks)."""
+def test_the_green_box_is_the_green_block(rules_api):
+    """rahul, 5 Oct: "green box" wasn't understood (the blocks are called blocks)."""
     for name in ("box", "cube", "block"):
-        meta = {"text": f"put the yellow {name} here", "holds": [click(11.5, *HERE)],
+        meta = {"text": f"put the green {name} here", "holds": [click(11.5, *HERE)],
                 "things": BLOCKS, "t": 12.0}  # fmt: skip
         res = post(rules_api, meta)["result"]
         assert res["status"] == "ok", (name, res)
-        assert res["calls"][0]["args"]["object"]["thing"] == "yellow"
+        assert res["calls"][0]["args"]["object"]["thing"] == "green"
 
 
 def test_here_pointed_onto_a_block_stacks_on_it(rules_api):
@@ -335,7 +335,7 @@ def test_here_pointed_onto_a_block_stacks_on_it(rules_api):
     assert place["evidence"]["target"] == "blue" and place["z_mm"] == 30
     assert place["mean_mm"] == pytest.approx([300, 90], abs=0.5)
     assert body["notes"] == ["pointed onto a block: on top of it"]
-    # Red already on blue: yellow onto the stack lands on red, 60 mm up.
+    # Red already on blue: green onto the stack lands on red, 60 mm up.
     stacked = [dict(b) for b in BLOCKS]
     for b in stacked:
         if b["id"] == "red":
@@ -343,7 +343,7 @@ def test_here_pointed_onto_a_block_stacks_on_it(rules_api):
         if b["id"] == "blue":
             b.update(selectable=False)
     meta = {"text": "put that here", "things": stacked, "t": 12.0,
-            "holds": [click(10, *CENTRES["yellow"]), click(11.5, 296, 93)]}  # fmt: skip
+            "holds": [click(10, *CENTRES["green"]), click(11.5, 296, 93)]}  # fmt: skip
     place = post(rules_api, meta)["result"]["calls"][0]["args"]["place"]
     assert place["evidence"]["target"] == "red" and place["z_mm"] == 60
     # A spot on the table next to a block stays a spot.

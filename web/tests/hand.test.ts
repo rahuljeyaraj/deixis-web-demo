@@ -133,7 +133,7 @@ describe('raycast (plan 4.3)', async () => {
   test('on the table it equals the 4-corner homography within 0.01 mm', () => {
     // Blocks parked far out of the way, so every ray below reaches the table (or the arm).
     arm.putBlock('red', 480, 240);
-    arm.putBlock('yellow', 470, 240);
+    arm.putBlock('green', 470, 240);
     arm.putBlock('blue', 30, 240);
     view.sync(data);
     const corners: [number, number][] = [
@@ -187,7 +187,7 @@ describe('raycast (plan 4.3)', async () => {
     // raycasts; run with UPDATE_FIXTURES=1 after changing the camera to write it again.
     const blocks: [BlockId, number, number][] = [
       ['red', 180, 100],
-      ['yellow', 225, 100],
+      ['green', 225, 100],
       ['blue', 300, 90],
     ];
     for (const [id, x, y] of blocks) arm.putBlock(id, x, y, 0);

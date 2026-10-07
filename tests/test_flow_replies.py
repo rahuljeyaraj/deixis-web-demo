@@ -15,7 +15,7 @@ from test_arm_core import BLOCKS, CENTRES, HERE
 from webdemo.settings import ROOT
 
 FIXTURE = ROOT / "web" / "tests" / "fixtures" / "replies.json"
-BETWEEN = ((CENTRES["red"][0] + CENTRES["yellow"][0]) / 2, CENTRES["red"][1])
+BETWEEN = ((CENTRES["red"][0] + CENTRES["green"][0]) / 2, CENTRES["red"][1])
 
 
 def command(api, text, clicks=(), state=None, context=None, t=30.0):
@@ -39,7 +39,7 @@ def scenes(api) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     out["put that here"] = [command(api, "put that here", [CENTRES["red"], HERE]), "yes"]
     out["put the blue one next to that"] = [
-        command(api, "put the blue one next to that", [CENTRES["yellow"]]),
+        command(api, "put the blue one next to that", [CENTRES["green"]]),
         "yes",
     ]
     out["put that on that"] = [
@@ -57,8 +57,8 @@ def scenes(api) -> dict[str, list[dict]]:
     ]
     out["outside the area"] = [command(api, "put that here", [CENTRES["red"], (540.0, 120.0)])]
     ask = command(api, "put that here", [BETWEEN, HERE])
-    yellow = [c["thing"] for c in ask["reply"]["result"]["ask"]["candidates"]].index("yellow")
-    out["between two blocks, then a click"] = [ask, answer(api, yellow), "yes"]
+    green = [c["thing"] for c in ask["reply"]["result"]["ask"]["candidates"]].index("green")
+    out["between two blocks, then a click"] = [ask, answer(api, green), "yes"]
     out["no pointing"] = [command(api, "put that here")]
     out["stop"] = [command(api, "stop")]
     out["go home"] = [command(api, "go home")]

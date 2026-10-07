@@ -89,7 +89,7 @@ describe('pick and place', () => {
     arm.goHomeNow();
     arm.putBlock('red', 150, 120, 0.4);
     arm.putBlock('blue', 320, 110, 0.2);
-    arm.putBlock('yellow', 250, 40);
+    arm.putBlock('green', 250, 40);
     step(0.3);
     const g = arm.block('blue');
     const res = await run(arm.move('red', { xMm: g.tableMm[0], yMm: g.tableMm[1], zMm: 30 }));
@@ -104,7 +104,7 @@ describe('pick and place', () => {
     arm.goHomeNow();
     arm.putBlock('red', 200, 100, 0.3);
     arm.putBlock('blue', 330, 80);
-    arm.putBlock('yellow', 120, 200);
+    arm.putBlock('green', 120, 200);
     step(0.3);
     const moving = arm.move('red', { xMm: 300, yMm: 120, zMm: 0 });
     for (let t = 0; arm.holding === null && t < 10; t += 0.05) step(0.05);

@@ -29,7 +29,7 @@ const layout = (page) =>
     const { arm, flow } = window.__sim;
     arm.goHomeNow();
     arm.putBlock('red', 180, 100, 0);
-    arm.putBlock('yellow', 225, 100, 0);
+    arm.putBlock('green', 225, 100, 0);
     arm.putBlock('blue', 300, 90, 0);
     flow.reset();
   });
@@ -100,7 +100,7 @@ const flowLine = async (page) =>
   await page.mouse.move(5, 5);
   await page.waitForTimeout(300);
   await shot(page, '11-question.png');
-  await clickTable(page, 225, 100, 30); // the yellow one
+  await clickTable(page, 225, 100, 30); // the green one
   await page.waitForFunction(() => window.__sim.flow.state.kind === 'preview', null, { timeout: 15000 });
   console.log('answered:', await flowLine(page));
 

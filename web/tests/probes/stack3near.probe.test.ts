@@ -15,7 +15,7 @@ test('three high near and far', async () => {
     for (let i = 0; i < 200; i++) mj.mj_step(model, data);
     return p;
   };
-  const tilt = (id: 'red' | 'yellow' | 'blue') => {
+  const tilt = (id: 'red' | 'green' | 'blue') => {
     const b = arm.blocks.get(id)!;
     const q = data.qpos as Float64Array;
     const [w, x, y] = [q[b.qposAdr + 3], q[b.qposAdr + 4], q[b.qposAdr + 5]];
@@ -27,15 +27,15 @@ test('three high near and far', async () => {
     const gx = BASE_MM.x + r * Math.sin(a);
     const gy = BASE_MM.y - r * Math.cos(a);
     arm.goHomeNow();
-    arm.putBlock('yellow', gx, gy, 0.3);
+    arm.putBlock('green', gx, gy, 0.3);
     arm.putBlock('red', BASE_MM.x + 200 * Math.sin(a > 0 ? a - 0.7 : a + 0.7), BASE_MM.y - 200 * Math.cos(a > 0 ? a - 0.7 : a + 0.7), 0);
     arm.putBlock('blue', BASE_MM.x + 160 * Math.sin(a > 0 ? a - 1.2 : a + 1.2), BASE_MM.y - 160 * Math.cos(a > 0 ? a - 1.2 : a + 1.2), 1.0);
     for (let i = 0; i < 100; i++) mj.mj_step(model, data);
     const r1 = (await run(arm.move('red', { xMm: gx, yMm: gy, zMm: 30 }))) as { ok: boolean; reason?: string };
     const red = arm.block('red');
     const r2 = (await run(arm.move('blue', { xMm: red.tableMm[0], yMm: red.tableMm[1], zMm: 60 }))) as { ok: boolean; reason?: string };
-    const g = arm.block('yellow'), rd = arm.block('red'), bl = arm.block('blue');
+    const g = arm.block('green'), rd = arm.block('red'), bl = arm.block('blue');
     const off = (b: typeof g) => Math.hypot(b.tableMm[0] - gx, b.tableMm[1] - gy).toFixed(1);
-    console.log(`r${r} a${a}: red ${r1.ok ? 'ok' : r1.reason}, blue ${r2.ok ? 'ok' : r2.reason} | tops ${g.heightMm.toFixed(0)}/${rd.heightMm.toFixed(0)}/${bl.heightMm.toFixed(0)} off ${off(g)}/${off(rd)}/${off(bl)} mm, tilt ${tilt('yellow').toFixed(1)}/${tilt('red').toFixed(1)}/${tilt('blue').toFixed(1)}°`);
+    console.log(`r${r} a${a}: red ${r1.ok ? 'ok' : r1.reason}, blue ${r2.ok ? 'ok' : r2.reason} | tops ${g.heightMm.toFixed(0)}/${rd.heightMm.toFixed(0)}/${bl.heightMm.toFixed(0)} off ${off(g)}/${off(rd)}/${off(bl)} mm, tilt ${tilt('green').toFixed(1)}/${tilt('red').toFixed(1)}/${tilt('blue').toFixed(1)}°`);
   }
 });

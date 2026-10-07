@@ -19,8 +19,11 @@ import type { MjData, MjModel, Mujoco } from './mujoco';
 import { BLOCK_MM, type Vec3, tableToWorld, worldToTable } from './table';
 
 // Three blocks (rahul, 6 Oct): less clutter on the mat, and a stack of all three is the
-// highest the arm can build. No green: red and green look alike to colour-blind viewers.
-export const BLOCK_IDS = ['red', 'yellow', 'blue'] as const;
+// highest the arm can build.
+// Green replaced yellow on 7 Oct (rahul): the arm itself is yellow, so a yellow block on a
+// yellow arm was hard to tell apart. He accepted that red and green look alike to
+// colour-blind viewers; the shape, the outline and the spoken name still tell them apart.
+export const BLOCK_IDS = ['red', 'green', 'blue'] as const;
 export type BlockId = (typeof BLOCK_IDS)[number];
 
 export const GRIPPER_OPEN = 0.6; // about 60 mm between the jaws

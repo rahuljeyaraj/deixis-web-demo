@@ -26,7 +26,7 @@ def test_info_has_the_profile_and_every_model(api):
     assert body["title"] == "deixis"
     assert body["core"]["over_mcp"] is True
     assert body["profile"]["name"] == "so101-table"
-    assert body["profile"]["area_mm"] == [0, 0, 500, 250]
+    assert body["profile"]["area_mm"] == [0, -40, 500, 290]
     assert set(body["profile"]["actions"]) >= {"move", "home", "adjust", "confirm", "cancel"}
     names = " ".join(m["name"] for m in body["models"])
     for model in ["MediaPipe", "Parakeet", "Nemotron 3.5 Lightning", "deixis", "MuJoCo"]:
@@ -57,7 +57,7 @@ def test_profile_matches_the_arm_in_the_browser():
     """The core's work area is the area the browser's arm draws (web/src/sim/table.ts)."""
     profile = load_profile(ROOT / "profiles" / "so101-table.json")
     ts = (ROOT / "web" / "src" / "sim" / "table.ts").read_text()
-    area = re.search(r"AREA_MM = \{ x: (\d+), y: (\d+), w: (\d+), h: (\d+) \}", ts)
+    area = re.search(r"AREA_MM = \{ x: (-?\d+), y: (-?\d+), w: (-?\d+), h: (-?\d+) \}", ts)
     assert area, "AREA_MM not found in table.ts"
     assert list(profile.area_mm) == [int(v) for v in area.groups()]
     block = re.search(r"BLOCK_MM = (\d+)", ts)

@@ -92,10 +92,10 @@ def test_in_words():
     assert in_words([{"name": "move", "args": {"object": {"last": True},
                      "place": {"deixis": "here", "word_index": 5}}}]) == (
         "move the block moved last (“it”) to where you pointed (“here”)")  # fmt: skip
-    between = {"relation": "between", "target": {"label": "yellow one"},
+    between = {"relation": "between", "target": {"label": "green one"},
                "target2": {"label": "blue one"}}  # fmt: skip
     move = {"name": "move", "args": {"object": {"label": "red one"}, "place": between}}
-    assert in_words([move]) == "move the red one between the yellow one and the blue one"
+    assert in_words([move]) == "move the red one between the green one and the blue one"
     assert cost_usd({"prompt": 1_000_000, "completion": 1_000_000}, 0.06, 0.24) == 0.30
     assert visitor_tag("a") != visitor_tag("b")
 
@@ -109,17 +109,17 @@ def test_the_prompt_knows_between():
 
 
 def test_between_resolves_in_the_core(rules_api, core):
-    """The chip 'put the red cube between the yellow and the blue': the core places it."""
+    """The chip 'put the red cube between the green and the blue': the core places it."""
     req = {"words": [{"text": w, "t0": i, "t1": i + 0.2} for i, w in enumerate(
-        "put the red cube between the yellow and the blue".split())],
+        "put the red cube between the green and the blue".split())],
         "things": BLOCKS, "samples": [], "holds": [],
         "calls": [{"name": "move", "args": {"object": {"label": "red one"}, "place": {
-            "relation": "between", "target": {"label": "yellow one"},
+            "relation": "between", "target": {"label": "green one"},
             "target2": {"label": "blue one"}}}}]}  # fmt: skip
     r = core.resolve(req).model_dump(mode="json")
     assert r["status"] == "ok", r
     mean = r["calls"][0]["args"]["place"]["mean_mm"]
-    y, b = CENTRES["yellow"], CENTRES["blue"]
+    y, b = CENTRES["green"], CENTRES["blue"]
     assert mean == pytest.approx([(y[0] + b[0]) / 2, (y[1] + b[1]) / 2], abs=15)
 
 

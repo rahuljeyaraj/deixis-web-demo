@@ -18,8 +18,8 @@
    "t": 1
   },
   {
-   "id": "yellow",
-   "label": "yellow block",
+   "id": "green",
+   "label": "green block",
    "box_mm": [
     210.0,
     85.0,
@@ -28,7 +28,7 @@
    ],
    "height_mm": 30,
    "attrs": {
-    "color": "yellow",
+    "color": "green",
     "also": "box cube"
    },
    "t": 2
@@ -379,7 +379,7 @@
           "confidence": 1.0,
           "evidence": {
            "relation": "next_to",
-           "target": "yellow",
+           "target": "green",
            "box_from": "object",
            "size_mm": [
             30.0,
@@ -1387,8 +1387,8 @@
            0.0
           ]
          ],
-         "thing": "yellow",
-         "label": "yellow block",
+         "thing": "green",
+         "label": "green block",
          "source": "object_ref",
          "confidence": 1.0,
          "evidence": {
@@ -1398,7 +1398,7 @@
        ],
        "options": [
         "red block",
-        "yellow block"
+        "green block"
        ],
        "word": {
         "text": "that",
@@ -1512,8 +1512,8 @@
             0.0
            ]
           ],
-          "thing": "yellow",
-          "label": "yellow block",
+          "thing": "green",
+          "label": "green block",
           "source": "object_ref",
           "confidence": 1.0,
           "evidence": {

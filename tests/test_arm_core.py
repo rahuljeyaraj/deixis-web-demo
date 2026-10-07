@@ -17,8 +17,8 @@ from view import VIEW, Finger, View
 from webdemo.settings import ROOT
 
 PROFILE = load_profile(ROOT / "profiles" / "so101-table.json")
-# On the mat (140 to 280 mm from the base at (250, 250)); red and yellow side by side.
-CENTRES = {"red": (180.0, 100.0), "yellow": (225.0, 100.0), "blue": (300.0, 90.0)}
+# On the mat (140 to 280 mm from the base at (250, 250)); red and green side by side.
+CENTRES = {"red": (180.0, 100.0), "green": (225.0, 100.0), "blue": (300.0, 90.0)}
 HERE = (330.0, 50.0)  # an empty spot on the mat, 213 mm from the arm's base
 
 
@@ -81,7 +81,7 @@ def test_put_that_here(core):
 
 
 def test_put_the_blue_one_next_to_that(core):
-    f = Finger(CENTRES).at_block("yellow").hold(0.7)
+    f = Finger(CENTRES).at_block("green").hold(0.7)
     t_that = f.t - 0.4
     w = words(("put", t_that - 1.5), ("the", t_that - 1.25), ("blue", t_that - 1.0),
               ("one", t_that - 0.75), ("next", t_that - 0.5), ("to", t_that - 0.25),
@@ -93,9 +93,9 @@ def test_put_the_blue_one_next_to_that(core):
     c = r.calls[0]
     assert c.where("object").thing == "blue"
     place = c.where("place")
-    assert place.evidence["target"] == "yellow"
+    assert place.evidence["target"] == "green"
     x, y, bw, bh = place.box_mm
-    assert x >= 240 + 10 and (bw, bh) == (30, 30)  # to the viewer's right of yellow, 10 mm gap
+    assert x >= 240 + 10 and (bw, bh) == (30, 30)  # to the viewer's right of green, 10 mm gap
     assert abs((y + bh / 2) - 100) < 1
 
 
@@ -138,7 +138,7 @@ def test_outside_the_area_asks_and_never_moves_it(core):
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_between_two_blocks_asks_which_then_the_answer_resolves(core, seed):
-    f = Finger(CENTRES, seed=seed).move((202.5, 120.0)).hold(0.7)  # between red and yellow
+    f = Finger(CENTRES, seed=seed).move((202.5, 120.0)).hold(0.7)  # between red and green
     t_that = f.t - 0.4
     f.move(HERE).hold(0.7)
     t_here = f.t - 0.4
@@ -148,9 +148,9 @@ def test_between_two_blocks_asks_which_then_the_answer_resolves(core, seed):
                            place={"deixis": "here", "word_index": 2})])  # fmt: skip
     first = ask(core, **req)
     assert first.status == "ask" and first.ask.reason == "ambiguous_object"
-    assert {c.thing for c in first.ask.candidates} == {"red", "yellow"}
+    assert {c.thing for c in first.ask.candidates} == {"red", "green"}
     assert first.ask.question == "This one or that one?"
-    pick = [c.thing for c in first.ask.candidates].index("yellow")  # the person clicks it
-    back = {"call": 0, "arg": "object", "candidate": pick, "thing": "yellow"}
+    pick = [c.thing for c in first.ask.candidates].index("green")  # the person clicks it
+    back = {"call": 0, "arg": "object", "candidate": pick, "thing": "green"}
     second = ask(core, **req, answers=[back, *[a.model_dump(mode="json") for a in first.partial]])
-    assert second.status == "ok" and second.calls[0].where("object").thing == "yellow"
+    assert second.status == "ok" and second.calls[0].where("object").thing == "green"

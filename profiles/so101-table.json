@@ -2,7 +2,7 @@
   "version": "1.0",
   "name": "so101-table",
   "frame": "table",
-  "area_mm": [0, 0, 500, 250],
+  "area_mm": [0, -40, 500, 290],
   "view": "surface",
   "viewer": {"right": [1, 0], "away": [0, 1]},
   "pointer": {
