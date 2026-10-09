@@ -12,6 +12,7 @@ import math
 import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from functools import partial
 from typing import Annotated, Any
 
 from fastapi import (
@@ -361,10 +362,12 @@ def create_app(
         context = Context(previewing=m.state.previewing, question=m.state.question)
         loop = asyncio.get_running_loop()
 
-        async def understand(key: str | None, why: Why | None) -> AgentResult:
+        async def understand(key: str | None, why: Why | None, shared: bool) -> AgentResult:
+            """`shared`: our own key, which keeps its connection to Token Factory open
+            between commands. A visitor's own key never does (it isn't kept at all)."""
             no_key_why = NO_KEY_WHY[why or "no_key"]
             return await loop.run_in_executor(
-                None, agent.understand, texts, key, context, no_key_why
+                None, partial(agent.understand, texts, key, context, no_key_why, shared)
             )
 
         if settings.ai == "rules":
@@ -375,13 +378,13 @@ def create_app(
         why: Why | None = None
         t = time.perf_counter()
         if texts and own:
-            agent_res = await understand(own, None)
+            agent_res = await understand(own, None, shared=False)
             key_refused = agent_res.key_refused
         if key_refused or not own:
             key, why = our_key(sid, addr)
             mode = "ours" if key else "simple"
             if texts:
-                agent_res = await understand(key, why)
+                agent_res = await understand(key, why, shared=True)
                 if key and agent_res.asked_model:
                     limits.spend(sid, addr)
             key = None

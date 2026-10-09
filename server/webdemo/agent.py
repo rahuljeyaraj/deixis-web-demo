@@ -5,10 +5,13 @@ confirm, cancel, stop, ask_user), as the core describes them (`tools_for_agent`,
 Objects and places are references to the words ("that" is word 1), never coordinates: the
 core finds them.
 
-`ArmAgent` asks Nemotron 3.5 Lightning on Nebius Token Factory (one call per command, one
-retry with the validation errors). `parse` is a small rule parser for the arm's phrases: the
-fallback when Nemotron can't be reached or the day's budget is used up ("simple mode"), and
-the agent for the tests. Shaped after deixis-doodle's `vacuum/agent.py` (commit 7a7e9cc).
+`ArmAgent` asks Nemotron 3.5 Lightning on Nebius Token Factory for every command, "yes" and
+"stop" included (one call per command, one retry with the validation errors): the model is
+what the demo shows, so nothing is decided behind its back (rahul, 8 Oct). `parse` is a small
+rule parser for the arm's phrases: the fallback when Nemotron can't be reached or the day's
+budget is used up ("simple mode"), the comparison the details panel prints beside the model's
+answer, and the agent for the tests. The arm's instant stop is the page's Stop button (Esc),
+which never waits for anything. Shaped after deixis-doodle's `vacuum/agent.py` (7a7e9cc).
 """
 
 from __future__ import annotations
@@ -116,6 +119,9 @@ move({"object": {"label": "blue one"}, "place": {"relation": "next_to", "target"
 
 Words: 0:put 1:that 2:on 3:that
 move({"object": {"deixis": "that", "word_index": 1}, "place": {"relation": "on", "target": {"deixis": "that", "word_index": 3}}})
+
+Words: 0:place 1:this 2:box 3:on 4:top 5:of 6:this 7:box
+move({"object": {"deixis": "this", "word_index": 1}, "place": {"relation": "on", "target": {"deixis": "this", "word_index": 6}}})
 
 Words: 0:put 1:the 2:red 3:cube 4:between 5:the 6:green 7:and 8:the 9:blue
 move({"object": {"label": "red one"}, "place": {"relation": "between", "target": {"label": "green one"}, "target2": {"label": "blue one"}}})
@@ -313,6 +319,12 @@ def calls_from_text(text: str, names: set[str]) -> list[dict[str, Any]]:
     return out
 
 
+def arg_text(raw: dict[str, Any]) -> str:
+    """One raw call's arguments as the examples write them (they arrive as JSON text)."""
+    args = raw.get("args")
+    return args if isinstance(args, str) else json.dumps(args or {})
+
+
 def add_usage(total: dict[str, int], usage: Any) -> None:
     """Add one reply's token counts (OpenAI-style `usage`) to `total`."""
     if usage is None:
@@ -323,16 +335,6 @@ def add_usage(total: dict[str, int], usage: Any) -> None:
                  ("completion", getattr(usage, "completion_tokens", None))):  # fmt: skip
         if isinstance(v, int):
             total[k] = total.get(k, 0) + v
-
-
-def plain_yes_no(words: Sequence[str]) -> bool:
-    """A plain "yes" or "no" (fillers allowed, nothing else): answered at once by the rule
-    parser, without the model, like "stop" (web demo item 12). "No, there" is not plain."""
-    ws = [w for w in _norm(words) if w and w not in FILLERS and w not in ("thanks", "thank")]
-    if not ws or len(ws) > 3:
-        return False
-    said = " ".join(ws)
-    return said in YES_PHRASES or all(w in YES for w in ws) or all(w in NO for w in ws)
 
 
 def _scrub(text: str, key: str | None) -> str:
@@ -352,22 +354,52 @@ class ArmAgent:
     tools: list[dict[str, Any]]  # tools_for_agent, from the core
     base_url: str
     model: str = DEFAULT_MODEL
-    timeout_s: float = 8.0
+    timeout_s: float = 15.0  # one attempt
+    budget_s: float = 20.0  # all the attempts for one command together
     max_retries: int = 1
     client_factory: Any = None  # (api_key) -> an OpenAI-like client; tests pass a fake
+    _shared: Any = field(default=None, init=False, repr=False)
 
-    def _client(self, key: str) -> Any:
+    def _make(self, key: str, keepalive_s: float) -> Any:
         if self.client_factory is not None:
             return self.client_factory(key)
+        import httpx
         from openai import OpenAI
 
-        return OpenAI(base_url=self.base_url, api_key=key, timeout=self.timeout_s, max_retries=0)
+        # One pool that holds the connection open: a fresh TLS handshake to Token Factory
+        # costs 2-11 s on a home line, which is most of a command's wait (rahul, 8 Oct).
+        http = httpx.Client(
+            limits=httpx.Limits(
+                max_connections=4, max_keepalive_connections=4, keepalive_expiry=keepalive_s
+            )
+        )
+        return OpenAI(
+            base_url=self.base_url, api_key=key, timeout=self.timeout_s, max_retries=0,
+            http_client=http,
+        )  # fmt: skip
 
-    def run(self, words: Sequence[str], key: str, context: Context | None = None) -> AgentResult:
-        """Nemotron alone (raises `AgentUnavailable`). `key` is used for this call only."""
+    def _client(self, key: str, shared: bool) -> Any:
+        """The client for this call. Our own key keeps one client, so the connection stays
+        open between commands; a visitor's key gets a client for that call only, so their
+        key is never held on to (plan 8.2)."""
+        if not shared:
+            return self._make(key, 0.0)
+        if self._shared is None:
+            self._shared = self._make(key, 600.0)
+        return self._shared
+
+    def run(
+        self,
+        words: Sequence[str],
+        key: str,
+        context: Context | None = None,
+        shared: bool = False,
+    ) -> AgentResult:
+        """Nemotron alone (raises `AgentUnavailable`). Unless `shared`, `key` is used for
+        this call only: a visitor's own key is never kept."""
         if not key:
             raise AgentUnavailable("no Nebius key")
-        client = self._client(key)
+        client = self._client(key, shared)
         names = {t["function"]["name"] for t in self.tools}
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM},
@@ -376,6 +408,10 @@ class ArmAgent:
         result = AgentResult(calls=[], model=self.model)
         t0 = time.perf_counter()
         for attempt in range(self.max_retries + 1):
+            # The person is waiting: one slow attempt must not cost them the next one too.
+            left = self.budget_s - (time.perf_counter() - t0)
+            if attempt and left < 2.0:
+                break
             try:
                 resp = client.chat.completions.create(
                     model=self.model,
@@ -384,6 +420,7 @@ class ArmAgent:
                     tool_choice="auto",
                     temperature=0.0,
                     max_tokens=512,
+                    timeout=min(self.timeout_s, max(2.0, left)),
                     extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 )
             except Exception as e:  # openai errors, timeouts
@@ -407,13 +444,17 @@ class ArmAgent:
             if not errors:
                 break
             if attempt < self.max_retries:
-                messages.append({"role": "assistant", "content": json.dumps(raw)})
-                messages.append({
+                # The retry is one more user turn. Told what it wrote as an assistant turn
+                # whose content was JSON text, the model copied that shape and answered in
+                # text instead of tool calls: 0 of 6, against 6 of 6 this way (8 Oct).
+                wrote = "\n".join(f"{r['name']}({arg_text(r)})" for r in raw) or "(nothing)"
+                messages = [*messages[:2], {
                     "role": "user",
-                    "content": "Your reply had errors, so nothing was done:\n- "
+                    "content": f"You replied with:\n{wrote}\n"
+                    "Your reply had errors, so nothing was done:\n- "
                     + "\n- ".join(errors)
                     + "\nReply again with the complete, corrected list of tool calls.",
-                })  # fmt: skip
+                }]  # fmt: skip
         result.latency_s = time.perf_counter() - t0
         return result
 
@@ -423,17 +464,17 @@ class ArmAgent:
         key: str | None,
         context: Context | None = None,
         no_key_why: str = "no Nebius key: simple mode",
+        shared: bool = False,
     ) -> AgentResult:
         """Nemotron if it answers with calls, else the rule parser (with why in `errors`).
-        "Stop" never waits for the model (about a second): the rule parser answers at once.
+        Every command goes to the model, "yes" and "stop" included: the rule parser only ever
+        answers when the model couldn't (no key, an error, the day's budget).
         `no_key_why` is the reason given when there is no key (simple mode, plan 8.1)."""
-        if parse(words, context) == [{"name": "stop", "args": {}}] or plain_yes_no(words):
-            return rules(self.profile, words, context)
         why = no_key_why
         refused = False
         if key:
             try:
-                res = self.run(words, key, context)
+                res = self.run(words, key, context, shared)
                 res.asked_model = True
                 if res.ok:
                     return res

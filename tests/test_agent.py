@@ -150,7 +150,12 @@ def test_a_bad_call_is_fixed_on_the_retry():
     )
     res = agent(llm).understand(["put", "that", "here"], "sk-ours")
     assert res.source == "nemotron" and res.attempts == 2 and res.errors  # seen, then fixed
-    assert len(llm.requests[1]["messages"]) == 4  # the errors went back to the model
+    # The errors go back as one more user turn (system, the words, the errors), never as a
+    # made-up assistant turn: that made the model answer in text instead of tool calls.
+    msgs = llm.requests[1]["messages"]
+    assert [m["role"] for m in msgs] == ["system", "user", "user"]
+    assert "You replied with:\nmove(" in msgs[2]["content"]
+    assert "word 2 is 'here'" in msgs[2]["content"]
 
 
 def test_a_timeout_falls_back_to_the_rules_without_the_key():
@@ -167,11 +172,39 @@ def test_a_refused_key_says_so():
     assert res.source == "rules" and res.errors[0] == "the Nebius key was refused"
 
 
-def test_stop_never_waits_for_the_model():
-    llm = FakeLLM()  # no reply queued: a call would fail the test
-    res = agent(llm).understand(["stop", "stop"], "sk-ours")
-    assert res.source == "rules" and [c.name for c in res.calls] == ["stop"]
-    assert llm.requests == []
+def test_even_stop_and_yes_go_to_the_model():
+    """Nothing is decided behind Nemotron's back (rahul, 8 Oct): the rule parser only
+    answers when the model couldn't. The arm's instant stop is the page's Stop button."""
+    for said, want in (("stop stop", "stop"), ("yes", "confirm"), ("no", "cancel")):
+        llm = FakeLLM(f"{want}({{}})")
+        res = agent(llm).understand(said.split(), "sk-ours")
+        assert res.source == "nemotron" and [c.name for c in res.calls] == [want]
+        assert len(llm.requests) == 1
+
+
+def test_our_key_keeps_one_connection_and_a_visitors_key_never_does():
+    """A fresh TLS handshake to Token Factory costs 2-11 s on a home line and was timing
+    the model out (rahul, 8 Oct), so our own key keeps one client between commands. A
+    visitor's key still gets a client for that call only: it is never kept."""
+    llm = FakeLLM("confirm({})", "confirm({})", "confirm({})", "confirm({})")
+    a = agent(llm)
+    a.understand(["yes"], "sk-ours", shared=True)
+    a.understand(["yes"], "sk-ours", shared=True)
+    assert llm.keys == ["sk-ours"] and len(llm.requests) == 2
+    a.understand(["yes"], "sk-visitor-123456789", shared=False)
+    a.understand(["yes"], "sk-visitor-123456789", shared=False)
+    assert llm.keys == ["sk-ours", "sk-visitor-123456789", "sk-visitor-123456789"]
+
+
+def test_the_retry_is_dropped_once_the_person_has_waited_long_enough():
+    """One slow attempt must not cost the person a second wait: past the budget the agent
+    keeps what it has (here: nothing, so the rule parser answers)."""
+    llm = FakeLLM([("move", {"object": that(2), "place": that(2, "here")})])  # a bad call
+    a = ArmAgent(PROFILE, TOOLS, "https://example.invalid/v1/", budget_s=0.0,
+                 client_factory=llm.factory)  # fmt: skip
+    res = a.understand(["put", "that", "here"], "sk-ours", shared=True)
+    assert res.attempts == 1 and len(llm.requests) == 1  # no second go
+    assert res.source == "rules" and [c.name for c in res.calls] == ["move"]
 
 
 def test_no_key_is_simple_mode():
@@ -272,7 +305,6 @@ def test_the_visitors_key_is_used_for_their_call_only(settings, core, caplog):
     llm = FakeLLM(reply, reply, TimeoutError("boom sk-visitor-9999999999 boom"))
     caplog.set_level(logging.DEBUG)
     with TestClient(create_app(settings, client=core, llm_factory=llm.factory)) as c:
-        # "confirm it", not a plain "yes": a plain yes never reaches the model (item 12)
         a = c.post("/api/command", data={"meta": json.dumps({"text": "confirm it"})})
         b = c.post("/api/command", data={"meta": json.dumps({"text": "confirm it"})},
                    headers={"X-Nebius-Key": "sk-visitor-9999999999"})  # fmt: skip

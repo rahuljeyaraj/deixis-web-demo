@@ -1,6 +1,7 @@
-"""Web demo build items (final/web-demo.md): a plain yes/no without the model (12), tokens
-and cost (11), the "Simple word rules" line (18), the command and event log (M30, M31, M33),
-the own-key box hidden (16), and Nemotron's prompt knows "between" (the chips)."""
+"""Web demo build items (final/web-demo.md): tokens and cost (11), the "Simple word rules"
+line (18), the command and event log (M30, M31, M33), the own-key box hidden (16), and
+Nemotron's prompt knows "between" (the chips). Item 12 (a plain yes/no answered without the
+model) was dropped on 8 Oct: every command goes to Nemotron."""
 
 from __future__ import annotations
 
@@ -13,20 +14,10 @@ from pydantic import SecretStr
 
 from test_agent import TOOLS, FakeLLM, click, post, that
 from test_arm_core import BLOCKS, CENTRES, HERE
-from webdemo.agent import SYSTEM, ArmAgent, plain_yes_no
+from webdemo.agent import SYSTEM, ArmAgent
 from webdemo.app import create_app
 from webdemo.record import cost_usd, in_words, visitor_tag
 from webdemo.settings import ROOT
-
-
-@pytest.mark.parametrize(
-    ("words", "plain"),
-    [("yes", True), ("Yes please", True), ("no", True), ("okay", True), ("go ahead", True),
-     ("no there", False), ("yes put it here", False), ("go home", False), ("", False),
-     ("confirm it", False)],
-)  # fmt: skip
-def test_plain_yes_no(words, plain):
-    assert plain_yes_no(words.split()) is plain
 
 
 class UsageLLM(FakeLLM):
@@ -44,8 +35,8 @@ def app_with(settings, core, llm) -> TestClient:
     return TestClient(create_app(settings, client=core, llm_factory=llm.factory))
 
 
-def test_yes_never_asks_the_model_and_a_command_costs(settings, core):
-    llm = UsageLLM([("move", {"object": that(1), "place": that(2, "here")})])
+def test_yes_asks_the_model_too_and_a_command_costs(settings, core):
+    llm = UsageLLM([("move", {"object": that(1), "place": that(2, "here")})], "confirm({})")
     with app_with(settings, core, llm) as c:
         meta = {"text": "put that here", "holds": [click(10, *CENTRES["red"]), click(11.5, *HERE)],
                 "things": BLOCKS, "t": 12.0}  # fmt: skip
@@ -54,7 +45,8 @@ def test_yes_never_asks_the_model_and_a_command_costs(settings, core):
     assert body["agent"]["source"] == "nemotron"
     assert body["agent"]["usage"] == {"prompt": 7000, "cached": 4000, "completion": 60}
     assert body["cost_usd"] == pytest.approx((7000 * 0.06 + 60 * 0.24) / 1e6)
-    assert yes["agent"]["source"] == "rules" and len(llm.keys) == 1  # yes: no model call
+    # "yes" is Nemotron's call like any other (rahul, 8 Oct): the model decides every time.
+    assert yes["agent"]["source"] == "nemotron" and len(llm.requests) == 2
     assert yes["agent"]["calls"][0]["name"] == "confirm"
 
 

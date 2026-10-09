@@ -113,7 +113,7 @@ def test_past_the_share_the_word_matcher_answers(settings, core):
         assert c.get("/api/info").json()["limits"]["left_today"] == 2
         first, second, third = (say(c, "confirm it").json() for _ in range(3))
         info = c.get("/api/info").json()
-    assert llm.keys == [OURS, OURS]
+    assert llm.keys == [OURS] and len(llm.requests) == 2  # one client, reused; two calls
     sources = [r["agent"]["source"] for r in (first, second, third)]
     assert sources == ["nemotron", "nemotron", "rules"]
     assert first["limits"]["mode"] == "ours" and first["limits"]["left_today"] == 1
@@ -137,7 +137,7 @@ def test_clearing_cookies_doesnt_reset_the_share(settings, core):
         assert say(c, "confirm it").json()["limits"]["mode"] == "ours"
         c.cookies.clear()
         r = say(c, "confirm it").json()
-    assert r["limits"]["why"] == "address" and len(llm.keys) == 3
+    assert r["limits"]["why"] == "address" and len(llm.requests) == 3
 
 
 def test_everyones_budget(settings, core):
@@ -162,11 +162,14 @@ def test_behind_a_proxy_the_left_of_forwarded_for_is_ignored(settings, core):
     assert r["limits"]["why"] == "address"
 
 
-def test_stop_costs_nothing(settings, core):
-    llm = FakeLLM()  # no reply queued: a call would fail the test
+def test_stop_goes_to_the_model_like_everything_else(settings, core):
+    """Nothing is decided behind Nemotron's back (rahul, 8 Oct), so "stop" costs a command
+    like any other. The arm's instant stop is the page's Stop button, which asks nobody."""
+    llm = FakeLLM("stop({})")
     with app(settings, core, llm, caps(visitor=2)) as c:
         r = say(c, "stop").json()
-    assert r["agent"]["source"] == "rules" and r["limits"]["left_today"] == 2 and not llm.keys
+    assert r["agent"]["source"] == "nemotron" and r["limits"]["left_today"] == 1
+    assert r["agent"]["calls"][0]["name"] == "stop" and len(llm.keys) == 1
 
 
 def test_an_own_key_skips_the_share(settings, core):

@@ -6,7 +6,9 @@
  *   inverse-kinematics poses above the spot, so the fingers don't swing into a block.
  * - Grip assist: the jaws really close on the block; then a weld holds it and it stops
  *   touching the gripper, so no squeeze can push it while it's carried or let go
- *   (table_scene.xml explains the weld switch).
+ *   (table_scene.xml explains the weld switch). From then on the jaws are held where they
+ *   closed on the block, not shut: with the contact off, a shut target would drive them
+ *   straight through it (the fingers went 13 mm inside the block; rahul, 8 Oct).
  * - The place is solved again from the real grip, so the block lands where it was meant to.
  *
  * Heights are of the `gripperframe` site, about 3 mm above the fingertips. The jaws open along
@@ -138,6 +140,8 @@ export class Arm {
   private readonly gripEq: number;
   private readonly noEquality: number;
   private held: Block | null = null;
+  /** Where the jaws rest while the weld holds a block: where they closed on it. */
+  private holdGrip = GRIPPER_SHUT;
   private onIdle: ((r: MoveResult) => void) | null = null;
   private result: MoveResult = { ok: true };
 
@@ -235,7 +239,10 @@ export class Arm {
       seg.from = this.ctrlNow();
     }
     const s = minJerk((t - seg.start) / seg.duration);
-    this.setCtrl(seg.from!.map((f, i) => f + (seg.to[i] - f) * s));
+    const v = seg.from!.map((f, i) => f + (seg.to[i] - f) * s);
+    // A held block doesn't touch the jaws, so hold them on its faces instead of shut.
+    if (this.held && seg.to[5] === GRIPPER_SHUT) v[5] = this.holdGrip;
+    this.setCtrl(v);
     if (t - seg.start >= seg.duration) {
       this.queue.shift();
       seg.onEnd?.();
@@ -631,6 +638,9 @@ export class Arm {
     (this.model.eq_obj2id as Int32Array)[this.gripEq] = b.body;
     this.setWeld(true);
     this.touchGripper(b, false);
+    // The jaws are pressing the block right now, so this is where they belong from here on.
+    this.holdGrip = this.data.qpos[this.gripperQpos];
+    this.data.ctrl[this.ctrlAdr[5]] = this.holdGrip;
     this.held = b;
     this.result = { ok: true, assisted: !touching };
     return local;
