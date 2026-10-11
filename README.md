@@ -37,10 +37,16 @@ Copy `.env.example` to `.env` and put a Nebius Token Factory key in it to use Ne
 
 ```powershell
 uv run pytest                    # the server; the core is reached over MCP with no fallback
+uv run pytest -m network         # the real Nemotron, opt-in (needs a key; about $0.02 a run)
 cd web
 npm test                         # the arm, headless (MuJoCo WebAssembly in Node)
 npx tsc --noEmit                 # type check
 ```
+
+`uv run pytest` answers every command with a fake model, so the `-m network` run is the one
+that checks what a judge will see: `tests/test_live_web.py` drives the whole server with the
+real key and asserts that **every** command came back from Nemotron, never from the word
+matcher.
 
 The block at the top of this file (between the `---` lines) holds the Hugging Face Space
 settings (plan W14).

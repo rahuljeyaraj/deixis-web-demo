@@ -7,11 +7,15 @@ core finds them.
 
 `ArmAgent` asks Nemotron 3.5 Lightning on Nebius Token Factory for every command, "yes" and
 "stop" included (one call per command, one retry with the validation errors): the model is
-what the demo shows, so nothing is decided behind its back (rahul, 8 Oct). `parse` is a small
-rule parser for the arm's phrases: the fallback when Nemotron can't be reached or the day's
-budget is used up ("simple mode"), the comparison the details panel prints beside the model's
-answer, and the agent for the tests. The arm's instant stop is the page's Stop button (Esc),
-which never waits for anything. Shaped after deixis-doodle's `vacuum/agent.py` (7a7e9cc).
+what the demo shows, so nothing is decided behind its back (rahul, 8 Oct). While the robot
+has a question open it also gets `pick`, so the answer to that question is the model's call
+too, not words read on the server (rahul, 11 Oct); where the answer was only pointed at
+("this one"), `pick` hands the choosing to the core, which is the one part the model cannot
+know. `parse` is a small rule parser for the arm's phrases: the fallback when Nemotron can't
+be reached or the day's budget is used up ("simple mode"), the comparison the details panel
+prints beside the model's answer, and the agent for the tests. The arm's instant stop is the
+page's Stop button (Esc), which never waits for anything. Shaped after deixis-doodle's
+`vacuum/agent.py` (7a7e9cc).
 """
 
 from __future__ import annotations
@@ -47,6 +51,10 @@ class Context:
 
     previewing: bool = False  # a move is shown (ghost block) and waits for yes or no
     question: str | None = None  # the robot's open question, if any
+    # The things the open question is between, as the page glows them ("the red one"). While
+    # there are any, the agent is given the `pick` tool so the model answers the question
+    # itself instead of the server reading the words (rahul, 11 Oct).
+    choices: list[str] = field(default_factory=list)
 
     def lines(self) -> list[str]:
         out = []
@@ -54,6 +62,8 @@ class Context:
             out.append("A move is previewed and waits for the person's yes or no.")
         if self.question:
             out.append(f'The robot asked: "{self.question}"')
+        if self.choices:
+            out.append("Choices: " + "; ".join(f"{i}: {c}" for i, c in enumerate(self.choices)))
         return out
 
 
@@ -70,17 +80,19 @@ class AgentResult:
     latency_s: float = 0.0
     asked_model: bool = False  # Nemotron was asked (it costs, even when it failed)
     key_refused: bool = False  # Token Factory refused the key
+    pick: Pick | None = None  # how the model answered an open question (the `pick` tool)
     # Token Factory's counts over all attempts: prompt, cached (part of prompt), completion
     usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
-        return bool(self.calls)
+        return bool(self.calls) or self.pick is not None
 
     def summary(self) -> dict[str, Any]:
         return {
             "source": self.source,
             "model": self.model,
+            "pick": self.pick.to_dict() if self.pick else None,
             "calls": [c.to_dict() for c in self.calls],
             "raw": self.raw,
             "errors": self.errors,
@@ -98,11 +110,26 @@ Rules:
 - Reply only with tool calls. Never reply with plain text.
 - Never write coordinates or sizes. Blocks and places are references to the person's words:
   {"deixis": "that", "word_index": N}, where N is that word's number in the Words list.
+- word_index must point at a pointing word itself - one of here, there, this, that, these,
+  those - exactly as the Words list numbers it. Never at any other word. "the red block" is
+  not a pointing word: a block named by colour is always {"label": "red one"}.
 - The object: a pointed block {"deixis": "that", "word_index": N}; a block by colour
   {"label": "blue one"}; "it" (the block just moved) {"last": true}.
-- The place: a pointed spot {"deixis": "here", "word_index": N}; next to, on, left of, right
-  of, behind or in front of a block {"relation": "next_to", "target": <object>}; between two
-  blocks {"relation": "between", "target": <object>, "target2": <object>}.
+- The place: a pointed spot {"deixis": "here", "word_index": N}; where they pointed with no
+  word for it {"pointed": true}; next to, on, left of, right of, behind or in front of a
+  block {"relation": "next_to", "target": <object>}; between two blocks
+  {"relation": "between", "target": <object>, "target2": <object>}.
+- If they said which block but no word for the place ("move this box", "put this"), they
+  pointed at the spot without naming it: the place is {"pointed": true}. Never invent a
+  pointing word that is not in the Words list.
+- When the robot has asked a question, the Choices list above names what it is between (the
+  page has them glowing). A short reply that just picks one of them is the answer to that
+  question, not a new command: call pick. Only reply with another call if they said a whole
+  new command instead ("no, put the blue one here").
+- pick two ways, and the difference matters: if they named one ("the green one"), the words
+  say which, so give pick(choice=N). If they only pointed ("this one", "that one"), the words
+  do not say which - where they pointed does, and the robot works that out. Then give
+  pick(word_index=N) with that pointing word's number, and never guess a choice yourself.
 - "put that here", "move this there" -> move(object=..., place=...).
 - "yes", "ok", "go", "do it" -> confirm(). "no", "cancel", "never mind" -> cancel().
 - "stop", "halt", "wait", "freeze" -> stop(). "go home", "go back", "rest" -> home().
@@ -113,6 +140,12 @@ Rules:
 Examples:
 Words: 0:put 1:that 2:here
 move({"object": {"deixis": "that", "word_index": 1}, "place": {"deixis": "here", "word_index": 2}})
+
+Words: 0:move 1:this 2:box
+move({"object": {"deixis": "this", "word_index": 1}, "place": {"pointed": true}})
+
+Words: 0:put 1:this 2:box 3:on 4:top 5:of 6:the 7:red 8:block
+move({"object": {"deixis": "this", "word_index": 1}, "place": {"relation": "on", "target": {"label": "red one"}}})
 
 Words: 0:put 1:the 2:blue 3:one 4:next 5:to 6:that
 move({"object": {"label": "blue one"}, "place": {"relation": "next_to", "target": {"deixis": "that", "word_index": 6}}})
@@ -136,7 +169,126 @@ Words: 0:yes
 confirm({})
 
 Words: 0:go 1:home
-home({})"""  # noqa: E501
+home({})
+
+The robot asked: "The red one or the green one?"
+Choices: 0: the red one; 1: the green one
+Words: 0:the 1:green 2:one
+pick({"choice": 1})
+
+The robot asked: "The red one or the green one?"
+Choices: 0: the red one; 1: the green one
+Words: 0:this 1:one
+pick({"word_index": 0})"""  # noqa: E501
+
+
+PICK = "pick"
+
+
+@dataclass
+class Pick:
+    """How the model answered the robot's open question: the choice the person named, or the
+    pointing word they said instead ("this one"), whose spot the core then finds."""
+
+    choice: int | None = None  # the Choice's number
+    word_index: int | None = None  # they only pointed: this word's number
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"choice": self.choice, "word_index": self.word_index}
+
+
+def pick_tool(choices: Sequence[str], words: Sequence[str]) -> dict[str, Any]:
+    """The extra tool the agent gets only while the robot has a question open: it answers
+    that question. It is the web demo's own, not the core's - the answer goes to the core as
+    an `Answer` on the same request (`answer_entry`), the way a click on the block does.
+
+    Two ways to answer, because only one of them is the model's to decide. If the person
+    named a choice ("the green one"), the words say which: `choice`. If they only pointed
+    ("this one"), the words cannot say which - where they pointed can, and that is the core's
+    job, not the model's: `word_index` names the pointing word and the core finds the spot."""
+    return {
+        "type": "function",
+        "function": {
+            "name": PICK,
+            "description": "Answer the robot's open question. Give exactly one of the two.",
+            "parameters": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "choice": {
+                        "type": "integer",
+                        "description": "The number of the Choice the person named.",
+                        "enum": list(range(len(choices))),
+                    },
+                    "word_index": {
+                        "type": "integer",
+                        "description": 'Instead, if they only pointed ("this one", "that '
+                        "one\"): that pointing word's number. The robot works out which one "
+                        "they meant from where they pointed.",
+                        "enum": [i for i, w in enumerate(words) if norm_word(w) in POINTED_ANSWER],
+                    },
+                },
+            },
+        },
+    }
+
+
+# The pointing words a bare answer can use ("this one", "that one"). "here" and "there" are
+# about a spot, not a thing, so they are not among them.
+POINTED_ANSWER = frozenset({"this", "that", "these", "those"})
+
+
+def take_pick(
+    raw: list[dict[str, Any]], choices: Sequence[str], words: Sequence[str]
+) -> tuple[list[dict[str, Any]], Pick | None, str]:
+    """The raw calls with any `pick` taken out, how it answered, and why it was refused.
+    Neither field, both, a choice outside the Choices list, a word that is not a pointing
+    word, or a second `pick`: an error for the retry."""
+    rest: list[dict[str, Any]] = []
+    pick: Pick | None = None
+    why = ""
+    for r in raw:
+        if r["name"] != PICK:
+            rest.append(r)
+            continue
+        args = r.get("args")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args or "{}")
+            except ValueError:
+                why = "pick: the arguments were not valid JSON"
+                continue
+        one, bad = _one_pick(args or {}, choices, words)
+        if bad:
+            why = bad
+        elif pick is not None:
+            why = "pick: answer once, not several times"
+        else:
+            pick = one
+    return rest, (None if why else pick), why
+
+
+def _whole(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def _one_pick(
+    args: dict[str, Any], choices: Sequence[str], words: Sequence[str]
+) -> tuple[Pick | None, str]:
+    """One `pick` call's arguments as a `Pick`, or why they were refused."""
+    choice, word = args.get("choice"), args.get("word_index")
+    if (choice is None) == (word is None):
+        return None, "pick: give exactly one of choice (they named it) or word_index (they pointed)"  # noqa: E501
+    if choice is not None:
+        if not _whole(choice) or not 0 <= choice < len(choices):
+            return None, f"pick.choice: must be a Choice's number, 0 to {len(choices) - 1}"
+        return Pick(choice=choice), ""
+    if not _whole(word) or not 0 <= word < len(words):
+        return None, f"pick.word_index: must be a word's number, 0 to {len(words) - 1}"
+    if norm_word(words[word]) not in POINTED_ANSWER:
+        said = " ".join(sorted(POINTED_ANSWER))
+        return None, f"pick.word_index: word {word} is '{words[word]}', not one of: {said}"
+    return Pick(word_index=word), ""
 
 
 def indexed(words: Sequence[str]) -> str:
@@ -157,7 +309,7 @@ HOME = {"home", "rest"}
 YES = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "correct", "go", "do"}
 NO = {"no", "nope", "cancel", "nevermind"}
 MOVE = {"put", "move", "place", "stack", "set", "take", "bring", "drop", "pick"}
-COLOURS = {"red", "green", "green", "blue"}
+COLOURS = {"red", "green", "blue"}
 BLOCK_WORDS = ("block", "blocks", "cube", "cubes", "box", "boxes")
 POINTING = {"this", "that", "these", "those", "here", "there"}
 SPOTS = {"here", "there"}
@@ -400,7 +552,9 @@ class ArmAgent:
         if not key:
             raise AgentUnavailable("no Nebius key")
         client = self._client(key, shared)
-        names = {t["function"]["name"] for t in self.tools}
+        choices = (context or Context()).choices
+        tools = [*self.tools, pick_tool(choices, words)] if choices else self.tools
+        names = {t["function"]["name"] for t in tools}
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": user_message(words, context)},
@@ -416,7 +570,7 @@ class ArmAgent:
                 resp = client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    tools=self.tools,
+                    tools=tools,
                     tool_choice="auto",
                     temperature=0.0,
                     max_tokens=512,
@@ -436,7 +590,12 @@ class ArmAgent:
             if not raw:
                 raw = calls_from_text(getattr(msg, "content", None) or "", names)
             result.raw = raw
-            calls, errors = validate(self.profile, raw, words)
+            rest, result.pick, bad_pick = (
+                take_pick(raw, choices, words) if choices else (raw, None, "")
+            )
+            calls, errors = validate(self.profile, rest, words)
+            if bad_pick:
+                errors = [bad_pick, *errors]
             if not raw:
                 errors = ["no tool call; reply only with tool calls (use ask_user to talk)"]
             result.errors += errors

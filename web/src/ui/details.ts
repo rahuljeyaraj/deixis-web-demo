@@ -37,6 +37,13 @@ export function callLine(c: { name: string; args: Record<string, unknown> }): st
   return `${c.name}(${args.join(', ')})`;
 }
 
+/** The `pick` tool call the model wrote to answer the robot's question, as a line. */
+export function pickLine(pick: NonNullable<AgentSummary['pick']>): string {
+  return pick.choice !== null
+    ? `pick(choice=${pick.choice})`
+    : `pick(word_index=${pick.word_index})   // they pointed: the core says which`;
+}
+
 /** The core's answer without its empty fields and its working notes (`log`). */
 export function coreJson(result: CoreResponse): string {
   const { log: _log, holds: _holds, ...rest } = result as CoreResponse & { log?: unknown };
@@ -106,8 +113,10 @@ export function fillDetails(body: HTMLElement, d: DetailsInput): void {
     parts.push(section(d.typed ? 'You typed' : 'Heard (NVIDIA Parakeet, with the time of each word)', said));
   }
   parts.push(section('Understood by', understoodBy(d.agent, d.limits?.mode)));
-  if (d.agent && d.agent.calls.length) {
-    parts.push(section('The tool calls it wrote (words, never coordinates)', pre(d.agent.calls.map(callLine).join('\n'))));
+  const wrote = d.agent ? d.agent.calls.map(callLine) : [];
+  if (d.agent?.pick) wrote.push(pickLine(d.agent.pick));
+  if (wrote.length) {
+    parts.push(section('The tool calls it wrote (words, never coordinates)', pre(wrote.join('\n'))));
   }
   if (d.word_rules && d.agent?.source === 'nemotron') {
     const wr = d.word_rules;

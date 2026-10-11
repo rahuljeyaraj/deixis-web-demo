@@ -97,6 +97,17 @@ def answer_by_label(ask: dict[str, Any], texts: list[str]) -> int | None:
     return hits[0] if len(hits) == 1 else None
 
 
+def choices_for(ask: dict[str, Any]) -> list[str]:
+    """The open question's candidates named the way the page glows and says them ("the red
+    one"), for the agent's `pick` tool. Empty unless every candidate is a thing: a question
+    between bare spots gives a person nothing to name, and the page glows none of them
+    (web/src/flow/flow.ts, `askLine`)."""
+    things = [c.get("thing") for c in ask.get("candidates") or []]
+    if len(things) < 2 or not all(isinstance(t, str) and t for t in things):
+        return []
+    return [f"the {t} one" for t in things]
+
+
 def nearest_candidate(ask: dict[str, Any], point: list[float], within_mm: float) -> int | None:
     """The candidate nearest a pointed spot ("this one" while pointing), if close enough."""
     best = None

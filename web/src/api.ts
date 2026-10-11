@@ -19,6 +19,12 @@ export interface AgentSummary {
   source: 'nemotron' | 'rules' | 'answer';
   model: string;
   calls: { name: string; args: Record<string, unknown> }[];
+  /**
+   * How the model answered the robot's open question, when it did (the `pick` tool):
+   * `choice` when the person named one of the glowing blocks, `word_index` when they only
+   * pointed ("this one") and the core worked out which from the finger.
+   */
+  pick?: { choice: number | null; word_index: number | null } | null;
   raw: unknown[];
   errors: string[];
   attempts: number;

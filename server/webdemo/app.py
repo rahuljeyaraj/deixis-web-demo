@@ -41,6 +41,7 @@ from webdemo.command import (
     Sessions,
     answer_by_label,
     answer_entry,
+    choices_for,
     nearest_candidate,
     onto_pointed_block,
     say_for,
@@ -272,9 +273,39 @@ def create_app(
         remember(sid, request, result)
         return result, error
 
+    async def pointed_at(
+        m: Meta, words: list[dict[str, Any]], word: str, k: int
+    ) -> dict[str, Any] | None:
+        """Where the person pointed while saying word `k`: the core's own `locate`, over MCP.
+        This is the part of an answer the model cannot know - it never sees the finger."""
+        locate = {"name": "locate", "args": {"place": {"deixis": word, "word_index": k}}}
+        r, _ = await resolve({"words": words, "samples": m.samples, "holds": m.holds,
+                              "things": m.things, "calls": [locate]})  # fmt: skip
+        if not r or r["status"] != "ok":
+            return None
+        return r["calls"][0]["args"]["place"]
+
+    async def pointed_answer(
+        ask: dict[str, Any], m: Meta, words: list[dict[str, Any]], k: int
+    ) -> dict[str, Any] | None:
+        """The open question answered by pointing: the candidate nearest the spot they
+        pointed at while saying word `k` ("this one"), or that spot itself when the robot
+        asked where. Used for Nemotron's `pick(word_index=k)` and by `spoken_answer`."""
+        if not ask.get("arg") or not 0 <= k < len(words):
+            return None
+        where = await pointed_at(m, words, norm_word(words[k]["text"]), k)
+        if where is None:
+            return None
+        if any(c.get("thing") for c in ask["candidates"]):  # which block
+            picked = nearest_candidate(ask, where.get("mean_mm") or [0, 0], within_mm=40)
+            return None if picked is None else answer_entry(ask, picked)
+        return {"call": ask.get("call") or 0, "arg": ask["arg"], "where": where}  # which spot
+
     async def spoken_answer(sid: str, m: Meta, words: list[dict[str, Any]]) -> dict | None:
-        """The answer to the open question in words: "the red one"; "this one" while pointing
-        at a block; "here" while pointing at a spot (when the robot asked where)."""
+        """The answer to the open question read from the words on the server: "the red one";
+        "this one" while pointing at a block; "here" while pointing at a spot. Only used when
+        Nemotron gave neither a `pick` nor a command (it is down, or it said nothing), so a
+        question can always still be answered."""
         open_ask = sessions.get(sid)
         if open_ask is None or not m.state.question:
             return None
@@ -284,19 +315,7 @@ def create_app(
         if picked is not None:
             return answer_entry(ask, picked)
         k = next((i for i, w in enumerate(texts) if w in DEMONSTRATIVES and w != "so"), None)
-        if k is None or not ask.get("arg"):
-            return None
-        # Where did they point while saying it? The core's own `locate`, over MCP.
-        locate = {"name": "locate", "args": {"place": {"deixis": texts[k], "word_index": k}}}
-        r, _ = await resolve({"words": words, "samples": m.samples, "holds": m.holds,
-                              "things": m.things, "calls": [locate]})  # fmt: skip
-        if not r or r["status"] != "ok":
-            return None
-        where = r["calls"][0]["args"]["place"]
-        if any(c.get("thing") for c in ask["candidates"]):  # which block
-            picked = nearest_candidate(ask, where.get("mean_mm") or [0, 0], within_mm=40)
-            return None if picked is None else answer_entry(ask, picked)
-        return {"call": ask.get("call") or 0, "arg": ask["arg"], "where": where}  # which spot
+        return None if k is None else await pointed_answer(ask, m, words, k)
 
     @app.post("/api/command", response_model=None)
     async def command(
@@ -359,7 +378,13 @@ def create_app(
         # else the rule parser (simple mode). A refused own key: as if none was sent.
         texts = [w["text"] for w in words]
         agent: ArmAgent = app.state.agent
-        context = Context(previewing=m.state.previewing, question=m.state.question)
+        # While a question is open, the agent is given the `pick` tool with the choices the
+        # page glows, so Nemotron answers the question itself (rahul, 11 Oct).
+        open_ask = sessions.get(sid) if m.state.question else None
+        context = Context(
+            previewing=m.state.previewing, question=m.state.question,
+            choices=choices_for(open_ask.response["ask"]) if open_ask else [],
+        )  # fmt: skip
         loop = asyncio.get_running_loop()
 
         async def understand(key: str | None, why: Why | None, shared: bool) -> AgentResult:
@@ -395,12 +420,30 @@ def create_app(
         calls = [c.to_dict() for c in agent_res.calls]
         result = error = None
         request: dict[str, Any] = {}
-        entry = None if calls else await spoken_answer(sid, m, words)
         notes: list[str] = []
+        # The answer to an open question: Nemotron's `pick`, else the words read on the
+        # server (a plain "the red one" when the model gave no call at all).
+        entry = None
+        picked = False
+        pick = agent_res.pick
+        if calls and pick is not None:
+            notes.append("answered the question and gave a command: the command wins")
+        elif pick is not None and open_ask is not None:
+            ask = open_ask.response["ask"]
+            if pick.choice is not None:  # they named a choice: the words said which
+                entry = answer_entry(ask, pick.choice)
+            else:  # they only pointed: the core says which, from the finger
+                entry = await pointed_answer(ask, m, words, pick.word_index or 0)
+                if entry is None:
+                    notes.append("pointed at no choice")
+            picked = entry is not None
+        elif not calls:
+            entry = await spoken_answer(sid, m, words)
         t = time.perf_counter()
         if entry is not None:
             result, error = await answer_open(sid, entry)
-            agent_res.source = "answer"
+            if not picked:  # a `pick` stays Nemotron's: it is the model's own tool call
+                agent_res.source = "answer"
             say = result["ask"]["question"] if result and result["status"] == "ask" else None
         else:
             if calls:
@@ -414,7 +457,9 @@ def create_app(
                     if result2 is not None:
                         request, result, error = again, result2, error2
                         notes.append("pointed onto a block: on top of it")
-            remember(sid, request, result)
+                remember(sid, request, result)
+            # Nothing understood (a mis-heard word, or they pointed at no choice): the
+            # robot's open question stays open, so they can simply answer it again.
             say = "Sorry, something went wrong." if error else say_for(result, calls)
         if result is not None or entry is not None or calls:
             timings["core_s"] = round(time.perf_counter() - t, 3)
@@ -437,7 +482,8 @@ def create_app(
         record.write(
             "command", sid, said=" ".join(texts), typed=audio is None, mode=mode,
             source=agent_res.source, model=agent_res.model, attempts=agent_res.attempts,
-            calls=calls, status=(result or {}).get("status") if not error else "error",
+            calls=calls, pick=agent_res.pick.to_dict() if agent_res.pick else None,
+            status=(result or {}).get("status") if not error else "error",
             ask=((result or {}).get("ask") or {}).get("reason"), error=error,
             timings=timings, usage=agent_res.usage, cost_usd=cost,
             word_rules={"understood": word_rules["understood"], "same": word_rules["same"]},

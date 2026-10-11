@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { HeardWord } from '../src/api';
 import type { CoreResponse } from '../src/core';
-import { callLine, coreJson, costLine, timingsLine, understoodBy } from '../src/ui/details';
+import { callLine, coreJson, costLine, pickLine, timingsLine, understoodBy } from '../src/ui/details';
 import { layoutWords, stripModel } from '../src/ui/strip';
 
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'replies.json'), 'utf8')) as {
@@ -78,6 +78,13 @@ describe('the details panel', () => {
       args: { object: { deixis: 'that', word_index: 1 }, place: { deixis: 'here', word_index: 2 } },
     });
     expect(line).toBe('move(object={"deixis":"that","word_index":1}, place={"deixis":"here","word_index":2})');
+  });
+
+  test("the pick that answered the robot's question reads as a line too", () => {
+    // Named: the model chose it. Pointed: the model handed it to the core, and the line says so.
+    expect(pickLine({ choice: 1, word_index: null })).toBe('pick(choice=1)');
+    expect(pickLine({ choice: null, word_index: 0 })).toContain('pick(word_index=0)');
+    expect(pickLine({ choice: null, word_index: 0 })).toContain('the core says which');
   });
 
   test("the core's answer without empty fields or its working notes", () => {

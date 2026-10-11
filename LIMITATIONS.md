@@ -53,4 +53,11 @@ keep using Nemotron. One command can be sent every 1.5 s; the page waits by itse
 The counts live in the server's memory: they start again at midnight UTC and when the server
 restarts. A network is a scrambled form of the visitor's address, never logged.
 
+Within those limits Nemotron answers **every** command, "yes", "stop" and the answer to the
+robot's own question included: nothing is decided by matching words behind the model's back.
+The word matcher still runs beside it on every command, but only so the details panel can
+show what it alone would have made of the same words. The one thing the model is never asked
+to judge is where a finger pointed: when an answer is only pointed at ("this one"), the model
+says so and the core works out which block, because the words genuinely do not carry it.
+
 More items arrive as the finger, speech and the core are added (plan section 9).
