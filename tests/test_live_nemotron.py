@@ -123,6 +123,27 @@ def test_nemotron_takes_a_tower_apart_from_the_top(live, text):
     assert [one(c) for c in res.calls] == ["blue", "green", "red"], res.errors
 
 
+def test_nemotron_replans_a_tower_from_the_top(live):
+    """The recovery path, as rahul's log had it on 11 Oct: step 1 picked up a covered block,
+    and the one re-plan came back with another covered block (the green one, still under the
+    blue one). The re-plan is told what is stacked too, so it has what it needs."""
+    agent, key = live
+    planned = [
+        'move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})',  # noqa: E501
+        'move({"object": {"label": "green one"}, "place": {"relation": "inside", "target": {"label": "green square"}}})',  # noqa: E501
+        'move({"object": {"label": "blue one"}, "place": {"relation": "inside", "target": {"label": "blue square"}}})',  # noqa: E501
+    ]
+    context = Context(
+        stacks=[["red one", "green one", "blue one"]], plan=planned, failed_step=0,
+        failed_why="There's a block on top of that one. Move that one first.",
+    )  # fmt: skip
+    res = agent.run("put each block on its own colour".split(), key.get_secret_value(), context)
+    print(f"re-plan: {[str(c) for c in res.calls]} in {res.latency_s:.2f} s")
+    assert res.refusal is None, res.refusal
+    assert [c.name for c in res.calls] == ["move"] * 3, res.errors
+    assert [one(c) for c in res.calls] == ["blue", "green", "red"], res.errors
+
+
 def one(call) -> str:
     """The colour of the block a move picks up."""
     label = (call.to_dict()["args"].get("object") or {}).get("label", "")
