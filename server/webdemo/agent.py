@@ -168,8 +168,12 @@ Rules:
   {"relation": "between", "target": <object>, "target2": <object>}.
 - A square is named like a block: {"label": "red square"}. "in the red square" is
   {"relation": "inside", "target": {"label": "red square"}}.
-- A square holds one block in the middle. A second block into the same square goes beside the
-  one that is already there: {"relation": "next_to", "target": <that block>}.
+- A square holds ONE block, in the middle. A second block into the same square would land on
+  the first, so it goes beside it: {"relation": "next_to", "target": <the block already
+  there>}. Taking a block out of a square is next_to the square itself.
+- A tower is built from the bottom up: first the middle block onto the bottom one, then the
+  top block onto the middle one. Done the other way round the arm is stuck, because a block
+  with one on top of it cannot be picked up.
 - The arm reaches a ring around itself only, so there is no place name it can trust: never
   write {"named": ...} and never {"empty_space": true}. A free spot is always beside
   something: {"relation": "next_to", "target": <another block>}.
@@ -257,6 +261,9 @@ home({})
 Words: 0:stack 1:them 2:all 3:up
 move({"object": {"label": "green one"}, "place": {"relation": "on", "target": {"label": "red one"}}})
 move({"object": {"label": "blue one"}, "place": {"relation": "on", "target": {"label": "green one"}}})
+
+Words: 0:take 1:the 2:red 3:one 4:out 5:of 6:the 7:square
+move({"object": {"label": "red one"}, "place": {"relation": "next_to", "target": {"label": "red square"}}})
 
 Words: 0:swap 1:the 2:red 3:and 4:the 5:blue
 move({"object": {"label": "red one"}, "place": {"relation": "next_to", "target": {"label": "green one"}}})
