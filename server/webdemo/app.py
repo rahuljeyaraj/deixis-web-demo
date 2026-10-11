@@ -55,6 +55,7 @@ from webdemo.command import (
     nearest_candidate,
     onto_pointed_block,
     say_for,
+    stacks_in,
     typed_words,
 )
 from webdemo.limits import NO_KEY_WHY, Caps, Limits, Mode, Why, view
@@ -502,6 +503,7 @@ def create_app(
         context = Context(
             previewing=m.state.previewing, question=m.state.question,
             choices=choices_for(open_ask.response["ask"]) if open_ask else [],
+            stacks=stacks_in(m.things),
         )  # fmt: skip
         agent_res, mode, why, key_refused, agent_s = await ask_model(sid, addr, own, texts, context)
         own = None
@@ -700,7 +702,7 @@ def create_app(
             raise HTTPException(409, "already re-planned once for this command")
         texts = plan.texts()
         context = Context(plan=call_lines(plan.calls), failed_step=body.index,
-                          failed_why=body.why)  # fmt: skip
+                          failed_why=body.why, stacks=stacks_in(body.things))  # fmt: skip
         res, mode, why, key_refused, agent_s = await ask_model(sid, addr, own, texts, context)
         own = None
         calls = [c.to_dict() for c in res.calls]

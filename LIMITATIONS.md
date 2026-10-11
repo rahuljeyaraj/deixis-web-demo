@@ -106,4 +106,17 @@ left", and Nemotron can name it. There is only ever one, and it is gone as soon 
 stands there. This is robot-side knowledge reported as a thing, which is what the core's L6
 expects — not a change to the core.
 
+## L10. The model is told what is stacked, and nothing else about the table
+
+Nemotron is given the words the person said, not the table. The one exception is a tower: a
+line says which blocks are stacked right now, bottom to top, because only the top block can
+be picked up and the order of the steps depends on it — "put each block in its own square"
+said to a tower of three has exactly one order that works. Everything else about where things
+are stays the core's to answer, from the words, and the model may never write a coordinate.
+
+So the model can get an order right, but it still cannot see the table: it cannot tell how
+much room is left, which spot is free, or whether a block is already where it was asked to
+go. The arm's own checks catch a step that cannot be done, and the model gets one go at
+planning the rest another way (L6).
+
 More items arrive as the finger, speech and the core are added (plan section 9).

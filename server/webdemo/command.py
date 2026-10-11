@@ -146,6 +146,48 @@ def _stackable(thing: dict[str, Any]) -> bool:
     return bool(thing.get("height_mm"))
 
 
+#: Two blocks whose centres are this close are one on top of the other, not side by side.
+#: The page's own `under` uses the same fraction of a 30 mm block; side by side, the nearest
+#: a block can be put is 31 mm away (half, half and the profile's clearance).
+SAME_COLUMN_MM = 20.0
+
+
+def _centre(thing: dict[str, Any]) -> tuple[float, float]:
+    box = thing["box_mm"]
+    return box[0] + box[2] / 2, box[1] + box[3] / 2
+
+
+def _named(thing: dict[str, Any]) -> str:
+    """The block by the name the model writes it as: "red one" (the page reports it in
+    `attrs.one`, since "the red one" names both the block and the paint of its colour)."""
+    one = (thing.get("attrs") or {}).get("one")
+    return one if isinstance(one, str) and one else str(thing.get("label") or thing.get("id") or "")
+
+
+def stacks_in(things: Sequence[dict[str, Any]]) -> list[list[str]]:
+    """The towers on the table right now, each one bottom to top, by the names the model
+    writes ("red one"). Robot-side knowledge the core does not model in words: the model is
+    told which blocks are stacked, because only the top one can be picked up and a plan that
+    starts with a covered block is wasted (rahul, 11 Oct: "stack them all up" and then "put
+    each block in its own square" did nothing at all).
+
+    Blocks over the same spot (`SAME_COLUMN_MM`) are one column, ordered by how high they
+    stand. The flat things - the painted squares, the spot a block left - have no height and
+    are never part of a tower."""
+    blocks = [t for t in things if _stackable(t) and t.get("box_mm")]
+    columns: list[list[dict[str, Any]]] = []
+    for b in sorted(blocks, key=lambda t: t["height_mm"]):
+        x, y = _centre(b)
+        for col in columns:
+            cx, cy = _centre(col[0])
+            if ((cx - x) ** 2 + (cy - y) ** 2) ** 0.5 < SAME_COLUMN_MM:
+                col.append(b)
+                break
+        else:
+            columns.append([b])
+    return [[_named(t) for t in col] for col in columns if len(col) > 1]
+
+
 def onto_pointed_block(request: dict[str, Any], result: dict[str, Any]) -> dict[str, Any] | None:
     """ "Put that here" while pointing at another block means on top of it (rahul, 5 Oct:
     stacking that way said "a block in the way"). For each move whose place was a pointing

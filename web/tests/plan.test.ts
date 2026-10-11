@@ -346,6 +346,57 @@ describe('a plan of several steps, in the browser', async () => {
     expect(near(at('blue'), ...centre(square))).toBeLessThan(8);
   });
 
+  // Command 15 said to a table that is already a tower (rahul, 11 Oct): "stack them all up",
+  // then "put each block in its own square". Only the top block can be picked up, so the
+  // plan's order is the whole game. What the model is told about the tower is the server's
+  // side of this (`stacks_in`, tests/test_plan.py).
+  describe('each block into its own square, from a tower of three', () => {
+    /** Another command against the table as it is now: nothing is put back first. */
+    async function next(order: BlockId[]) {
+      const planned = FIXTURE.scenes['put each block on its own colour'][0].reply!.plan!.calls;
+      const calls = order.map((id) => planned.find((c) => (c.args.object as { label: string }).label === `${id} one`)!);
+      const view = new Recorder();
+      const stub = new Stub(calls);
+      let clock = 500;
+      const flow = new Flow(arm, view, { confirmFirst: true, now: () => clock++, server: stub });
+      flow.thinking();
+      // The server resolves step 1 against the table as it is at that moment.
+      const reply: FlowReply = { ...okReply(measure(calls[0], flow.things(), 0)), plan: { calls, steps: calls.length } };
+      await pump(flow.handle(reply));
+      return { flow, view, stub };
+    }
+
+    async function tower() {
+      const first = await start('stack them all up');
+      await pump(first.flow.go());
+      expect([at('red').heightMm, at('green').heightMm, at('blue').heightMm].map(Math.round)).toEqual([30, 60, 90]);
+    }
+
+    test('top down: the whole plan runs, and every block lands on its colour', async () => {
+      await tower();
+      const { flow, view, stub } = await next(['blue', 'green', 'red']);
+      expect(view.said).toEqual(['Three steps, like this?']);
+      await pump(flow.go());
+      expect(stub.replans).toBe(0);
+      expect(view.said.at(-1)).toBe(SAY.done);
+      for (const id of ['red', 'green', 'blue'] as BlockId[]) {
+        const square = flow.things().find((t) => t.id === `${id}-square`)!;
+        expect(near(at(id), ...centre(square))).toBeLessThan(6);
+        expect(at(id).heightMm).toBeCloseTo(30, 0);
+      }
+    });
+
+    test('bottom up: the first step is refused before anything moves', async () => {
+      await tower();
+      const { flow, view, stub } = await next(['red', 'green', 'blue']);
+      // The red one is under the other two: nothing can be done, and it is not attempted.
+      expect(view.said).toContain(SAY.coveredObject);
+      expect(stub.replans).toBe(1); // handed back to Nemotron, which is all the page can do
+      expect(flow.state.kind).toBe('idle');
+      expect([at('red').heightMm, at('green').heightMm, at('blue').heightMm].map(Math.round)).toEqual([30, 60, 90]);
+    });
+  });
+
   test('no better idea: the arm says the reason and stops there', async () => {
     const second = await start('stack them all up');
     arm.putBlock('blue', ...at('red').tableMm, 0, 30);

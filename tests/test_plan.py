@@ -27,12 +27,14 @@ from webdemo.agent import (
     DECLINED,
     MAX_STEPS,
     NOT_FOLLOWED,
+    STACKED,
     SYSTEM,
     TOO_MANY,
     plan_problems,
     validate,
 )
 from webdemo.app import create_app
+from webdemo.command import stacks_in
 from webdemo.settings import ROOT
 from webdemo.trace import asked_for, measured
 
@@ -59,6 +61,11 @@ def inside(name: str) -> dict:
 
 
 SPOT = "the spot it left"
+#: The table after "stack them all up": one tower of three, over where the red one was.
+TOWER = [block("red", 1), block("green", 2, CENTRES["red"], 30),
+         block("blue", 3, CENTRES["red"], 60), *PAINT]  # fmt: skip
+#: The three squares, each block into its own, top of the tower first.
+TOP_DOWN = [move(label(f"{c} one"), inside(f"{c} square")) for c in ("blue", "green", "red")]
 #: The swap of command 10: park the red one, then two moves into the spot the last one left.
 SWAP = [
     move(label("red one"), {"relation": "next_to", "target": label("green one")}),
@@ -128,6 +135,59 @@ def test_pointing_at_the_paint_finds_no_block(rules_api):
                             "holds": [click(10, *SQUARES["red"]), click(11, *HERE)]})  # fmt: skip
     assert body["result"]["status"] == "ask"
     assert body["result"]["ask"]["reason"] == "no_object"
+
+
+# --- the towers on the table, as the model is told about them ---
+
+
+def test_a_flat_table_says_nothing_about_towers():
+    assert stacks_in(SCENE) == []
+    assert stacks_in([*SCENE, spot(*HERE)]) == []
+
+
+def test_the_tower_is_named_bottom_to_top():
+    """The paint and the spot a block left are flat, so they are never part of a tower."""
+    assert stacks_in(TOWER) == [["red one", "green one", "blue one"]]
+    assert stacks_in([*TOWER, spot(*HERE)]) == [["red one", "green one", "blue one"]]
+
+
+def test_blocks_side_by_side_are_not_a_tower():
+    """The red and the green are 45 mm apart in `CENTRES`, and the nearest a block can be put
+    beside another is 31 mm. Only blocks over the same spot are one tower."""
+    assert stacks_in(BLOCKS) == []
+    pair = [block("red", 1), block("green", 2, CENTRES["red"], 30), block("blue", 3)]
+    assert stacks_in(pair) == [["red one", "green one"]]
+
+
+def test_the_model_is_told_what_is_stacked(settings, core):
+    """Found by rahul on 11 Oct: "stack them all up", then "put each block in its own square",
+    and nothing happened at all. The model planned the red one first, and the red one was at
+    the bottom of the tower - a step the arm cannot do, which throws the whole plan away. It
+    was blind to the table: nothing in the prompt said the blocks were stacked."""
+    llm = FakeLLM(TOP_DOWN)
+    with app_with(settings, core, llm) as c:
+        body = post(c, {"text": "put each block in its own square", "things": TOWER, "t": 12.0})
+    asked = llm.requests[0]["messages"][1]["content"]
+    assert STACKED + "the red one, the green one, the blue one." in asked
+    # And the top of the tower is the one step 1 picks up.
+    assert body["plan"]["steps"] == 3
+    assert object_of(body) == "blue"
+
+
+def test_a_replan_is_told_what_is_stacked_too(settings, core):
+    llm = FakeLLM(TOP_DOWN, [move(label("blue one"), inside("blue square"))])
+    with app_with(settings, core, llm) as c:
+        post(c, {"text": "put each block in its own square", "things": TOWER, "t": 12.0})
+        r = c.post("/api/replan", json={"index": 0, "why": "There's a block on top of that one.",
+                                        "things": TOWER})  # fmt: skip
+        assert r.status_code == 200, r.text
+    asked = llm.requests[1]["messages"][1]["content"]
+    assert STACKED + "the red one, the green one, the blue one." in asked
+
+
+def test_the_prompt_says_a_tower_comes_apart_from_the_top_down():
+    assert STACKED.strip() in SYSTEM
+    assert "taken apart from the top down" in SYSTEM
 
 
 # --- a plan arrives whole, and is measured one step at a time ---

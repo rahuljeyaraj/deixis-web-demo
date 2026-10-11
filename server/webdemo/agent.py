@@ -52,6 +52,9 @@ TOO_MANY = "That's more steps than I can plan at once. Ask me for up to four."
 NOT_FOLLOWED = "Sorry, I didn't follow that. Try one thing at a time."
 #: What the arm says to anything that isn't about moving these blocks (the `decline` action).
 DECLINED = "I only move the blocks on this table."
+#: How the table's towers are given to the model, and named in the prompt's rule. The whole
+#: line reads: "Stacked on the table, bottom to top: the red one, the green one, the blue one."
+STACKED = "Stacked on the table, bottom to top: "
 
 
 class AgentUnavailable(RuntimeError):
@@ -72,6 +75,10 @@ class Context:
     # there are any, the agent is given the `pick` tool so the model answers the question
     # itself instead of the server reading the words (rahul, 11 Oct).
     choices: list[str] = field(default_factory=list)
+    # The towers on the table right now, each bottom to top ("red one", "green one", ...).
+    # The model is otherwise blind to the table: it cannot know a block is covered, and only
+    # the top one of a tower can be picked up (`stacks_in`).
+    stacks: list[list[str]] = field(default_factory=list)
     # A re-plan (`/api/replan`): the plan that was running, as the model wrote it, which step
     # the arm could not do, and the arm's own reason. The model gets one go at a new plan.
     plan: list[str] = field(default_factory=list)
@@ -80,6 +87,8 @@ class Context:
 
     def lines(self) -> list[str]:
         out = []
+        for stack in self.stacks:
+            out.append(STACKED + ", ".join(f"the {name}" for name in stack) + ".")
         if self.previewing:
             out.append("A move is previewed and waits for the person's yes or no.")
         if self.question:
@@ -175,6 +184,12 @@ Rules:
 - A tower is built from the bottom up: first the middle block onto the bottom one, then the
   top block onto the middle one. Done the other way round the arm is stuck, because a block
   with one on top of it cannot be picked up.
+- A line "Stacked on the table, bottom to top: ..." says which blocks are in a tower right
+  now, in that order. It is the only thing you are told about where the blocks are, and it
+  changes the order of your steps: only the top block of that tower can be picked up, so a
+  tower is taken apart from the top down - the last one named first, then the one under it,
+  and the block at the bottom last of all. A step that picks up a block with another one on
+  top of it cannot be done, and the rest of the plan is thrown away with it.
 - The arm reaches a ring around itself only, so there is no place name it can trust: never
   write {"named": ...} and never {"empty_space": true}. A free spot is always beside
   something: {"relation": "next_to", "target": <another block>}.
@@ -275,6 +290,12 @@ Words: 0:put 1:each 2:block 3:on 4:its 5:own 6:colour
 move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})
 move({"object": {"label": "green one"}, "place": {"relation": "inside", "target": {"label": "green square"}}})
 move({"object": {"label": "blue one"}, "place": {"relation": "inside", "target": {"label": "blue square"}}})
+
+Stacked on the table, bottom to top: the red one, the green one, the blue one.
+Words: 0:put 1:each 2:block 3:in 4:its 5:own 6:square
+move({"object": {"label": "blue one"}, "place": {"relation": "inside", "target": {"label": "blue square"}}})
+move({"object": {"label": "green one"}, "place": {"relation": "inside", "target": {"label": "green square"}}})
+move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})
 
 Words: 0:everything 1:except 2:the 3:blue 4:one 5:goes 6:in 7:the 8:red 9:square
 move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})

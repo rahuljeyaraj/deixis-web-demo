@@ -14,7 +14,7 @@ from pydantic import SecretStr
 from tests.wordrules import rules
 
 from test_agent import PHRASES, PROFILE, TOOLS
-from webdemo.agent import MAX_STEPS, ArmAgent
+from webdemo.agent import MAX_STEPS, ArmAgent, Context
 from webdemo.settings import Settings
 
 pytestmark = pytest.mark.network
@@ -94,6 +94,40 @@ def test_nemotron_plans_the_steps(live, text, actions, blocks):
     assert res.refusal is None, res.refusal
     assert [c.name for c in res.calls] == actions, res.errors
     assert moved(res.calls) >= blocks, res.errors
+
+
+#: What the model is told when the three blocks are one tower ("stack them all up").
+TOWER = Context(stacks=[["red one", "green one", "blue one"]])
+
+#: Said to a table that is already a tower. Every one of these must be planned from the top
+#: of the tower down, or the first step picks up a covered block and the plan is thrown away.
+ON_A_TOWER = [
+    "put each block in its own square",
+    "put each block on its own colour",
+]
+
+
+@pytest.mark.parametrize("text", ON_A_TOWER)
+def test_nemotron_takes_a_tower_apart_from_the_top(live, text):
+    """Found by rahul on 11 Oct: "stack them all up", then "put each block in its own square",
+    and nothing happened at all. The model planned the red one first, and the red one was at
+    the bottom of the tower - a step the arm cannot do, which throws the whole plan away. It
+    is told what is stacked now (`stacks_in`), so the order is the model's to get right."""
+    agent, key = live
+    res = agent.run(text.split(), key.get_secret_value(), TOWER)
+    print(f"{text!r}: {[str(c) for c in res.calls]} in {res.latency_s:.2f} s, "
+          f"{res.attempts} attempt(s)")  # fmt: skip
+    assert res.refusal is None, res.refusal
+    assert [c.name for c in res.calls] == ["move"] * 3, res.errors
+    # Top of the tower first, then the one under it, then the block at the bottom.
+    assert [one(c) for c in res.calls] == ["blue", "green", "red"], res.errors
+
+
+def one(call) -> str:
+    """The colour of the block a move picks up."""
+    label = (call.to_dict()["args"].get("object") or {}).get("label", "")
+    found = [w for w in COLOURS if w in label.lower()]
+    return found[0] if len(found) == 1 else label
 
 
 @pytest.mark.parametrize("text", [
