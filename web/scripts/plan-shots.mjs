@@ -90,15 +90,24 @@ async function readable(page) {
     // A row of one line is about 20 px; anything taller has wrapped.
     const wrapped = says.filter((el) => box(el).height > 24).length;
     const starts = new Set(says.map((el) => Math.round(box(el).left)));
-    // The three pieces of one arrow must sit on one line, to a tenth of a pixel.
-    const middle = (el) => (el ? Math.round((box(el).top + box(el).bottom) * 5) / 10 : null);
+    // An arrow's head must sit on its line, and land on the lane it is pointing at: a CSS
+    // triangle's point is in the middle of its box, which is easy to get wrong by 5 px.
+    const centre = (el, axis) =>
+      Math.round((box(el)[axis === 'y' ? 'top' : 'left'] + box(el)[axis === 'y' ? 'bottom' : 'right']) * 50) / 100;
+    const rails = [...document.querySelectorAll('.wiring-row:first-child .wiring-rail')].map(
+      (r) => box(r).left,
+    );
     const offLine = [];
     for (const t of document.querySelectorAll('.wiring-track')) {
-      const [line, dot, tip] = ['.wiring-line', '.wiring-dot', '.wiring-tip'].map((q) =>
-        middle(t.querySelector(q)),
-      );
-      if (line === null) continue;
-      if (dot !== line || tip !== line) offLine.push(`line ${line}, dot ${dot}, head ${tip}`);
+      const line = t.querySelector('.wiring-line');
+      const tip = t.querySelector('.wiring-tip');
+      if (!line || !tip) continue;
+      if (centre(tip, 'y') !== centre(line, 'y')) {
+        offLine.push(`head ${centre(tip, 'y')} is not on the line ${centre(line, 'y')}`);
+      }
+      const x = centre(tip, 'x');
+      const miss = Math.min(...rails.map((r) => Math.abs(r - x)));
+      if (miss > 0.5) offLine.push(`head misses its lane by ${Math.round(miss * 10) / 10} px`);
     }
     return {
       offLine,

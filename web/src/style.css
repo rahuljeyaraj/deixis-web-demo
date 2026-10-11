@@ -212,8 +212,8 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
   border-top: 1px solid var(--line); }
 .wiring-rows:empty { border-top: 0; }
 .wiring-row { display: grid; grid-template-columns: var(--cols); column-gap: 10px;
-  align-items: center; padding: 3px 0; font-size: 14px; color: var(--page);
-  border-bottom: 1px solid #f2f4f8; }
+  align-items: center; min-height: var(--row-h, 31px); padding: 3px 0; font-size: 14px;
+  color: var(--page); border-bottom: 1px solid #f2f4f8; }
 .wiring-row::before { grid-column: 1; counter-increment: msg; content: counter(msg);
   text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: #aeb6c2; }
 .wiring-row[data-from="you"] { color: var(--you); }
@@ -229,19 +229,16 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 .wiring-rail[data-lane="nemotron"] { border-left-color: #efb6b6; }
 .wiring-rail[data-lane="core"] { border-left-color: #a8d9c0; }
 .wiring-rail[data-lane="arm"] { border-left-color: #d2bbe4; }
-/* The arrow: a dot where the message starts, a line, a head where it lands. Each piece keeps
-   its own size however wide the panel is (see `arrow()` in wiring.ts).
-   All three are centred on one line, and all three are an even number of pixels tall, so
-   nothing lands on a half pixel. The line was a `border-top`, which draws *below* the box it
-   is on: that put it 1 px under the dot and the head (rahul, 11 Oct: "the arrow and the
-   circle is not alliged"). `plan-shots.mjs` measures the three centres now. */
+/* The arrow: a line from one lane to another, with a head where it lands. It keeps its size
+   however wide the panel is (see `arrow()` in wiring.ts).
+   The head is a CSS triangle, whose point is in the *middle* of its 10 px box, not at the
+   far edge: both directions pull back by half of it, or the head stops short of the lane it
+   is landing on (rahul, 11 Oct: "the arrows are not in the right posistion"). */
 .wiring-arrow { position: absolute; inset: 0; }
 .wiring-line { position: absolute; top: calc(50% - 1px); height: 2px; background: currentColor; }
-.wiring-dot { position: absolute; top: calc(50% - 4px); width: 8px; height: 8px; margin-left: -4px;
-  border-radius: 50%; background: currentColor; }
 .wiring-tip { position: absolute; top: calc(50% - 5px); width: 0; height: 0;
-  border: 5px solid transparent; }
-.wiring-tip[data-dir="right"] { border-left-color: currentColor; margin-left: -10px; }
+  border: 5px solid transparent; margin-left: -5px; }
+.wiring-tip[data-dir="right"] { border-left-color: currentColor; }
 .wiring-tip[data-dir="left"] { border-right-color: currentColor; }
 .wiring-self { position: absolute; top: calc(50% - 4px); width: 8px; height: 8px; margin-left: -4px;
   border-radius: 2px; background: currentColor; }

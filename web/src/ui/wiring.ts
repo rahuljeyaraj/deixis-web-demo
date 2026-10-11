@@ -43,6 +43,9 @@ export const LANES: Lane[] = [
 
 const INDEX = new Map(LANES.map((l, i) => [l.id, i]));
 
+/** A row's height in CSS pixels: the 24 px arrow track, 3 px above and below, and the rule. */
+const ROW_H = 31;
+
 export function laneOf(id: string): number {
   return INDEX.get(id) ?? INDEX.size - 1;
 }
@@ -115,6 +118,8 @@ export class Wiring {
     this.list = root.querySelector('.wiring-rows')!;
     this.foot = root.querySelector('.wiring-foot');
     this.drawLaneNames();
+    this.snapRows();
+    window.addEventListener('resize', () => this.snapRows());
     this.replayButton?.addEventListener('click', () => this.replay());
   }
 
@@ -162,6 +167,19 @@ export class Wiring {
     };
     tick();
     this.timer = window.setInterval(tick, 850);
+  }
+
+  /**
+   * Keep a row a whole number of the screen's own pixels tall.
+   *
+   * At a display scale of 125% a 31 px row is 38.75 screen pixels, so each row starts on a
+   * different quarter of a pixel and the 2 px line is painted over two screen rows on some
+   * and three on others: "alternative arrows are thicker than others" (rahul, 11 Oct).
+   * Rounded to whole screen pixels, every row sits the same way and every line looks alike.
+   */
+  private snapRows(): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.root.style.setProperty('--row-h', `${Math.round(ROW_H * dpr) / dpr}px`);
   }
 
   private drawLaneNames(): void {
@@ -231,12 +249,13 @@ export class Wiring {
 }
 
 /**
- * The arrow from one lane to another, in the sending lane's colour: a dot where it starts, a
- * line, a head where it lands.
+ * The arrow from one lane to another, in the sending lane's colour: a line from the lane
+ * that sent the message to the one that got it, with a head where it lands.
  *
  * Plain elements placed by percentage, not an SVG: the panel is as wide as the page, and an
- * SVG stretched to that width turns a round dot into a wide pill and the head into a wedge.
- * These keep their size whatever the panel's width.
+ * SVG stretched to that width turns the head into a wedge. These keep their size whatever
+ * the panel's width. (There was a dot at the sending end until 11 Oct; rahul had it off -
+ * the line starts at a lane, which says the same thing with less ink.)
  */
 function arrow(s: RowShape): HTMLElement {
   const a = lanePercent(s.from);
@@ -247,14 +266,11 @@ function arrow(s: RowShape): HTMLElement {
   line.className = 'wiring-line';
   line.style.left = `${Math.min(a, b)}%`;
   line.style.width = `${Math.abs(b - a)}%`;
-  const tail = document.createElement('i');
-  tail.className = 'wiring-dot';
-  tail.style.left = `${a}%`;
   const head = document.createElement('i');
   head.className = 'wiring-tip';
   head.dataset.dir = s.rightwards ? 'right' : 'left';
   head.style.left = `${b}%`;
-  wrap.append(line, tail, head);
+  wrap.append(line, head);
   return wrap;
 }
 
