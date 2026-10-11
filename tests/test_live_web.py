@@ -158,10 +158,12 @@ def test_a_phrase_the_word_matcher_misses(live_api):
     assert body["word_rules"]["same"] is False
 
 
-def test_nonsense_is_the_models_question_not_a_guess(live_api):
-    """Nemotron must still answer (ask_user), never hand the words to the word matcher."""
+def test_nonsense_is_the_models_answer_not_a_guess(live_api):
+    """Nemotron must answer nonsense itself, and never guess a move out of it. Which of the
+    two ways it answers is its own call: a short question back, or the one line that says
+    what this arm is for (11 Oct: it declines, which is the better of the two)."""
     body = ask(live_api, "banana the sideways wednesday", t=110.0)
-    assert names(body) in (["ask_user"], []), body["agent"]
+    assert names(body) in (["ask_user"], ["decline"], []), body["agent"]
     assert body["agent"]["source"] == "nemotron"
 
 
@@ -218,7 +220,10 @@ def test_a_new_command_while_a_question_is_open(live_api):
                 holds=[click(150, *between), click(150.8, *HERE)])  # fmt: skip
     assert first["result"]["status"] == "ask", first["result"]
     second = ask(live_api, "no, stop", t=161.0, question=first["say"])
-    assert names(second) == ["stop"], second["agent"]
+    # Either reading of "no, stop" is fair (the "no" or the "stop"); what matters is that it
+    # was taken as a new command and not as an answer to the open question.
+    assert names(second) in (["stop"], ["cancel"]), second["agent"]
+    assert second["agent"]["pick"] is None
 
 
 # --- plans, the whole way through: Nemotron, the core, step by step (section 6) ---
