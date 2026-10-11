@@ -106,7 +106,20 @@ left", and Nemotron can name it. There is only ever one, and it is gone as soon 
 stands there. This is robot-side knowledge reported as a thing, which is what the core's L6
 expects — not a change to the core.
 
-## L10. The model is told what is stacked, and nothing else about the table
+## L10. "Put the red one at the bottom" is read as picking the red one up
+
+A tower in a given order works when the order is asked for as a tower: "stack them with the
+green one on the bottom and the blue one on top", "make a tower with red at the bottom and
+green on top", "build a tower with the red one on top". The block named at the bottom stays
+where it is, the block nobody names is the middle one, and the arm builds upwards.
+
+Said as "**put** the red one at the bottom", it does not work. Every other use of "put the red
+one ..." in this demo means picking the red one up, and that reading wins: the arm builds a
+tower, but the block that was meant to be at the bottom ends up in the middle. A rule, a
+worked example and a contrasting pair of examples were all tried against the live model on
+11 Oct and none of them shifted it. Say "stack them with ..." instead.
+
+## L11. The model is told what is stacked, and nothing else about the table
 
 Nemotron is given the words the person said, not the table. The one exception is a tower: a
 line says which blocks are stacked right now, bottom to top, because only the top block can

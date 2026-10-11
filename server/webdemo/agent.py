@@ -184,6 +184,16 @@ Rules:
 - A tower is built from the bottom up: first the middle block onto the bottom one, then the
   top block onto the middle one. Done the other way round the arm is stuck, because a block
   with one on top of it cannot be picked up.
+- When they say which block belongs at the bottom or on top ("with the green one on the
+  bottom and blue on the top", "a tower with the red one on top"), that names the order for
+  you. There are only three blocks, so work out all three places before writing any move:
+  the one they put at the bottom, the one they put on top, and the one that is left over -
+  neither of those two - which is the middle one. "Red at the bottom and green on top"
+  leaves the blue one, so the tower is red, blue, green, and the two moves are the blue one
+  onto the red one, then the green one onto the blue one. The block at the bottom stays
+  where it is: it is only ever a target, never the object of a move. Always two moves, and
+  never the two blocks they named onto each other - that leaves the third one on the table
+  and asks the arm to put each of them on the other.
 - A line "Stacked on the table, bottom to top: ..." says which blocks are in a tower right
   now, in that order. It is the only thing you are told about where the blocks are, and it
   changes the order of your steps: only the top block of that tower can be picked up, so a
@@ -277,6 +287,14 @@ home({})
 Words: 0:stack 1:them 2:all 3:up
 move({"object": {"label": "green one"}, "place": {"relation": "on", "target": {"label": "red one"}}})
 move({"object": {"label": "blue one"}, "place": {"relation": "on", "target": {"label": "green one"}}})
+
+Words: 0:stack 1:them 2:with 3:green 4:on 5:the 6:bottom 7:and 8:blue 9:on 10:the 11:top
+move({"object": {"label": "red one"}, "place": {"relation": "on", "target": {"label": "green one"}}})
+move({"object": {"label": "blue one"}, "place": {"relation": "on", "target": {"label": "red one"}}})
+
+Words: 0:build 1:a 2:tower 3:with 4:the 5:red 6:one 7:on 8:top
+move({"object": {"label": "green one"}, "place": {"relation": "on", "target": {"label": "blue one"}}})
+move({"object": {"label": "red one"}, "place": {"relation": "on", "target": {"label": "green one"}}})
 
 Words: 0:take 1:the 2:red 3:one 4:out 5:of 6:the 7:square
 move({"object": {"label": "red one"}, "place": {"relation": "next_to", "target": {"label": "red square"}}})

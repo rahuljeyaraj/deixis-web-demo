@@ -200,6 +200,13 @@ def test_the_prompt_says_a_tower_comes_apart_from_the_top_down():
     assert "taken apart from the top down" in SYSTEM
 
 
+def test_the_prompt_says_how_a_tower_is_ordered():
+    """The block the person puts at the bottom never moves, and the one they do not name is
+    the middle. `test_live_nemotron.py` is what checks the model really does it."""
+    assert "which block belongs at the bottom or on top" in SYSTEM
+    assert "never the object of a move" in SYSTEM
+
+
 # --- a plan arrives whole, and is measured one step at a time ---
 
 

@@ -96,6 +96,43 @@ def test_nemotron_plans_the_steps(live, text, actions, blocks):
     assert moved(res.calls) >= blocks, res.errors
 
 
+# A tower in the order the person asks for (command 4, and rahul on 11 Oct: "stack them with
+# green on the bottom and blue on the top" came back as the green one onto the blue one and
+# then the blue one onto the green one, each onto the other). The person names the bottom, the
+# top, or both; the block they do not name is the middle one, the bottom one never moves, and
+# the moves go upwards. Each case below is (what was said, the colours picked up in order, the
+# colours they go onto).
+TOWER_ORDER = [
+    ("stack them with green on the bottom and blue on the top", "red blue", "green red"),
+    ("stack them with green at the bottom and red on top", "blue red", "green blue"),
+    ("stack them with red on top and blue at the bottom", "green red", "blue green"),
+    ("make a tower with red at the bottom and green on top", "blue green", "red blue"),
+    ("stack them with the blue one at the bottom", "green red", "blue green"),
+    ("build a tower with the red one on top", "green red", "blue green"),
+    ("build a tower with the green one on top", "red green", "blue red"),
+]
+
+
+@pytest.mark.parametrize(("text", "picked", "onto"), TOWER_ORDER, ids=[t[0] for t in TOWER_ORDER])
+def test_nemotron_builds_a_tower_in_the_order_it_was_asked_for(live, text, picked, onto):
+    agent, key = live
+    res = agent.run(text.split(), key.get_secret_value())
+    print(f"{text!r}: {[str(c) for c in res.calls]} in {res.latency_s:.2f} s")
+    assert res.refusal is None, res.refusal
+    assert [c.name for c in res.calls] == ["move", "move"], res.errors
+    assert [one(c) for c in res.calls] == picked.split(), res.errors
+    assert [onto_of(c) for c in res.calls] == onto.split(), res.errors
+
+
+def onto_of(call) -> str:
+    """The colour of the block a move puts its block on top of."""
+    place = call.to_dict()["args"].get("place") or {}
+    assert place.get("relation") == "on", place
+    label = (place.get("target") or {}).get("label", "")
+    found = [w for w in COLOURS if w in label.lower()]
+    return found[0] if len(found) == 1 else label
+
+
 #: What the model is told when the three blocks are one tower ("stack them all up").
 TOWER = Context(stacks=[["red one", "green one", "blue one"]])
 
