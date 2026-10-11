@@ -192,8 +192,12 @@ def model_rows(words: Sequence[str], things: Sequence[dict[str, Any]],
     """What the page sent Nemotron, and the plan it sent back.
 
     `agent` is an `AgentResult`; `off` is why Nemotron was not asked (simple mode), if so."""
-    blocks = len([t for t in things if t.get("selectable", True)])
-    sent = f"your words + the table ({blocks} blocks) + {len(tools)} tools it may call"
+    # The blocks, not the paint: a square and the spot a block left are flat. `selectable`
+    # would have been wrong here - a block under another one cannot be picked up, so a tower
+    # of three read as "1 blocks" on the panel (11 Oct).
+    blocks = len([t for t in things if t.get("height_mm")])
+    counted = "1 block" if blocks == 1 else f"{blocks} blocks"
+    sent = f"your words + the table ({counted}) + {len(tools)} tools it may call"
     rows = [Row("page", "nemotron", sent, detail={
         "words": list(words),
         "tools": [t["function"]["name"] for t in tools],

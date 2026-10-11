@@ -185,6 +185,16 @@ def test_a_replan_is_told_what_is_stacked_too(settings, core):
     assert STACKED + "the red one, the green one, the blue one." in asked
 
 
+def test_the_panel_counts_every_block_of_a_tower(settings, core):
+    """It used to count the blocks that could be picked up, so a tower of three read as
+    "1 blocks" on the panel - wrong number and wrong grammar, in front of a judge."""
+    llm = FakeLLM(TOP_DOWN)
+    with app_with(settings, core, llm) as c:
+        body = post(c, {"text": "put each block in its own square", "things": TOWER, "t": 12.0})
+    asked = next(r for r in body["trace"] if r["from"] == "page" and r["to"] == "nemotron")
+    assert "the table (3 blocks)" in asked["say"]
+
+
 def test_the_prompt_says_a_tower_comes_apart_from_the_top_down():
     assert STACKED.strip() in SYSTEM
     assert "taken apart from the top down" in SYSTEM
