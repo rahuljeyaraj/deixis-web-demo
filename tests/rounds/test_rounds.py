@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 
-from rounds.brain import StubBrain
+from rounds.brain import Decision, StubBrain
 from rounds.person import Person
 from rounds.pointer import point_at
 from rounds.rounds import (
@@ -103,6 +103,58 @@ def test_questions_are_capped_and_then_it_must_commit() -> None:
     a = point_and_ask(target, things, person, StubBrain(), cone, max_asks=1)
     assert a.asks <= 1
     assert a.picked  # it committed to something rather than giving up
+
+
+class _AlwaysAsks(StubBrain):
+    """Never commits by itself, so every attempt runs the questions out."""
+
+    def step(self, things, cone, said, asked):  # type: ignore[override]
+        free = [c.id for c in cone.candidates if c.id not in {i for i, _ in asked}]
+        return Decision("ask", free[0], "keep asking")
+
+
+def test_the_final_commit_is_the_models_call_not_ours() -> None:
+    """When the questions run out the brain decides, with only `choose` available. If the
+    harness tie-broke here, part of every score would be the harness's."""
+
+    class OwnIdea(_AlwaysAsks):
+        def commit(self, things, cone, said, asked):  # type: ignore[override]
+            return Decision("choose", "remote", "my own idea")
+
+    things = shelf()
+    target = _target("bottle_1")
+    cone = point_at(target, things, random.Random(9))
+    person = Person(target, things, random.Random(9))
+    a = point_and_ask(target, things, person, OwnIdea(), cone, max_asks=0)
+    assert a.asks == 0  # no questions allowed at all: straight to the commit
+    assert a.picked == "remote"
+    assert "my own idea" in " ".join(a.log)
+
+
+def test_the_question_cap_is_exact() -> None:
+    """Up to N questions must mean N, not N + 1 - the mean-asks column depends on it."""
+    things = shelf()
+    target = _target("bottle_1")
+    for cap in (0, 1, 2, 3):
+        cone = point_at(target, things, random.Random(9))
+        person = Person(target, things, random.Random(9))
+        a = point_and_ask(target, things, person, _AlwaysAsks(), cone, max_asks=cap)
+        # It stops early if a question happens to land on the right thing.
+        assert a.asks <= cap
+        assert person.answers == a.asks
+
+
+def test_an_unreachable_brain_at_the_commit_is_recorded() -> None:
+    class DiesAtTheEnd(_AlwaysAsks):
+        def commit(self, things, cone, said, asked):  # type: ignore[override]
+            raise RuntimeError("token factory down")
+
+    things = shelf()
+    target = _target("bottle_1")
+    cone = point_at(target, things, random.Random(9))
+    person = Person(target, things, random.Random(9))
+    a = point_and_ask(target, things, person, DiesAtTheEnd(), cone, max_asks=0)
+    assert a.failed and not a.ok
 
 
 def test_a_thing_that_is_not_on_the_shelf_scores_zero() -> None:

@@ -152,7 +152,10 @@ def point_and_ask(
         f"cone    {inside}",
     ]
     asked: list[tuple[str, bool]] = []
-    for _ in range(max_asks + 1):
+    # At most `max_asks` questions, then a commit. Not `max_asks + 1`: the header says "up
+    # to N questions" and it has to be true, or the mean-asks column is measuring a cap we
+    # do not have.
+    for _ in range(max_asks):
         try:
             d: Decision = brain.step(things, cone, said, asked)
         except Exception as e:
@@ -178,11 +181,21 @@ def point_and_ask(
         if yes:
             a.picked = d.id
             return a
-    # Out of questions. Commit to the likeliest thing the person has not already rejected.
-    rejected = {i for i, ok in asked if not ok}
-    rest = [c.id for c in cone.candidates if c.id not in rejected]
-    a.picked = rest[0] if rest else (cone.best or "")
-    a.log.append(f"robot   out of questions; commits to {a.picked or 'nothing'}")
+    # Out of questions. The *model* makes the final choice, with only `choose` on the table:
+    # if the harness picked a fallback here, part of the score would be the harness's.
+    try:
+        d = brain.commit(things, cone, said, asked)
+    except Exception as e:
+        a.failed = str(e)
+        a.log.append(f"robot   could not reach the model: {e}")
+        return a
+    a.picked = d.id
+    a.invalid = d.id not in index
+    a.log.append(
+        f"robot   out of questions; commits to {d.id or 'nothing'}"
+        + (f" - {d.why}" if d.why else "")
+        + (" (not on the shelf!)" if a.invalid else "")
+    )
     return a
 
 

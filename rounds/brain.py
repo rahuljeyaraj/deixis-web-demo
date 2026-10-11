@@ -77,6 +77,10 @@ class Brain(Protocol):
         self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
     ) -> Decision: ...
 
+    def commit(
+        self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
+    ) -> Decision: ...
+
 
 SYSTEM = """You help a robot arm work out which thing on a shelf a person means.
 
@@ -240,6 +244,17 @@ class Nemotron:
     ) -> Decision:
         return self._call(_step_message(things, cone, said, asked), TOOLS)
 
+    def commit(
+        self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
+    ) -> Decision:
+        """Out of questions: the same picture, but only `choose` on the table. The model
+        makes this call, not the harness - otherwise part of the score would be ours."""
+        message = (
+            _step_message(things, cone, said, asked)
+            + "\n\nYou have no questions left. Choose the one you think they mean."
+        )
+        return self._call(message, CHOOSE_ONLY)
+
 
 @dataclass
 class StubBrain:
@@ -272,3 +287,16 @@ class StubBrain:
         if len(live) == 1:
             return Decision("choose", live[0], "only one fits the words")
         return Decision("ask", live[0], "two or more fit; ask")
+
+    def commit(
+        self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
+    ) -> Decision:
+        self.usage.calls += 1
+        rejected = {i for i, ok in asked if not ok}
+        index = {t.id: t for t in things}
+        fits = [
+            c.id for c in cone.candidates if c.id not in rejected and self._fits(index[c.id], said)
+        ]
+        rest = [c.id for c in cone.candidates if c.id not in rejected]
+        pick = (fits or rest or [cone.best or things[0].id])[0]
+        return Decision("choose", pick, "out of questions")
