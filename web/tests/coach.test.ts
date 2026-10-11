@@ -28,7 +28,9 @@ describe('the coach line', () => {
     const c = new Coach();
     c.started('finger', 10);
     expect(c.line(12)?.text).toBe(COACH.moveFinger);
-    expect(c.line(13.1)?.text).toBe(COACH.noHand);
+    // It goes inside the camera window, where the person is already looking.
+    expect(c.line(13.1)).toEqual({ text: COACH.noHand, at: 'camera' });
+    expect(COACH.noHand.length).toBeLessThan(32); // the window is a quarter of the scene wide
     c.hand(true, 13.2);
     expect(c.line(13.3)?.text).toBe(COACH.moveFinger);
   });

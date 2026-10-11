@@ -90,7 +90,18 @@ async function readable(page) {
     // A row of one line is about 20 px; anything taller has wrapped.
     const wrapped = says.filter((el) => box(el).height > 24).length;
     const starts = new Set(says.map((el) => Math.round(box(el).left)));
+    // The three pieces of one arrow must sit on one line, to a tenth of a pixel.
+    const middle = (el) => (el ? Math.round((box(el).top + box(el).bottom) * 5) / 10 : null);
+    const offLine = [];
+    for (const t of document.querySelectorAll('.wiring-track')) {
+      const [line, dot, tip] = ['.wiring-line', '.wiring-dot', '.wiring-tip'].map((q) =>
+        middle(t.querySelector(q)),
+      );
+      if (line === null) continue;
+      if (dot !== line || tip !== line) offLine.push(`line ${line}, dot ${dot}, head ${tip}`);
+    }
     return {
+      offLine,
       lanes: lanes.map((l) => l.name),
       collide,
       sayWidth,
@@ -118,6 +129,7 @@ async function shot(page, name, note) {
   console.log(`   ${read.rows} rows, words ${read.sayWidth} px wide at ${read.fontPx}, ${read.wrapped} wrapped`);
   if (read.collide.length) console.log(`   LANE NAMES COLLIDE: ${read.collide.join(', ')}`);
   if (!read.wordsStartAtOneX) console.log('   THE WORDS DO NOT START AT ONE X');
+  if (read.offLine?.length) console.log(`   ARROW PIECES OFF THE LINE: ${read.offLine[0]}`);
   // The controls must stay on the first screen: the diagram is below it, on purpose.
   const h = page.viewportSize().height;
   if (boxes['#controls'] && boxes['#controls'][1] + boxes['#controls'][3] > h) {

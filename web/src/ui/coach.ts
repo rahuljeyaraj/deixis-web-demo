@@ -16,6 +16,10 @@ export type Action = 'retry-camera';
 export interface Line {
   text: string;
   action?: Action;
+  /** Show it in the camera window instead of across the scene: when the camera is the
+   * problem, that is where the person is already looking, and the line can be very short
+   * (rahul, 11 Oct). */
+  at?: 'camera';
 }
 
 export const COACH = {
@@ -26,7 +30,8 @@ export const COACH = {
   noCamera: 'No camera (blocked, or another app such as Zoom is using it). Your mouse points instead.',
   noMic: 'No microphone, so type instead: click a block and a spot, then type “put that here”.',
   silent: 'I didn’t hear anything. Check that your microphone is on.',
-  noHand: 'I can’t see your hand. Hold it up in front of the camera, one finger out.',
+  // Short enough for the camera window, which is a quarter of the scene wide.
+  noHand: 'Show your hand, one finger out',
   serverDown: 'The robot’s brain isn’t answering right now. The video shows it working.',
 } as const;
 
@@ -94,7 +99,7 @@ export class Coach {
     this.problem = null;
     const since = this.fingerSince;
     if (this.how === 'finger' && since !== null && now - Math.max(since, this.handAt) >= NO_HAND_S) {
-      return { text: COACH.noHand };
+      return { text: COACH.noHand, at: 'camera' };
     }
     if (this.step === 'move') return { text: this.how === 'finger' ? COACH.moveFinger : COACH.moveMouse };
     if (this.step === 'talk') return { text: COACH.talk };

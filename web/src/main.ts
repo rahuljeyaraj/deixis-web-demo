@@ -105,6 +105,7 @@ async function start(): Promise<void> {
   document.getElementById('phone-line')!.hidden = !onPhone();
   const coach = new Coach();
   const coachEl = document.getElementById('coach')!;
+  const camCoach = document.getElementById('cam-coach')!;
   let coachShown = '';
   const keys = new KeyPanel(document.getElementById('models-list')!);
   showInfo(keys, (ok) => coach.server(ok));
@@ -617,12 +618,16 @@ async function start(): Promise<void> {
   let marked = false;
   const drawCoach = (t: number) => {
     const line = stage.classList.contains('starting') ? null : coach.line(t);
-    const key = line ? `${line.text}|${line.action ?? ''}` : '';
+    const key = line ? `${line.text}|${line.action ?? ''}|${line.at ?? ''}` : '';
     if (key === coachShown) return;
     coachShown = key;
-    coachEl.hidden = !line;
+    // A line about the camera goes inside the camera window, not across the scene.
+    const inCamera = line?.at === 'camera';
+    camCoach.hidden = !inCamera;
+    camCoach.textContent = inCamera ? line!.text : '';
+    coachEl.hidden = !line || inCamera;
     coachEl.replaceChildren();
-    if (!line) return;
+    if (!line || inCamera) return;
     coachEl.append(line.text);
     if (line.action === 'retry-camera') {
       const b = document.createElement('button');
@@ -666,7 +671,7 @@ async function start(): Promise<void> {
   startMouseBtn.disabled = false;
   Object.assign(window, {
     __sim: {
-      mj, model, data, view, arm, pointer, mouse, talk, flow,
+      mj, model, data, view, arm, pointer, mouse, talk, flow, coach, now,
       tracker: () => tracker,
       mic: () => mic,
       /** For the look check: draw a plan strip without the model (scripts/plan-shots.mjs). */
