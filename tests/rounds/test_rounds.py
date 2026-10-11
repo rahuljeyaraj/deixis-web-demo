@@ -160,7 +160,7 @@ def test_an_unreachable_brain_at_the_commit_is_recorded() -> None:
 def test_a_thing_that_is_not_on_the_shelf_scores_zero() -> None:
     class Hallucinates(StubBrain):
         def from_words(self, things, said):  # type: ignore[override]
-            return "teapot"
+            return Decision("choose", "teapot", "a thing it invented")
 
     things = shelf()
     target = _target("phone")
@@ -228,3 +228,19 @@ def test_the_whole_thing_runs(capsys) -> None:
     out = capsys.readouterr().out
     assert "SCOREBOARD" in out
     assert "point only" in out and "words only" in out and "point + ask" in out
+
+
+def test_every_model_call_is_kept_on_the_attempt() -> None:
+    """The page can only show the thinking if the harness keeps it. Round 1 asks no model
+    and must record none; the other two must record one per robot action."""
+    things = shelf()
+    target = _target("bottle_1")
+    one, two, three = trial(target, things, StubBrain(), seed=5)
+    assert one.thoughts == []  # pure geometry
+    assert one.model_calls == 0
+    assert len(two.thoughts) == 1
+    assert two.thoughts[0]["at"] == "from words alone"
+    assert len(three.thoughts) == three.asks + (0 if three.asks and three.ok else 1)
+    for t in three.thoughts:
+        assert t["action"] in ("ask", "choose")
+        assert "thinking" in t and "latency_s" in t

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -40,13 +41,30 @@ class BrainUnavailable(RuntimeError):
     """Token Factory could not be used. The robot says so; it never falls back on words."""
 
 
+class OutOfRoom(BrainUnavailable):
+    """Reasoning spent the whole token budget and no tool call came out (`finish_reason`
+    is "length"). Worth separating because it is recoverable: ask again without reasoning."""
+
+
 @dataclass
 class Decision:
-    """What the brain decided to do next."""
+    """What the brain decided to do next, and what it was thinking.
+
+    `thinking` is the model's own reasoning, as Token Factory returns it in
+    `reasoning_content` when `enable_thinking` is on. It is kept because a demo about
+    thinking has to show the thinking: without it the page shows a robot pointing at things
+    and nothing at all of the model that decided to.
+    """
 
     action: Literal["choose", "ask"]
     id: str
     why: str = ""
+    thinking: str = ""
+    latency_s: float = 0.0
+    out_tokens: int = 0
+    #: reasoning ran out of room, so this answer came from a second call with it off
+    ran_out_thinking: bool = False
+    asked_model: bool = True  #: false for the rounds that are pure geometry
 
 
 @dataclass
@@ -71,7 +89,7 @@ class Brain(Protocol):
     name: str
     usage: Usage
 
-    def from_words(self, things: list[Thing], said: str) -> str: ...
+    def from_words(self, things: list[Thing], said: str) -> Decision: ...
 
     def step(
         self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
@@ -196,7 +214,21 @@ class Nemotron:
     usage: Usage = field(default_factory=Usage)
     temperature: float = 0.0
     timeout_s: float = 30.0
+    #: Nemotron's reasoning mode. On, it returns `reasoning_content` - a few hundred tokens
+    #: of its working, which the page shows. Off, it answers in about 50.
+    thinking: bool = True
     _client: Any = None
+
+    @property
+    def max_tokens(self) -> int:
+        """Thinking needs a lot of room, and running out of it fails silently: the model
+        spends the whole budget reasoning, never closes the thinking block (the working
+        turns up in `content` instead of `reasoning_content`), and returns no tool call.
+
+        Measured 11 Oct on the same prompt, six times: 932, 1037, 1481, 1640, 1924 tokens -
+        and one overran. The spread is wide enough that 2000 lost 3 of 40 calls, so the cap
+        is 4000. Nothing is charged for room that is not used."""
+        return 4000 if self.thinking else 400
 
     def client(self) -> Any:
         if self._client is None:
@@ -209,6 +241,18 @@ class Nemotron:
         return self._client
 
     def _call(self, message: str, tools: list[dict[str, Any]]) -> Decision:
+        """One decision. If reasoning runs the token budget out, the same model is asked
+        once more with reasoning off - still Nemotron, never a word list - and the fall back
+        is recorded on the Decision so it shows up in the run rather than hiding."""
+        try:
+            return self._once(message, tools, self.thinking)
+        except OutOfRoom:
+            d = self._once(message, tools, False)
+            d.ran_out_thinking = True
+            return d
+
+    def _once(self, message: str, tools: list[dict[str, Any]], thinking: bool) -> Decision:
+        t0 = time.perf_counter()
         try:
             resp = self.client().chat.completions.create(
                 model=MODEL,
@@ -217,16 +261,29 @@ class Nemotron:
                     {"role": "user", "content": message},
                 ],
                 tools=tools,
-                tool_choice="required",
+                # "auto", never "required". Measured on Token Factory, 11 Oct: with
+                # "required" this model never emits a stop - finish_reason comes back
+                # "length" every time, it repeats the same tool call 7 to 23 times, and it
+                # spends the whole token cap. With "auto" it stops cleanly on one call, in
+                # about 50 tokens. `parallel_tool_calls=False` does not help; it is ignored.
+                tool_choice="auto",
                 temperature=self.temperature,
-                max_tokens=256,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                max_tokens=4000 if thinking else 400,
+                extra_body={"chat_template_kwargs": {"enable_thinking": thinking}},
             )
         except Exception as e:  # network, timeout, a refused key
             raise BrainUnavailable(f"{type(e).__name__}: {e}") from None
+        dt = time.perf_counter() - t0
         self.usage.add(getattr(resp, "usage", None))
-        calls = list(getattr(resp.choices[0].message, "tool_calls", None) or [])
+        message_out = resp.choices[0].message
+        out = int(getattr(getattr(resp, "usage", None), "completion_tokens", 0) or 0)
+        thought = str(getattr(message_out, "reasoning_content", None) or "")
+        calls = list(getattr(message_out, "tool_calls", None) or [])
         if not calls:
+            # Out of room mid-thought: the thinking block never closed, so the working
+            # turns up in `content` and no tool call was ever emitted.
+            if thinking and resp.choices[0].finish_reason == "length":
+                raise OutOfRoom("reasoning used the whole token budget")
             raise BrainUnavailable("the model answered with no tool call")
         call = calls[0]
         try:
@@ -234,10 +291,17 @@ class Nemotron:
         except json.JSONDecodeError:
             raise BrainUnavailable("the model's arguments were not JSON") from None
         action = "ask" if call.function.name == "ask_about" else "choose"
-        return Decision(action, str(args.get("id", "")), str(args.get("why", "")))
+        return Decision(
+            action,
+            str(args.get("id", "")),
+            str(args.get("why", "")),
+            thinking=thought,
+            latency_s=round(dt, 3),
+            out_tokens=out,
+        )
 
-    def from_words(self, things: list[Thing], said: str) -> str:
-        return self._call(_words_message(things, said), CHOOSE_ONLY).id
+    def from_words(self, things: list[Thing], said: str) -> Decision:
+        return self._call(_words_message(things, said), CHOOSE_ONLY)
 
     def step(
         self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]
@@ -269,10 +333,10 @@ class StubBrain:
         text = (t.seen + " " + " ".join(t.says)).lower()
         return bool(words) and any(w in text for w in words)
 
-    def from_words(self, things: list[Thing], said: str) -> str:
+    def from_words(self, things: list[Thing], said: str) -> Decision:
         self.usage.calls += 1
         hits = [t.id for t in things if self._fits(t, said)]
-        return hits[0] if hits else things[0].id
+        return Decision("choose", hits[0] if hits else things[0].id, "first word match")
 
     def step(
         self, things: list[Thing], cone: Cone, said: str, asked: list[tuple[str, bool]]

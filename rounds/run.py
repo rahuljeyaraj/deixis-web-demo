@@ -49,6 +49,11 @@ def args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--words-2", type=int, default=WORDS_ONLY_BUDGET, help="round 2 budget")
     p.add_argument("--words-3", type=int, default=POINT_AND_ASK_BUDGET, help="round 3 budget")
     p.add_argument("--max-asks", type=int, default=MAX_ASKS)
+    p.add_argument(
+        "--no-thinking",
+        action="store_true",
+        help="turn Nemotron's reasoning mode off (faster, no trace to show)",
+    )
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--show", type=int, default=2, help="transcripts to print in full")
     p.add_argument("--json", type=Path, default=None, help="write every attempt here")
@@ -61,7 +66,8 @@ def header(a: argparse.Namespace, brain: Brain, things: list) -> list[str]:
     return [
         "THE THREE ROUNDS - which thing on the shelf does the person mean?",
         "",
-        f"  brain          {brain.name}",
+        f"  brain          {brain.name}"
+        + ("" if a.brain == "stub" else f", reasoning {'off' if a.no_thinking else 'on'}"),
         f"  shelf          {len(things)} things, {DIST} m away, "
         f"{STEP_X * 100:.0f} cm apart across and {STEP_Z * 100:.0f} cm up",
         f"  identical      {same} - no word tells them apart",
@@ -77,7 +83,7 @@ def header(a: argparse.Namespace, brain: Brain, things: list) -> list[str]:
 
 def run(a: argparse.Namespace) -> tuple[list[Attempt], Brain]:
     things = shelf()
-    brain: Brain = StubBrain() if a.brain == "stub" else Nemotron()
+    brain: Brain = StubBrain() if a.brain == "stub" else Nemotron(thinking=not a.no_thinking)
     print("\n".join(header(a, brain, things)), flush=True)
     order = list(things)
     random.Random(a.seed).shuffle(order)

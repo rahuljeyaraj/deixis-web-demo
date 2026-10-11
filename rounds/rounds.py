@@ -59,10 +59,37 @@ class Attempt:
     invalid: bool = False  #: the brain named something that is not on the shelf
     failed: str = ""  #: the brain could not be reached at all
     log: list[str] = field(default_factory=list)
+    #: Every model call this attempt made: what it decided, why, what it was thinking, how
+    #: long it took and what it spent. Round 1 has none - it never asks a model.
+    thoughts: list[dict[str, object]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
         return self.picked == self.target and not self.invalid and not self.failed
+
+    @property
+    def model_calls(self) -> int:
+        return len(self.thoughts)
+
+    @property
+    def model_s(self) -> float:
+        return sum(float(t.get("latency_s", 0.0)) for t in self.thoughts)
+
+
+def _remember(a: Attempt, what: str, d: Decision) -> None:
+    """Keep one model call on the attempt, so the page can show the thinking."""
+    a.thoughts.append(
+        {
+            "at": what,
+            "action": d.action,
+            "id": d.id,
+            "why": d.why,
+            "thinking": d.thinking,
+            "latency_s": d.latency_s,
+            "out_tokens": d.out_tokens,
+            "ran_out_thinking": d.ran_out_thinking,
+        }
+    )
 
 
 def _cone_pairs(cone: Cone) -> list[tuple[str, float]]:
@@ -112,14 +139,19 @@ def words_only(
     )
     a.log = [f'person  says "{said}" ({a.words} of {budget} words), and cannot point']
     try:
-        picked = brain.from_words(things, said)
+        d = brain.from_words(things, said)
     except Exception as e:
         a.failed = str(e)
         a.log.append(f"robot   could not reach the model: {e}")
         return a
-    a.picked = picked
-    a.invalid = picked not in by_id(things)
-    a.log.append(f"robot   picks {picked}{' (not on the shelf!)' if a.invalid else ''}")
+    _remember(a, "from words alone", d)
+    a.picked = d.id
+    a.invalid = d.id not in by_id(things)
+    a.log.append(
+        f"robot   picks {d.id}"
+        + (f" - {d.why}" if d.why else "")
+        + (" (not on the shelf!)" if a.invalid else "")
+    )
     return a
 
 
@@ -162,6 +194,7 @@ def point_and_ask(
             a.failed = str(e)
             a.log.append(f"robot   could not reach the model: {e}")
             return a
+        _remember(a, "commit" if d.action == "choose" else f"question {a.asks + 1}", d)
         if d.id not in index:
             a.invalid = True
             a.picked = d.id
@@ -189,6 +222,7 @@ def point_and_ask(
         a.failed = str(e)
         a.log.append(f"robot   could not reach the model: {e}")
         return a
+    _remember(a, "out of questions", d)
     a.picked = d.id
     a.invalid = d.id not in index
     a.log.append(

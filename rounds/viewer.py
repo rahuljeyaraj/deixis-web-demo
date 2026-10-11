@@ -17,6 +17,7 @@ import json
 import sys
 from pathlib import Path
 
+from rounds.brain import MODEL
 from rounds.scene import shelf
 
 TEMPLATE = """<!doctype html>
@@ -78,6 +79,26 @@ TEMPLATE = """<!doctype html>
   .verdict.ok { color: var(--good); }
   .verdict.no { color: var(--bad); }
   .legend { color: var(--soft); font-size: 16px; margin-top: 12px; }
+  .think {
+    margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  }
+  .think h3 {
+    margin: 0; padding: 11px 16px; font-size: 16px; font-weight: 600;
+    background: color-mix(in srgb, var(--cool) 12%, transparent);
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  }
+  .think h3 span { font-weight: 400; color: var(--soft); font-size: 15px; }
+  .think .body { padding: 14px 16px; }
+  .think p { margin: 0 0 10px; }
+  .think .trace {
+    white-space: pre-wrap; font-size: 16px; line-height: 1.65; color: var(--soft);
+    border-left: 3px solid var(--cool); padding-left: 14px; margin: 0;
+  }
+  .nomodel { color: var(--soft); font-size: 16px; margin-top: 16px; font-style: italic; }
+  .badge {
+    display: inline-block; font-size: 14px; padding: 2px 9px; border-radius: 20px;
+    background: color-mix(in srgb, var(--cool) 18%, transparent); color: var(--ink);
+  }
   .score { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 4px; }
   .score div { font-size: 16px; color: var(--soft); }
   .score b { display: block; font-size: 25px; color: var(--ink); }
@@ -86,7 +107,7 @@ TEMPLATE = """<!doctype html>
 <body>
 <div class="wrap">
   <h1>The three rounds</h1>
-  <p class="sub">Which thing on the shelf does the person mean? __SUB__</p>
+  <p class="sub">Which thing on the shelf does the person mean?<br>__SUB__</p>
 
   <div class="card">
     <div class="score" id="score"></div>
@@ -106,6 +127,7 @@ TEMPLATE = """<!doctype html>
     <p class="legend">A thing's ring is how much of the person's point it holds. Orange
       outline: what they actually wanted. Filled: what the robot picked.</p>
     <ul class="log" id="log"></ul>
+    <div id="thinking"></div>
   </div>
 </div>
 <script>
@@ -185,8 +207,43 @@ function render() {
     const label = line.startsWith('cone') ? 'point' : who;
     return `<li><span class="who ${who}">${label}</span><span>${rest}</span></li>`;
   }).join('');
+  thoughts(att, lines.length);
   document.getElementById('next').disabled = done;
   document.getElementById('back').disabled = step === 0;
+}
+
+function esc(s) {
+  return (s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+// Every model call this attempt made, revealed in step with the conversation, so the
+// thinking arrives just before the action it caused.
+function thoughts(att, shownLines) {
+  const box = document.getElementById('thinking');
+  const all = att.thoughts || [];
+  if (!all.length) {
+    box.innerHTML = shownLines
+      ? `<p class="nomodel">No model was asked in this round &mdash; it is pure geometry:
+         the robot takes whatever holds most of the cone.</p>`
+      : '';
+    return;
+  }
+  // One call per robot action, in order. Reveal as many as there are robot lines so far.
+  const robotLines = att.log.slice(0, shownLines).filter(l => l.startsWith('robot')).length;
+  const show = all.slice(0, Math.max(0, robotLines));
+  box.innerHTML = show.map((t, i) => `
+    <div class="think">
+      <h3>${DATA.model} &mdash; ${esc(t.at)}
+        <span>${t.latency_s}s &middot; ${t.out_tokens} tokens out &middot;
+          ${t.action === 'ask' ? 'asks about' : 'commits to'} ${esc(t.id)}</span></h3>
+      <div class="body">
+        ${t.why ? `<p><span class="badge">it says</span> ${esc(t.why)}</p>` : ''}
+        ${t.thinking
+          ? `<p class="trace">${esc(t.thinking)}</p>`
+          : `<p class="nomodel" style="margin:0">Reasoning mode was off for this run, so
+             the model returned only its one-line why.</p>`}
+      </div>
+    </div>`).join('');
 }
 
 function fill() {
@@ -211,7 +268,7 @@ render();
 """
 
 
-def build(attempts: list[dict], out: Path, sub: str = "") -> Path:
+def build(attempts: list[dict], out: Path, sub: str = "", model: str = "Nemotron") -> Path:
     """Write the page. `attempts` is the harness's JSON, as `--json` saved it."""
     things = shelf()
     seen = {t.id: t.seen for t in things}
@@ -226,7 +283,7 @@ def build(attempts: list[dict], out: Path, sub: str = "") -> Path:
         r["pct"] = round(100 * r["correct"] / r["n"]) if r["n"] else 0
     for a in attempts:
         a["ok"] = a["picked"] == a["target"] and not a["invalid"] and not a["failed"]
-    data = {"attempts": attempts, "rounds": list(rounds.values())}
+    data = {"attempts": attempts, "rounds": list(rounds.values()), "model": model}
     page = (
         TEMPLATE.replace("__DATA__", json.dumps(data))
         .replace(
@@ -247,8 +304,14 @@ def main(argv: list[str] | None = None) -> int:
     src = Path(args[0])
     out = Path(args[1]) if len(args) > 1 else src.with_suffix(".html")
     attempts = json.loads(src.read_text(encoding="utf-8"))
-    built = build(attempts, out, sub=f"{len(attempts) // 3} trials, from {src.name}")
-    print(f"wrote {built}")
+    calls = sum(len(a.get("thoughts") or []) for a in attempts)
+    secs = sum(float(t.get("latency_s", 0)) for a in attempts for t in (a.get("thoughts") or []))
+    sub = (
+        f"{len(attempts) // 3} trials &middot; {calls} Nemotron calls &middot; "
+        f"{secs:.0f}s of model time &middot; from {src.name}"
+    )
+    built = build(attempts, out, sub=sub, model=MODEL)
+    print(f"wrote {built}  ({calls} model calls recorded)")
     return 0
 
 
