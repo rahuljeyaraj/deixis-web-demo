@@ -13,7 +13,7 @@ import pytest
 from pydantic import SecretStr
 
 from test_agent import PHRASES, PROFILE, TOOLS
-from webdemo.agent import ArmAgent, rules
+from webdemo.agent import MAX_STEPS, ArmAgent, rules
 from webdemo.settings import Settings
 
 pytestmark = pytest.mark.network
@@ -55,3 +55,60 @@ def test_nemotron_agrees_with_the_rules(live, text):
           f"{res.attempts} attempt(s)")  # fmt: skip
     expected = [same_block(c.to_dict()) for c in rules(PROFILE, words).calls]
     assert [same_block(c.to_dict()) for c in res.calls] == expected, res.errors
+
+
+# The commands that need a plan (advanced-commands-plan.md section 4). The rule parser gives
+# nothing for these - that is the point - so what is checked is the shape of the plan: how
+# many steps, which actions, and which blocks they move. Not the exact places: those are the
+# core's, and the model may word a reference several right ways.
+PLANS = [
+    ("stack them all up", ["move", "move"], {"green", "blue"}),
+    ("swap the red and the blue", ["move", "move", "move"], {"red", "blue"}),
+    ("put each block on its own colour", ["move"] * 3, {"red", "green", "blue"}),
+    ("everything except the blue one goes in the red square", ["move", "move"], {"red", "green"}),
+    ("put the red one on the blue one, then go home", ["move", "home"], {"red"}),
+    ("move them all a bit to the left", ["move"] * 3, {"red", "green", "blue"}),
+]
+
+
+def moved(calls) -> set[str]:
+    """The colours the plan picks up, from each move's object reference."""
+    out = set()
+    for c in calls:
+        args = c.to_dict()["args"]
+        label = (args.get("object") or {}).get("label", "")
+        out |= {w for w in ("red", "green", "blue") if w in label.lower()}
+    return out
+
+
+@pytest.mark.parametrize(("text", "actions", "blocks"), PLANS, ids=[p[0] for p in PLANS])
+def test_nemotron_plans_the_steps(live, text, actions, blocks):
+    agent, key = live
+    res = agent.run(text.split(), key.get_secret_value())
+    print(f"{text!r}: {[str(c) for c in res.calls]} in {res.latency_s:.2f} s, "
+          f"{res.attempts} attempt(s)")  # fmt: skip
+    assert res.refusal is None, res.refusal
+    assert [c.name for c in res.calls] == actions, res.errors
+    assert moved(res.calls) >= blocks, res.errors
+
+
+@pytest.mark.parametrize("text", [
+    "what is the capital of france",
+    "pick it up and throw it",
+    "tell me a joke",
+])  # fmt: skip
+def test_nemotron_declines_anything_that_is_not_about_the_blocks(live, text):
+    """Found live on 11 Oct: an off-topic question came back as the robot asking the person
+    their own question, with multiple-choice options."""
+    agent, key = live
+    res = agent.run(text.split(), key.get_secret_value())
+    print(f"{text!r}: {[str(c) for c in res.calls]}")
+    assert [c.name for c in res.calls] == ["decline"], res.errors
+
+
+def test_a_plan_that_is_too_long_is_refused(live):
+    agent, key = live
+    res = agent.run("stack all six blocks into one tall tower".split(), key.get_secret_value())
+    print(f"steps: {[str(c) for c in res.calls]}, refusal: {res.refusal}")
+    # Either it plans within the cap, or it is refused out loud - never attempted badly.
+    assert res.refusal is not None or len(res.calls) <= MAX_STEPS

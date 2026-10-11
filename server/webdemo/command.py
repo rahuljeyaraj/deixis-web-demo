@@ -1,13 +1,16 @@
 """One command, server side (plan 4.2 steps 3 to 5): words (from Parakeet, or typed), the
 agent's tool calls, and the core's answer over MCP. Plus the last open question per visitor,
-so `/api/answer` can resolve it again with the person's choice (plan 7.2).
+so `/api/answer` can resolve it again with the person's choice (plan 7.2), and the plan it set
+off, so `/api/step` can measure each later step just before the arm runs it.
 """
 
 from __future__ import annotations
 
+import json
 import secrets
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -136,6 +139,13 @@ def _inside(p: list[float] | None, box: list[float]) -> bool:
     return bool(p) and box[0] <= p[0] <= box[0] + box[2] and box[1] <= p[1] <= box[1] + box[3]
 
 
+def _stackable(thing: dict[str, Any]) -> bool:
+    """Something a block can be put on top of: another block, not the paint. The painted
+    squares and the spot a block left are flat (`height_mm` 0), and pointing inside one means
+    that spot on the table, not "on top of the square"."""
+    return bool(thing.get("height_mm"))
+
+
 def onto_pointed_block(request: dict[str, Any], result: dict[str, Any]) -> dict[str, Any] | None:
     """ "Put that here" while pointing at another block means on top of it (rahul, 5 Oct:
     stacking that way said "a block in the way"). For each move whose place was a pointing
@@ -151,11 +161,18 @@ def onto_pointed_block(request: dict[str, Any], result: dict[str, Any]) -> dict[
             continue
         mean = (rc["args"].get("place") or {}).get("mean_mm")
         moved = (rc["args"].get("object") or {}).get("thing")
-        if any(t["id"] != moved and _inside(mean, t["box_mm"]) for t in request["things"]):
+        onto = [t for t in request["things"] if t["id"] != moved and _stackable(t)]
+        if any(_inside(mean, t["box_mm"]) for t in onto):
             call["args"] = {**call["args"], "place": {"relation": "on", "target": dict(place_ref)}}
             calls[rc["index"]] = call
             changed = True
     return {**request, "calls": calls} if changed else None
+
+
+def call_lines(calls: Sequence[dict[str, Any]]) -> list[str]:
+    """The calls as the examples write them, one per line: `move({"object": ...})`. Used to
+    show the model the plan it wrote when a step of it failed (a re-plan)."""
+    return [f"{c['name']}({json.dumps(c.get('args') or {}, separators=(',', ' '))})" for c in calls]
 
 
 @dataclass
@@ -163,6 +180,65 @@ class OpenAsk:
     request: dict[str, Any]
     response: dict[str, Any]
     t: float
+
+
+@dataclass
+class OpenPlan:
+    """A plan that is running: the model's calls, and the moment the person said them (the
+    words with their times, the pointer samples, the holds).
+
+    Only step 0 is resolved when the command arrives. The page asks for each later step just
+    before it runs it (`/api/step`), sending the table as it is then, so a step is measured
+    against the scene it will act on and not the one before it
+    (advanced-commands-plan.md section 6)."""
+
+    words: list[dict[str, Any]]
+    samples: list[dict[str, Any]]
+    holds: list[dict[str, Any]]
+    calls: list[dict[str, Any]]
+    context: dict[str, Any]
+    replans: int = 0
+    t: float = 0.0
+
+    @property
+    def steps(self) -> int:
+        return len(self.calls)
+
+    def texts(self) -> list[str]:
+        return [w["text"] for w in self.words]
+
+    def moment(self) -> dict[str, Any]:
+        """The parts of a core request that come from when it was said, not from now."""
+        return {"words": self.words, "samples": self.samples, "holds": self.holds}
+
+
+class Plans:
+    """Each visitor's running plan (in memory, 5 minutes), beside their open question."""
+
+    def __init__(self, ttl_s: float = SESSION_TTL_S) -> None:
+        self.ttl_s = ttl_s
+        self._plans: dict[str, OpenPlan] = {}
+        self._lock = threading.Lock()
+
+    def put(self, sid: str, plan: OpenPlan) -> None:
+        plan.t = time.monotonic()
+        with self._lock:
+            self._expire()
+            self._plans[sid] = plan
+
+    def get(self, sid: str) -> OpenPlan | None:
+        with self._lock:
+            self._expire()
+            return self._plans.get(sid)
+
+    def drop(self, sid: str) -> None:
+        with self._lock:
+            self._plans.pop(sid, None)
+
+    def _expire(self) -> None:
+        now = time.monotonic()
+        for k in [k for k, v in self._plans.items() if now - v.t > self.ttl_s]:
+            del self._plans[k]
 
 
 class Sessions:

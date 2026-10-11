@@ -60,4 +60,50 @@ show what it alone would have made of the same words. The one thing the model is
 to judge is where a finger pointed: when an answer is only pointed at ("this one"), the model
 says so and the core works out which block, because the words genuinely do not carry it.
 
+## L6. A plan is four steps at most, and one re-plan
+
+One sentence can be several steps ("stack them all up", "swap the red and the blue"): Nemotron
+answers with up to **four** tool calls from one model call, and the page runs them in order.
+A longer plan is refused out loud rather than attempted badly — the literature is clear that
+reliability falls away and hallucinations pile up over longer plans. "Stack all six into one
+tower" gets "That's more steps than I can plan at once. Ask me for up to four."
+
+When a step turns out to be impossible, the arm's own reason goes back to Nemotron, which
+plans the rest another way. That happens **once** per command, so a model that keeps failing
+cannot run away; after that the robot says the reason and stops there.
+
+A single move that cannot be done is not re-planned: "I can't reach there. Please move the dot
+closer." is a better answer than anything a model that may not write coordinates could offer.
+
+## L7. The whole plan is previewed from a guess; every step is measured again
+
+The plan is shown before anything moves, with a ghost block at each block's final place. The
+places past the first step are worked out against the table as the steps before them *will*
+have left it — a prediction by the page, not a measurement.
+
+When the arm reaches a step, the core measures that step again against the real table, and
+that is the answer the arm acts on. So the preview can be a little out (a block that ends up
+a millimetre from where the ghost was), but nothing is ever acted on without being measured
+first. One "yes" covers the whole plan; one "yes" per step would ruin the demo.
+
+## L8. The painted squares hold one block each
+
+The three coloured squares are 70 mm of paint on the mat: flat, with no physics, nothing to
+grip, and a finger pointing at one goes through to the table under it. "In the red square" is
+the middle of that square, so a square holds **one** block in the middle; a second block into
+the same square goes beside the first and half on the paint. "Put all three in the blue
+square" is not something this table can do.
+
+A block and its square both answer to "the red one". The core prefers an exact match, and the
+page reports "red one" as one of the block's own names, so "the red one" is the block, "the
+red square" is the paint, and nothing has to be asked.
+
+## L9. "The spot it left" lasts until something is put there
+
+A swap needs one block to go where another one was, and no reference the core has could say
+that. So the page reports the place the last step emptied as a thing called "the spot it
+left", and Nemotron can name it. There is only ever one, and it is gone as soon as a block
+stands there. This is robot-side knowledge reported as a thing, which is what the core's L6
+expects — not a change to the core.
+
 More items arrive as the finger, speech and the core are added (plan section 9).

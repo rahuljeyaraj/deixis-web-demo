@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from test_agent import click, post
-from test_arm_core import BLOCKS, CENTRES, HERE
+from test_arm_core import BLOCKS, CENTRES, HERE, SCENE, SQUARES, spot
 from webdemo.app import create_app
 from webdemo.settings import ROOT, Settings
 
@@ -37,9 +37,10 @@ def live_api(core, tmp_path_factory):
         yield c
 
 
-def ask(api, text: str, *, holds=(), question=None, previewing=False, t=None):
+def ask(api, text: str, *, holds=(), question=None, previewing=False, t=None, things=None):
     """One typed command, as the page sends it, and the reply - from Nemotron or nothing."""
-    meta = {"text": text, "things": BLOCKS, "holds": list(holds),
+    meta = {"text": text, "things": list(things if things is not None else BLOCKS),
+            "holds": list(holds),
             "state": {"previewing": previewing, "question": question}}  # fmt: skip
     if t is not None:
         meta["t"] = t
@@ -218,3 +219,56 @@ def test_a_new_command_while_a_question_is_open(live_api):
     assert first["result"]["status"] == "ask", first["result"]
     second = ask(live_api, "no, stop", t=161.0, question=first["say"])
     assert names(second) == ["stop"], second["agent"]
+
+
+# --- plans, the whole way through: Nemotron, the core, step by step (section 6) ---
+
+
+def test_a_plan_is_measured_one_step_at_a_time(live_api):
+    """The swap: the model must park a block first, because the arm has one gripper. Step 2
+    then asks for the spot step 1 emptied - a place that did not exist when the plan was
+    written. This is the whole loop, with the real model."""
+    first = ask(live_api, "swap the red and the blue", t=200.0, things=SCENE)
+    assert first["plan"]["steps"] == 3, first["plan"]
+    assert [c["name"] for c in first["plan"]["calls"]] == ["move", "move", "move"]
+    assert len(first["result"]["calls"]) == 1  # only the first step is measured here
+    parked = ok(first)["place"]["mean_mm"]
+    assert parked != list(CENTRES["red"])
+
+    # The page's job: red is parked, so the table it sends for step 2 has a spot where red was.
+    moved_red = [{**b, "box_mm": [parked[0] - 15, parked[1] - 15, 30, 30]} if b["id"] == "red"
+                 else b for b in SCENE]  # fmt: skip
+    r = live_api.post("/api/step", json={"index": 1, "things": [*moved_red, spot(*CENTRES["red"])]})
+    assert r.status_code == 200, r.text
+    second = r.json()
+    assert second["result"]["status"] == "ok", second
+    args = second["result"]["calls"][0]["args"]
+    assert args["object"]["thing"] == "blue"
+    assert args["place"]["mean_mm"] == pytest.approx(list(CENTRES["red"]), abs=1)
+
+
+def test_each_block_on_its_own_colour(live_api):
+    body = ask(live_api, "put each block on its own colour", t=210.0, things=SCENE)
+    assert body["plan"]["steps"] == 3, body["plan"]
+    assert ok(body)["place"]["mean_mm"] == pytest.approx(list(SQUARES["red"]), abs=1)
+
+
+def test_an_off_topic_question_is_declined(live_api):
+    """Found live on 11 Oct: the robot handed the person their own question back."""
+    body = ask(live_api, "what is the capital of france", t=220.0, things=SCENE)
+    assert names(body) == ["decline"], body["agent"]
+    assert body["say"] is None  # the page says one short line
+
+
+def test_a_plan_that_is_too_long_is_refused_out_loud(live_api):
+    body = ask(live_api, "stack all six blocks into one tall tower", t=230.0, things=SCENE)
+    assert body["agent"]["refusal"] is None or body["plan"]["steps"] == 0
+    assert body["plan"]["steps"] <= 4
+
+
+def test_the_wiring_panel_gets_a_row_from_every_part(live_api):
+    body = ask(live_api, "put that here", t=240.0, things=SCENE,
+               holds=[click(238, *CENTRES["red"]), click(239, *HERE)])  # fmt: skip
+    lanes = {(r["from"], r["to"]) for r in body["trace"]}
+    assert {("page", "nemotron"), ("nemotron", "page"), ("page", "core"), ("core", "page")} <= lanes
+    assert any(r.get("kind") == "shadow" for r in body["trace"])

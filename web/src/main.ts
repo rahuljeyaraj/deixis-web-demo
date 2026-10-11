@@ -18,11 +18,21 @@
  * it and `?start=skip` skip the start card.
  */
 
-import { type CommandMeta, type CommandReply, ServerDown, getInfo, sendAnswer, sendCommand, sendEvent } from './api';
+import {
+  type CommandMeta,
+  type CommandReply,
+  ServerDown,
+  getInfo,
+  sendAnswer,
+  sendCommand,
+  sendEvent,
+  sendReplan,
+  sendStep,
+} from './api';
 import { AUDIO_CONSTRAINTS, MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
-import { Flow } from './flow/flow';
+import { Flow, type FlowServer, type Plan } from './flow/flow';
 import { fromCanvas } from './hand/cursor';
 import { MousePointer } from './hand/mouse';
 import { CameraInset, HandOverlay } from './hand/overlay';
@@ -33,26 +43,35 @@ import { Arm, BLOCK_IDS, type BlockId } from './sim/arm';
 import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
-import { BASE_MM, BLOCK_MM, REACH_MM, onMat, tableToWorld } from './sim/table';
+import { BASE_MM, BLOCK_MM, CLEAR_OF_SQUARE_MM, REACH_MM, SQUARES, type Vec3, onMat, tableToWorld } from './sim/table';
 import { COACH, Coach, onPhone } from './ui/coach';
 import { fillDetails } from './ui/details';
 import { KeyPanel, ownKey } from './ui/key';
 import { fillModels, modelsUnavailable } from './ui/models';
+import { drawPlan } from './ui/plan';
 import { type StripModel, drawStrip, stripModel } from './ui/strip';
-import { speak } from './voice';
+import { Wiring } from './ui/wiring';
+import { setMuted, speak } from './voice';
 
 /** A clip whose loudest sample is below this is silence (a muted or wrong microphone). */
 const SILENT_DB = -45;
 
-/** Random spots on the reach mat, at least 60 mm apart. */
+/**
+ * Random spots on the reach mat, at least 60 mm apart and clear of the painted squares, so
+ * "put each one on its own colour" always starts with three blocks on bare mat and ends with
+ * three blocks on paint.
+ */
 function layout(n: number, rand = Math.random): [number, number][] {
   const out: [number, number][] = [];
-  while (out.length < n) {
+  const clearOfPaint = (x: number, y: number) =>
+    SQUARES.every((s) => Math.hypot(s.xMm - x, s.yMm - y) > CLEAR_OF_SQUARE_MM);
+  for (let tries = 0; out.length < n && tries < 2000; tries++) {
     const r = REACH_MM.min + 15 + rand() * (REACH_MM.max - REACH_MM.min - 30);
     const a = (rand() - 0.5) * Math.PI * 0.9;
     const x = BASE_MM.x + r * Math.sin(a);
     const y = BASE_MM.y - r * Math.cos(a);
-    if (onMat(x, y) && out.every(([u, v]) => Math.hypot(u - x, v - y) > 60)) out.push([x, y]);
+    if (!onMat(x, y) || !clearOfPaint(x, y)) continue;
+    if (out.every(([u, v]) => Math.hypot(u - x, v - y) > 60)) out.push([x, y]);
   }
   return out;
 }
@@ -78,6 +97,8 @@ async function start(): Promise<void> {
   const params = new URLSearchParams(location.search);
   /** `?hands=demo`: a made-up hand points instead of the camera. */
   const synthetic = params.get('hands') === 'demo';
+  // `?quiet`: the robot writes but does not speak (screenshots, the film, a quiet room).
+  if (params.has('quiet')) setMuted(true);
   if (synthetic || params.get('start') === 'skip') stage.classList.remove('starting');
   // The hand tracker downloads while the start card shows, so "Use my finger" starts at once.
   if (!synthetic) void HandTracker.preload().catch((e) => console.warn('hand tracker preload:', e));
@@ -132,39 +153,82 @@ async function start(): Promise<void> {
       if (flow.state.kind !== 'preview' && flow.state.kind !== 'asking') bubble.classList.remove('on');
     }, 6000);
   };
-  const flow = new Flow(arm, {
-    speak: robotSays,
-    glow: (ids) => {
-      for (const id of BLOCK_IDS) {
-        const on = ids.includes(id);
-        if (on === glowing.has(id)) continue;
-        view.glow(arm.blocks.get(id)!.geom, on);
-        if (on) glowing.add(id);
-        else glowing.delete(id);
-      }
-    },
-    ghost: (block, place) => {
-      if (!block || !place) return view.showGhost(null);
-      const [gx, gy] = tableToWorld(place.xMm, place.yMm);
-      view.showGhost([gx, gy, (place.zMm + BLOCK_MM / 2) / 1000], arm.blocks.get(block)!.geom);
-    },
-    changed: (s) => {
-      stage.dataset.flow = s.kind;
-      goBtn.disabled = s.kind !== 'preview';
-      if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
-    },
-    event: (kind, data) => {
-      // For the server's log: M30 (right first time) and M31 (last word to the guess).
-      const extra: { latency_s?: number; via?: string } = {};
-      if (kind === 'preview' && lastWordT1 !== null) extra.latency_s = Math.round((now() - lastWordT1) * 1000) / 1000;
-      if (kind === 'go') extra.via = goVia;
-      if (kind === 'go' || kind === 'cancel' || kind === 'stop') goVia = 'voice';
-      sendEvent({ kind, ...data, ...extra });
-      if (kind === 'done' && coach.moved(now())) {
-        document.getElementById('chips-label')!.textContent = 'Now say it your own way:';
-      }
-    },
+  const detailsBody = document.getElementById('details-body')!;
+  // The live wiring panel and the plan strip (advanced-commands-plan.md 5.1, 5.2).
+  const wiring = new Wiring(
+    document.getElementById('wiring')!,
+    document.getElementById('wiring-replay') as HTMLButtonElement,
+  );
+  const planStrip = document.getElementById('plan-strip')!;
+  const foldBtn = document.getElementById('wiring-fold') as HTMLButtonElement;
+  foldBtn.addEventListener('click', () => {
+    const open = document.getElementById('wiring')!.classList.toggle('open');
+    foldBtn.textContent = open ? 'Hide' : 'Show';
   });
+
+  /**
+   * The parts of a plan the page asks for as it goes (`/api/step`, `/api/replan`): each one
+   * sends the table as it is at that moment, and its trace rows go straight on the panel.
+   */
+  const server: FlowServer = {
+    step: async (index, things, context) => {
+      const reply = await sendStep(index, things, context);
+      wiring.add(reply.trace);
+      return reply;
+    },
+    replan: async (index, why, things, context) => {
+      const reply = await sendReplan(index, why, things, context, ownKey());
+      wiring.add(reply.trace);
+      keys.reply(reply);
+      fillDetails(detailsBody, { ...reply, typed: true });
+      return reply;
+    },
+  };
+
+  const flow = new Flow(
+    arm,
+    {
+      speak: robotSays,
+      glow: (ids) => {
+        for (const id of BLOCK_IDS) {
+          const on = ids.includes(id);
+          if (on === glowing.has(id)) continue;
+          view.glow(arm.blocks.get(id)!.geom, on);
+          if (on) glowing.add(id);
+          else glowing.delete(id);
+        }
+      },
+      ghosts: (items) => {
+        view.showGhosts(
+          items.map(({ block, place }) => {
+            const [gx, gy] = tableToWorld(place.xMm, place.yMm);
+            return { at: [gx, gy, (place.zMm + BLOCK_MM / 2) / 1000] as Vec3, geom: arm.blocks.get(block)!.geom };
+          }),
+        );
+      },
+      plan: (plan) => drawPlan(planStrip, plan),
+      trace: (rows) => wiring.add(rows),
+      changed: (s) => {
+        stage.dataset.flow = s.kind;
+        goBtn.disabled = s.kind !== 'preview';
+        if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
+      },
+      event: (kind, data) => {
+        // For the server's log: M30 (right first time) and M31 (last word to the guess).
+        const extra: { latency_s?: number; via?: string } = {};
+        if ((kind === 'preview' || kind === 'plan') && lastWordT1 !== null) {
+          extra.latency_s = Math.round((now() - lastWordT1) * 1000) / 1000;
+        }
+        if (kind === 'go') extra.via = goVia;
+        if (kind === 'go' || kind === 'cancel' || kind === 'stop') goVia = 'voice';
+        sendEvent({ kind, ...data, ...extra });
+        if (kind === 'done' && coach.moved(now())) {
+          document.getElementById('chips-label')!.textContent = 'Now say it your own way:';
+        }
+      },
+    },
+    { confirmFirst: true, now, server },
+  );
   /** How the next "yes" came: by voice unless a button or a key says otherwise. */
   let goVia = 'voice';
   /** The page time the last spoken command's last word ended (null for typed commands). */
@@ -173,7 +237,6 @@ async function start(): Promise<void> {
   // The thinking strip and the details panel (plan 5.2).
   const stripEl = document.getElementById('strip')!;
   const stripSvg = document.getElementById('strip-svg') as unknown as SVGSVGElement;
-  const detailsBody = document.getElementById('details-body')!;
   // Only what the person said and where they pointed; the robot's words go in its bubble.
   const HINT = 'Speak while you point: your words and your pointing show here, on one timeline.';
   let shown: StripModel | string = HINT;
@@ -208,6 +271,7 @@ async function start(): Promise<void> {
     usedClicksUntil = meta.t ?? now();
     flow.thinking();
     coach.sent();
+    wiring.clear(); // the panel shows this command, from the first word to the last move
     showStrip(wav ? 'Turning your voice into words…' : 'Thinking…', true);
     const reply = await sendCommand(meta, wav, ownKey(), () => say('One moment…'));
     coach.server(true);
@@ -215,6 +279,7 @@ async function start(): Promise<void> {
     lastWordT1 = wav && reply.words.length ? reply.words[reply.words.length - 1].t1 : null;
     const keyNote = keys.reply(reply);
     const heard = reply.words.map((w) => w.text).join(' ');
+    wiring.add(reply.trace);
     showStrip(heard ? stripModel(reply.words, reply.result) : HINT);
     fillDetails(detailsBody, { ...reply, typed: !wav });
     const line = wav
@@ -282,6 +347,7 @@ async function start(): Promise<void> {
     try {
       const reply = await sendAnswer(pick);
       fillDetails(detailsBody, reply);
+      wiring.add(reply.trace);
       if (lastReply) showStrip(stripModel(lastReply.words, lastReply.result, reply.result));
       await flow.handle(reply);
     } catch (err) {
@@ -582,6 +648,8 @@ async function start(): Promise<void> {
       mj, model, data, view, arm, pointer, mouse, talk, flow,
       tracker: () => tracker,
       mic: () => mic,
+      /** For the look check: draw a plan strip without the model (scripts/plan-shots.mjs). */
+      plan: (plan: Plan | null) => drawPlan(planStrip, plan),
       lastClip: () => lastClip,
       lastReply: () => lastReply,
       startMic,

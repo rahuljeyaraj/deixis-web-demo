@@ -2,6 +2,12 @@
 
 In development Vite serves the page on :5173 and proxies /api and /healthz to this server on
 :8000. Hosted (plan W14) this server serves `web/dist` itself on :7860.
+
+A command may come back as a plan of up to four steps (advanced-commands-plan.md section 6).
+`/api/command` resolves only its first step; the page asks for each later one with
+`/api/step` just before it runs it, sending the table as it is at that moment, and for a new
+plan with `/api/replan` when a step turns out to be impossible. Every reply carries a `trace`
+(`trace.py`): what each part said to the next, for the page's wiring panel.
 """
 
 from __future__ import annotations
@@ -29,18 +35,22 @@ from fastapi import (
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from deixis.mcp import DeixisClient
 from deixis.profile import load_profile
 from deixis.refs import DEMONSTRATIVES, norm_word
-from webdemo import __version__
-from webdemo.agent import AgentResult, ArmAgent, Context, rules
+from webdemo import __version__, trace
+from webdemo.agent import MAX_STEPS, AgentResult, ArmAgent, Context, rules
 from webdemo.command import (
+    MAX_SAMPLES,
     Meta,
+    OpenPlan,
+    Plans,
     Sessions,
     answer_by_label,
     answer_entry,
+    call_lines,
     choices_for,
     nearest_candidate,
     onto_pointed_block,
@@ -56,6 +66,8 @@ from webdemo.speech import ClipError, Speech
 MAX_META_BYTES = 1_000_000  # plan 7.2
 MAX_AUDIO_BYTES = 44 + 12 * 16000 * 2 + 1024  # 12 s of 16 kHz 16-bit mono, plus a header
 MAX_KEY_CHARS = 4096
+#: One re-plan per command, so a model that keeps failing cannot run away (section 8).
+MAX_REPLANS = 1
 
 log = logging.getLogger("webdemo")
 
@@ -106,6 +118,7 @@ def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[st
 EVENTS = {
     "start", "preview", "refused", "go", "done", "failed", "cancel", "stop", "undo", "reset",
     "camera_error", "mic_error", "silent", "no_hand", "server_down",
+    "plan", "step_failed", "replan", "declined",
 }  # fmt: skip
 
 
@@ -117,12 +130,36 @@ class EventBody(BaseModel):
     why: str | None = None  # a refusal's or an error's reason, in a few words
     latency_s: float | None = None  # a preview: from the last word to the guess on screen
     block: str | None = None
+    step: int | None = None  # which step of a plan this was about
+    steps: int | None = None  # how many steps the plan had
 
 
 class AnswerBody(BaseModel):
     """`POST /api/answer`: the person chose one of the last question's candidates."""
 
     candidate: int
+
+
+class StepBody(BaseModel):
+    """`POST /api/step`: measure one step of the running plan, now.
+
+    `things` and `context` are the table as the page sees it at this moment, which is the
+    point: a step is resolved against the scene it will act on, not the one it was planned
+    in. The words, the pointer samples and the holds come from the stored plan, so "there"
+    still means where the finger was when it was said."""
+
+    index: int = Field(ge=0, le=MAX_STEPS)
+    things: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReplanBody(BaseModel):
+    """`POST /api/replan`: a step could not be done; ask Nemotron for the rest another way."""
+
+    index: int = Field(ge=0, le=MAX_STEPS)
+    why: str = Field(max_length=200)  # the arm's own reason, as it said it
+    things: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 def create_app(
@@ -138,6 +175,7 @@ def create_app(
     settings = settings or Settings()
     profile = load_profile(settings.profile)
     sessions = Sessions()
+    plans = Plans()
     record = CommandLog(settings.command_log)
     limits = limits or Limits(
         Caps(visitor=settings.cap_visitor_per_day, address=settings.cap_address_per_day,
@@ -261,6 +299,28 @@ def create_app(
             sessions.drop(sid)
 
     Reply = tuple[dict[str, Any] | None, str | None]  # the core's answer, or why it refused
+    Step = tuple[dict[str, Any], dict[str, Any] | None, str | None, list[str]]
+
+    async def resolve_one(moment: dict[str, Any], things: list[dict[str, Any]],
+                          context: dict[str, Any], calls: list[dict[str, Any]],
+                          answers: list[dict[str, Any]] | None = None) -> Step:  # fmt: skip
+        """One core request over MCP, with the "pointed onto a block" retry (robot-side glue,
+        not a core change). Gives back the request as it was finally resolved, the core's
+        answer, why it refused, and any notes.
+
+        `moment` is the words, samples and holds from when the person spoke; `things` and
+        `context` are the table now."""
+        request = {**moment, "things": things, "calls": calls, "context": context,
+                   "answers": answers or []}  # fmt: skip
+        notes: list[str] = []
+        result, error = await resolve(request)
+        again = onto_pointed_block(request, result) if result else None
+        if again is not None:
+            result2, error2 = await resolve(again)
+            if result2 is not None:
+                request, result, error = again, result2, error2
+                notes.append("pointed onto a block: on top of it")
+        return request, result, error, notes
 
     async def answer_open(sid: str, entry: dict[str, Any]) -> Reply:
         """Resolve the visitor's open question again with the person's answer, plus what was
@@ -317,6 +377,70 @@ def create_app(
         k = next((i for i, w in enumerate(texts) if w in DEMONSTRATIVES and w != "so"), None)
         return None if k is None else await pointed_answer(ask, m, words, k)
 
+    Asked = tuple[AgentResult, Mode, Why | None, bool, float]
+
+    async def ask_model(sid: str, addr: str, own: str | None, texts: list[str],
+                        context: Context) -> Asked:  # fmt: skip
+        """The agent for one command (or one re-plan): Nemotron with the visitor's own key, or
+        ours within the day's limits; else the rule parser (simple mode). A refused own key:
+        as if none was sent. Gives back what it decided, whose key, why not ours, whether the
+        own key was refused, and how long the whole thing took."""
+        agent: ArmAgent = app.state.agent
+        loop = asyncio.get_running_loop()
+
+        async def understand(key: str | None, why: Why | None, shared: bool) -> AgentResult:
+            """`shared`: our own key, which keeps its connection to Token Factory open
+            between commands. A visitor's own key never does (it isn't kept at all)."""
+            no_key_why = NO_KEY_WHY[why or "no_key"]
+            return await loop.run_in_executor(
+                None, partial(agent.understand, texts, key, context, no_key_why, shared)
+            )
+
+        if settings.ai == "rules":
+            own = None
+        res = AgentResult([], source="rules", model="rules", errors=["no words"])
+        refused = False
+        mode: Mode = "own"
+        why: Why | None = None
+        t = time.perf_counter()
+        if texts and own:
+            res = await understand(own, None, shared=False)
+            refused = res.key_refused
+        if refused or not own:
+            key, why = our_key(sid, addr)
+            mode = "ours" if key else "simple"
+            if texts:
+                res = await understand(key, why, shared=True)
+                if key and res.asked_model:
+                    limits.spend(sid, addr)
+            key = None
+        return res, mode, why, refused, time.perf_counter() - t
+
+    def shadow(texts: list[str], context: Context, calls: list[dict[str, Any]]) -> dict[str, Any]:
+        """What the simple word rules alone would have done with the same words (item 18):
+        the rule parser runs in well under a millisecond, beside Nemotron."""
+        agent: ArmAgent = app.state.agent
+        plain = rules(agent.profile, texts, context) if texts else None
+        plain_calls = [c.to_dict() for c in plain.calls] if plain else []
+        return {
+            "understood": bool(plain_calls),
+            "words": in_words(plain_calls),
+            "calls": plain_calls,
+            "same": plain_calls == calls,
+        }
+
+    def model_trace(tr: trace.Trace, texts: list[str], things: list[dict[str, Any]],
+                    res: AgentResult, agent_s: float,
+                    word_rules: dict[str, Any]) -> None:  # fmt: skip
+        """The Nemotron rows and the grey word-matcher row under them."""
+        agent: ArmAgent = app.state.agent
+        drove = res.source == "rules"
+        off = (res.errors[0] if res.errors else "it did not answer") if drove else None
+        tr.add(*trace.model_rows(texts, things, agent.tools, res, agent_s, off))
+        tr.add(trace.shadow_row(word_rules, drove))
+        if res.refusal:
+            tr.add(trace.refusal_row(res.refusal))
+
     @app.post("/api/command", response_model=None)
     async def command(
         request: Request,
@@ -329,7 +453,11 @@ def create_app(
         """One command (plan 4.2, 7.2): words (from the clip, or typed), the agent's tool
         calls, the core's places over MCP. A visitor's own key (`X-Nebius-Key`) is used for
         this request's Nemotron call only; it is never stored, logged or sent back. Our key
-        is used within the day's limits (plan 8.1), else the rule parser (simple mode)."""
+        is used within the day's limits (plan 8.1), else the rule parser (simple mode).
+
+        The model may answer with a plan of up to four steps. Only the first is resolved
+        here; the rest come back in `plan` and the page asks for each one with `/api/step`
+        just before the arm runs it."""
         t_start = time.perf_counter()
         sid = visitor(response, sid)
         addr = address(request)
@@ -353,6 +481,7 @@ def create_app(
         except ValidationError as e:
             raise HTTPException(400, f"meta: {e.errors()[0]['msg']}") from None
         timings: dict[str, float] = {}
+        audio_s: float | None = None
         if audio is not None:
             speech: Speech | None = app.state.speech
             if speech is None:
@@ -368,6 +497,7 @@ def create_app(
             except ClipError as e:
                 raise HTTPException(400, str(e)) from e
             timings["asr_s"] = round(time.perf_counter() - t, 3)
+            audio_s = max(0.0, (len(data) - 44) / (16000 * 2))
             words = [{"text": w.text, "t0": round(w.t0, 4), "t1": round(w.t1, 4)} for w in heard]
         elif m.text and m.text.strip():
             words = typed_words(m.text, m.holds, m.t)
@@ -377,7 +507,6 @@ def create_app(
         # The agent: Nemotron with the visitor's own key, or ours within the day's limits;
         # else the rule parser (simple mode). A refused own key: as if none was sent.
         texts = [w["text"] for w in words]
-        agent: ArmAgent = app.state.agent
         # While a question is open, the agent is given the `pick` tool with the choices the
         # page glows, so Nemotron answers the question itself (rahul, 11 Oct).
         open_ask = sessions.get(sid) if m.state.question else None
@@ -385,39 +514,14 @@ def create_app(
             previewing=m.state.previewing, question=m.state.question,
             choices=choices_for(open_ask.response["ask"]) if open_ask else [],
         )  # fmt: skip
-        loop = asyncio.get_running_loop()
-
-        async def understand(key: str | None, why: Why | None, shared: bool) -> AgentResult:
-            """`shared`: our own key, which keeps its connection to Token Factory open
-            between commands. A visitor's own key never does (it isn't kept at all)."""
-            no_key_why = NO_KEY_WHY[why or "no_key"]
-            return await loop.run_in_executor(
-                None, partial(agent.understand, texts, key, context, no_key_why, shared)
-            )
-
-        if settings.ai == "rules":
-            own = None
-        agent_res = AgentResult([], source="rules", model="rules", errors=["no words"])
-        key_refused = False
-        mode: Mode = "own"
-        why: Why | None = None
-        t = time.perf_counter()
-        if texts and own:
-            agent_res = await understand(own, None, shared=False)
-            key_refused = agent_res.key_refused
-        if key_refused or not own:
-            key, why = our_key(sid, addr)
-            mode = "ours" if key else "simple"
-            if texts:
-                agent_res = await understand(key, why, shared=True)
-                if key and agent_res.asked_model:
-                    limits.spend(sid, addr)
-            key = None
+        agent_res, mode, why, key_refused, agent_s = await ask_model(sid, addr, own, texts, context)
         own = None
-        timings["agent_s"] = round(time.perf_counter() - t, 3)
+        timings["agent_s"] = round(agent_s, 3)
 
-        # The core: every reference to a place or a block, over MCP.
+        # The core: every reference to a place or a block, over MCP. Only the plan's first
+        # step; the page asks for each later one with `/api/step` when it comes to it.
         calls = [c.to_dict() for c in agent_res.calls]
+        first = calls[:1]
         result = error = None
         request: dict[str, Any] = {}
         notes: list[str] = []
@@ -446,43 +550,43 @@ def create_app(
                 agent_res.source = "answer"
             say = result["ask"]["question"] if result and result["status"] == "ask" else None
         else:
-            if calls:
-                request = {"words": words, "samples": m.samples, "holds": m.holds,
-                           "things": m.things, "calls": calls, "context": m.context,
-                           "answers": m.answers}  # fmt: skip
-                result, error = await resolve(request)
-                again = onto_pointed_block(request, result) if result else None
-                if again is not None:
-                    result2, error2 = await resolve(again)
-                    if result2 is not None:
-                        request, result, error = again, result2, error2
-                        notes.append("pointed onto a block: on top of it")
+            if first:
+                moment = {"words": words, "samples": m.samples, "holds": m.holds}
+                request, result, error, more = await resolve_one(
+                    moment, m.things, m.context, first, m.answers
+                )
+                notes += more
                 remember(sid, request, result)
             # Nothing understood (a mis-heard word, or they pointed at no choice): the
             # robot's open question stays open, so they can simply answer it again.
-            say = "Sorry, something went wrong." if error else say_for(result, calls)
-        if result is not None or entry is not None or calls:
+            say = "Sorry, something went wrong." if error else say_for(result, first)
+        if agent_res.refusal:
+            say = agent_res.refusal
+        if result is not None or entry is not None or first:
             timings["core_s"] = round(time.perf_counter() - t, 3)
+        # The plan, kept until it is done: the page asks for step 1 onwards when it gets there.
+        if len(calls) > 1:
+            plans.put(sid, OpenPlan(words, m.samples, m.holds, calls, m.context))
+        else:
+            plans.drop(sid)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
         whose = f"{mode} key" if mode != "simple" else f"simple: {why}"
         if key_refused:
             whose = f"own key refused, {whose}"
         log_command(words, agent_res, result, error, notes, whose)
-        # What the simple word rules alone would have done with the same words (item 18):
-        # the rule parser runs in well under a millisecond, beside Nemotron.
-        plain = rules(agent.profile, texts, context) if texts else None
-        plain_calls = [c.to_dict() for c in plain.calls] if plain else []
-        word_rules = {
-            "understood": bool(plain_calls),
-            "words": in_words(plain_calls),
-            "calls": plain_calls,
-            "same": plain_calls == calls,
-        }
+        word_rules = shadow(texts, context, calls)
+        tr = trace.Trace()
+        tr.add(trace.pointing_row(len(m.samples), len(m.holds), audio is None))
+        tr.add(*trace.heard_rows(words, audio is None, audio_s, timings.get("asr_s")))
+        model_trace(tr, texts, m.things, agent_res, timings["agent_s"], word_rules)
+        tr.add(trace.step_row(0, len(calls)))
+        tr.add(*trace.core_rows(first, result, error, timings.get("core_s")))
         cost = cost_usd(agent_res.usage, settings.price_in_per_m, settings.price_out_per_m)
         record.write(
             "command", sid, said=" ".join(texts), typed=audio is None, mode=mode,
             source=agent_res.source, model=agent_res.model, attempts=agent_res.attempts,
-            calls=calls, pick=agent_res.pick.to_dict() if agent_res.pick else None,
+            calls=calls, steps=len(calls), refusal=agent_res.refusal,
+            pick=agent_res.pick.to_dict() if agent_res.pick else None,
             status=(result or {}).get("status") if not error else "error",
             ask=((result or {}).get("ask") or {}).get("reason"), error=error,
             timings=timings, usage=agent_res.usage, cost_usd=cost,
@@ -494,10 +598,12 @@ def create_app(
             "word_rules": word_rules,
             "cost_usd": cost,
             "agent": agent_res.summary(),
+            "plan": {"calls": calls, "steps": len(calls)},
             "result": result,
             "error": error,
             "notes": notes,
             "say": say,
+            "trace": tr.to_list(),
             "timings": timings,
             "limits": limits_now(sid, addr, mode, why),
             "key_refused": key_refused,
@@ -535,7 +641,122 @@ def create_app(
         result, error = await answer_open(sid, answer_entry(ask, body.candidate))
         timings = {"total_s": round(time.perf_counter() - t_start, 3)}
         say = result["ask"]["question"] if result and result["status"] == "ask" else None
-        return {"result": result, "error": error, "say": say, "timings": timings}
+        tr = trace.Trace()
+        tr.add(trace.Row("you", "page", f"you picked choice {body.candidate}", kind="note"))
+        tr.add(*trace.core_rows(open_ask.request["calls"], result, error, timings["total_s"]))
+        return {"result": result, "error": error, "say": say, "timings": timings,
+                "trace": tr.to_list()}  # fmt: skip
+
+    @app.post("/api/step")
+    async def step(
+        body: StepBody, response: Response, sid: Annotated[str | None, Cookie()] = None
+    ) -> dict[str, Any]:
+        """One step of the running plan, measured now (advanced-commands-plan.md section 6).
+
+        The page sends the table as it is at this moment, so step 2 is resolved against what
+        step 1 left behind and not against the scene the plan was written in. The words and
+        the pointing come from the stored plan: "there" still means where the finger was when
+        the person said it."""
+        t_start = time.perf_counter()
+        sid = visitor(response, sid)
+        plan = plans.get(sid)
+        if plan is None:
+            raise HTTPException(409, "no plan is running (it may have expired)")
+        if body.index >= plan.steps:
+            raise HTTPException(400, f"no step {body.index}: the plan has {plan.steps}")
+        if len(body.things) > 20 or len(plan.samples) > MAX_SAMPLES:
+            raise HTTPException(413, "too much scene")
+        call = plan.calls[body.index]
+        context = body.context or plan.context
+        request, result, error, notes = await resolve_one(
+            plan.moment(), body.things, context, [call]
+        )
+        remember(sid, request, result)
+        timings = {"core_s": round(time.perf_counter() - t_start, 3)}
+        timings["total_s"] = timings["core_s"]
+        say = "Sorry, something went wrong." if error else say_for(result, [call])
+        tr = trace.Trace()
+        tr.add(trace.step_row(body.index, plan.steps))
+        tr.add(*trace.core_rows([call], result, error, timings["core_s"], again=body.index > 0))
+        log.info("step %d of %d: %s -> %s", body.index + 1, plan.steps, call["name"],
+                 error or (result or {}).get("status"))  # fmt: skip
+        return {"index": body.index, "steps": plan.steps, "result": result, "error": error,
+                "notes": notes, "say": say, "trace": tr.to_list(), "timings": timings}  # fmt: skip
+
+    @app.post("/api/replan")
+    async def replan(
+        request: Request,
+        response: Response,
+        body: ReplanBody,
+        x_nebius_key: Annotated[str | None, Header()] = None,
+        sid: Annotated[str | None, Cookie()] = None,
+    ) -> dict[str, Any]:
+        """A step could not be done: give Nemotron the plan, the step that failed and the
+        arm's own reason, and take a new plan for the rest (job 2 of section 1).
+
+        One re-plan per command, so a model that keeps failing cannot run away. The words are
+        the ones the person actually said: nothing is put in their mouth."""
+        t_start = time.perf_counter()
+        sid = visitor(response, sid)
+        addr = address(request)
+        own = (x_nebius_key or "").strip() or None
+        x_nebius_key = None
+        if own is not None and len(own) > MAX_KEY_CHARS:
+            raise HTTPException(400, "that key is too long")
+        plan = plans.get(sid)
+        if plan is None:
+            raise HTTPException(409, "no plan is running (it may have expired)")
+        if plan.replans >= MAX_REPLANS:
+            raise HTTPException(409, "already re-planned once for this command")
+        texts = plan.texts()
+        context = Context(plan=call_lines(plan.calls), failed_step=body.index,
+                          failed_why=body.why)  # fmt: skip
+        res, mode, why, key_refused, agent_s = await ask_model(sid, addr, own, texts, context)
+        own = None
+        calls = [c.to_dict() for c in res.calls]
+        timings = {"agent_s": round(agent_s, 3)}
+        result = error = None
+        notes: list[str] = []
+        say = res.refusal
+        if calls:
+            t = time.perf_counter()
+            moment = plan.moment()
+            req, result, error, notes = await resolve_one(
+                moment, body.things, body.context or plan.context, calls[:1]
+            )
+            remember(sid, req, result)
+            timings["core_s"] = round(time.perf_counter() - t, 3)
+            if not say:
+                say = "Sorry, something went wrong." if error else say_for(result, calls[:1])
+            plans.put(sid, OpenPlan(plan.words, plan.samples, plan.holds, calls,
+                                    body.context or plan.context, plan.replans + 1))  # fmt: skip
+        else:
+            plans.drop(sid)
+        timings["total_s"] = round(time.perf_counter() - t_start, 3)
+        log_command(plan.words, res, result, error, [f"re-plan after step {body.index + 1}"],
+                    f"{mode} key" if mode != "simple" else f"simple: {why}")  # fmt: skip
+        word_rules = shadow(texts, context, calls)
+        tr = trace.Trace()
+        tr.add(trace.Row("arm", "page", f"step {body.index + 1} failed: {body.why}", kind="note"))
+        model_trace(tr, texts, body.things, res, timings["agent_s"], word_rules)
+        tr.add(trace.step_row(0, len(calls)))
+        tr.add(*trace.core_rows(calls[:1], result, error, timings.get("core_s")))
+        record.write("replan", sid, said=" ".join(texts), step=body.index, why=body.why[:120],
+                     source=res.source, model=res.model, calls=calls, steps=len(calls),
+                     refusal=res.refusal, timings=timings, usage=res.usage)  # fmt: skip
+        return {
+            "words": plan.words,
+            "agent": res.summary(),
+            "plan": {"calls": calls, "steps": len(calls)},
+            "result": result,
+            "error": error,
+            "notes": notes,
+            "say": say,
+            "trace": tr.to_list(),
+            "timings": timings,
+            "limits": limits_now(sid, addr, mode, why),
+            "key_refused": key_refused,
+        }
 
     if settings.web_dist.is_dir():
         app.mount("/", StaticFiles(directory=settings.web_dist, html=True), name="page")

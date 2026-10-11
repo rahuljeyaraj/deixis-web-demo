@@ -6,8 +6,8 @@
   right first time when its first guess was accepted with "yes" (said, Go or Enter), with no
   correction, cancel or question in between. Counted per visitor, in order. Every command
   that asked for a move counts in N, including one that wasn't understood, one the robot
-  answered with a question, and one it refused (out of reach); yes, no, stop, "a bit left"
-  and "go home" are answers, not new commands.
+  answered with a question, and one it refused (out of reach); yes, no, stop, "a bit left",
+  "go home", undo and a declined off-topic question are answers, not new commands.
 - **M31, last word to the guess** (spoken commands only): from the end of the last word to
   the guess on screen, as the page measured it (`preview` events, `latency_s`).
 - **M29, arm move time** (a cross-check of the stopwatch): from "yes" (the `go` event) to
@@ -26,7 +26,10 @@ import statistics
 from collections import defaultdict
 from pathlib import Path
 
-ANSWERS = {"confirm", "cancel", "stop", "adjust", "home", "ask_user"}
+# Calls that are a reply to the person, not a new command that asked for a move: they do
+# not count in M30's N. `decline` is an off-topic question answered in one line;
+# `undo` puts the last block back.
+ANSWERS = {"confirm", "cancel", "stop", "adjust", "home", "undo", "ask_user", "decline"}
 
 
 def load(path: Path, since: str | None = None) -> list[dict]:

@@ -8,7 +8,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { CoreResponse, Thing } from '../src/core';
-import { Flow, type FlowView, SAY, askLine, guessLine } from '../src/flow/flow';
+import {
+  type EventData,
+  Flow,
+  type FlowEvent,
+  type FlowView,
+  type Plan,
+  SAY,
+  askLine,
+  guessLine,
+} from '../src/flow/flow';
+import { type PlanLine, planLine } from '../src/ui/plan';
 import { blockedBy, distanceToBlock, footprint, thingsFor } from '../src/flow/things';
 import { Arm, BLOCK_IDS, type BlockId, type BlockState } from '../src/sim/arm';
 import { nodeScene } from './scene';
@@ -25,15 +35,27 @@ const FIXTURE = JSON.parse(
 class Recorder implements FlowView {
   said: string[] = [];
   glowing: BlockId[] = [];
-  ghostOf: BlockId | null = null;
+  ghostsOf: BlockId[] = [];
+  plans: (PlanLine | null)[] = [];
+  events: { kind: FlowEvent; data?: EventData }[] = [];
   speak(text: string) {
     this.said.push(text);
   }
   glow(ids: BlockId[]) {
     this.glowing = ids;
   }
-  ghost(block: BlockId | null) {
-    this.ghostOf = block;
+  ghosts(items: { block: BlockId }[]) {
+    this.ghostsOf = items.map((g) => g.block);
+  }
+  plan(plan: Plan | null) {
+    this.plans.push(plan ? planLine(plan) : null);
+  }
+  event(kind: FlowEvent, data?: EventData) {
+    this.events.push({ kind, data });
+  }
+  /** The one ghost block shown, when exactly one is (as it was before plans). */
+  get ghostOf(): BlockId | null {
+    return this.ghostsOf.length === 1 ? this.ghostsOf[0] : null;
   }
 }
 

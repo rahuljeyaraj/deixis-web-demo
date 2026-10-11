@@ -8,8 +8,11 @@ import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import type { HeardWord } from '../src/api';
 import type { CoreResponse } from '../src/core';
+import type { Plan, PlanStep, StepState } from '../src/flow/flow';
 import { callLine, coreJson, costLine, pickLine, timingsLine, understoodBy } from '../src/ui/details';
+import { MARK, planLine } from '../src/ui/plan';
 import { layoutWords, stripModel } from '../src/ui/strip';
+import { LANES, lanePercent, laneOf, rowShape, timeLabel } from '../src/ui/wiring';
 
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'replies.json'), 'utf8')) as {
   scenes: Record<string, { kind: string; reply?: { result: CoreResponse | null } }[]>;
@@ -116,5 +119,66 @@ describe('the details panel', () => {
     };
     expect(costLine(agent, 0.00043842)).toBe('7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price');
     expect(costLine({ ...agent, usage: {} }, 0)).toBeNull();
+  });
+});
+
+describe('the live wiring panel (advanced-commands-plan.md 5.1)', () => {
+  test('the lanes are the ones the server names, left to right', () => {
+    expect(LANES.map((l) => l.id)).toEqual(['you', 'mediapipe', 'parakeet', 'page', 'nemotron', 'core', 'arm']);
+    expect(laneOf('nemotron')).toBe(4);
+    expect(laneOf('core')).toBe(5);
+    // Nemotron's lane sits between the page's and the core's, as the learn diagrams have it.
+    expect(lanePercent(0)).toBeCloseTo(100 / 14);
+    expect(lanePercent(6)).toBeCloseTo(1300 / 14);
+  });
+
+  test('a row knows which way its arrow points, and what it cost', () => {
+    const asked = rowShape({ from: 'page', to: 'nemotron', say: 'your words + the table', detail: { a: 1 } });
+    expect([asked.left, asked.right, asked.rightwards, asked.single]).toEqual([3, 4, true, false]);
+    expect(asked.opens).toBe(true);
+    const back = rowShape({ from: 'nemotron', to: 'page', say: 'a plan: 3 tool calls', ms: 613 });
+    expect([back.rightwards, back.time]).toEqual([false, '0.61 s']);
+    // The word matcher's grey row is a part talking to itself: a dot, not an arrow.
+    const shadow = rowShape({ from: 'page', to: 'page', say: 'the simple word matcher', kind: 'shadow' });
+    expect([shadow.single, shadow.kind, shadow.opens]).toEqual([true, 'shadow', false]);
+  });
+
+  test('only the rows that cost something show a time', () => {
+    expect(timeLabel(undefined)).toBe('');
+    expect(timeLabel(0.4)).toBe('');
+    expect(timeLabel(12)).toBe('12 ms');
+    expect(timeLabel(99.6)).toBe('100 ms');
+    expect(timeLabel(1904)).toBe('1.90 s');
+  });
+});
+
+describe('the plan strip (advanced-commands-plan.md 5.2)', () => {
+  const step = (label: string, state: StepState, why?: string): PlanStep => ({
+    call: { name: 'move', args: {} }, label, resolved: null, live: false, move: null, state, why,
+  }); // prettier-ignore
+
+  test('each step lights as it runs', () => {
+    const plan: Plan = {
+      steps: [step('red onto blue', 'done'), step('green onto red', 'doing'), step('go home', 'todo')],
+      replanned: false,
+    };
+    const line = planLine(plan);
+    expect(line.title).toBe('Nemotron’s plan:');
+    expect(line.steps.map((s) => `${s.text} ${s.mark}`)).toEqual([
+      '1 red onto blue ✓',
+      '2 green onto red ●',
+      '3 go home ○',
+    ]);
+  });
+
+  test('a step that could not be done, and the plan that came instead', () => {
+    const plan: Plan = {
+      steps: [step('blue onto green', 'failed', "There's already a block on that one.")],
+      replanned: true,
+    };
+    const line = planLine(plan);
+    expect(line.title).toBe('Nemotron re-planned:');
+    expect(line.steps[0].mark).toBe(MARK.failed);
+    expect(line.steps[0].why).toContain('already a block');
   });
 });

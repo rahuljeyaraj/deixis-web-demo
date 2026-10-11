@@ -47,6 +47,14 @@
         {"name": "place", "type": "place", "want": "box", "size_from": "object", "required": true}
       ]
     },
-    {"name": "home", "description": "Go back to the home pose."}
+    {"name": "home", "description": "Go back to the home pose."},
+    {
+      "name": "undo",
+      "description": "Put the block that moved last back where it was."
+    },
+    {
+      "name": "decline",
+      "description": "Say that this arm only moves the blocks on this table. Use it for anything else: questions about the world, chit-chat, and jobs this arm cannot do (throwing, pouring, drawing)."
+    }
   ]
 }

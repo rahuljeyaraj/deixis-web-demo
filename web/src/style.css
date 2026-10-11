@@ -13,6 +13,14 @@
   --guess: #1e88e5;
   --blue: #1d4ed8;
   --hold: #ffb000;
+  /* One colour per part of the demo, the same as the learn diagrams (learn/images/06-models.png):
+     at a glance, red decided and green measured. */
+  --you: #c47f00;
+  --local: #1e88e5;
+  --page: #4b5563;
+  --nemotron: #d32f2f;
+  --core: #157f45;
+  --arm: #7b3fa0;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
@@ -73,8 +81,9 @@ button.big:disabled { opacity: 0.5; cursor: default; }
 #start .small a { white-space: nowrap; }
 .small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 /* While the start card shows, only the scene and the footer: no buttons or panels yet. */
-#stage.starting ~ #controls, #stage.starting ~ #strip, #stage.starting ~ #details,
-#app:has(#stage.starting) #chips { display: none; }
+#stage.starting ~ #controls, #stage.starting ~ #strip,
+#app:has(#stage.starting) #details, #app:has(#stage.starting) #wiring,
+#app:has(#stage.starting) #chips, #app:has(#stage.starting) #plan-strip { display: none; }
 
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
 #controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -131,6 +140,93 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 #strip-svg .link { fill: none; stroke: var(--edge); stroke-width: 1.5; }
 #strip.busy .note { animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.45; } }
+
+/* Nemotron's plan (advanced-commands-plan.md 5.2): one line above the scene, each step
+   lighting as it runs. A step that could not be done turns amber. */
+/* It takes the room the "Try saying" hints had, so the scene never changes size mid-command
+   and the thinking strip stays on screen on a 1366 x 768 laptop (web demo item 5). */
+#app:has(#plan-strip:not([hidden])) #chips { display: none; }
+#plan-strip { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;
+  padding: 6px 12px; border: 1.5px solid #f0c3c3; border-radius: 10px; background: #fdf3f3;
+  font-size: 14.5px; }
+#plan-strip[hidden] { display: none; }
+#plan-strip > b { color: var(--nemotron); }
+.plan-step { padding: 3px 10px; border: 1.5px solid var(--line); border-radius: 8px;
+  background: white; color: var(--muted); white-space: nowrap; }
+.plan-step.doing { border-color: var(--blue); color: var(--ink); font-weight: 600; }
+.plan-step.done { border-color: #86c9a8; color: var(--ink); }
+.plan-step.failed { border-color: #e0a43a; background: #fff4dc; color: #6b3d00; font-weight: 600; }
+
+/* The live wiring panel (advanced-commands-plan.md 5.1): always open, filling in row by row.
+   Above 1200 px it sits beside the scene; below, under it; under 900 px it folds away. */
+#work { display: grid; gap: 12px; }
+#wiring { padding: 8px 14px 6px; border: 1px solid var(--line); border-radius: 12px;
+  background: white; min-width: 0; }
+.wiring-top { display: flex; gap: 10px; align-items: baseline; }
+#wiring h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+#wiring .link { font-size: 13.5px; }
+#wiring-replay { margin-left: auto; }
+.wiring-fold { display: none; }
+/* Seven names over a narrow panel collide, so they sit on two lines, every other one lower
+   (a sequence diagram's trick). The full name and where it runs are in each one's tooltip. */
+.wiring-head { display: flex; gap: 8px; align-items: flex-end; height: 30px; margin-top: 4px; }
+.wiring-lanes { position: relative; flex: 0 0 52%; height: 100%; }
+.wiring-lane { position: absolute; top: 1px; transform: translateX(-50%); font-size: 10px;
+  font-weight: 700; white-space: nowrap; color: var(--page); }
+.wiring-lane:nth-child(even) { top: 15px; }
+.wiring-lane[data-lane="you"] { color: var(--you); }
+.wiring-lane[data-lane="mediapipe"], .wiring-lane[data-lane="parakeet"] { color: var(--local); }
+.wiring-lane[data-lane="nemotron"] { color: var(--nemotron); }
+.wiring-lane[data-lane="core"] { color: var(--core); }
+.wiring-lane[data-lane="arm"] { color: var(--arm); }
+.wiring-what { flex: 1; align-self: flex-end; font-size: 10.5px; font-weight: 700;
+  color: var(--muted); }
+.wiring-rows { margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto;
+  border-top: 1px solid var(--line); }
+.wiring-rows:empty { border-top: 0; }
+.wiring-row { display: flex; gap: 8px; align-items: center; padding: 1px 0; font-size: 13.5px;
+  color: var(--page); }
+.wiring-row[data-from="you"] { color: var(--you); }
+.wiring-row[data-from="mediapipe"], .wiring-row[data-from="parakeet"] { color: var(--local); }
+.wiring-row[data-from="nemotron"] { color: var(--nemotron); }
+.wiring-row[data-from="core"] { color: var(--core); }
+.wiring-row[data-from="arm"] { color: var(--arm); }
+.wiring-track { position: relative; flex: 0 0 52%; height: 22px; }
+.wiring-rail { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid var(--line); }
+.wiring-arrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.wiring-arrow line { stroke: currentColor; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
+.wiring-arrow polygon, .wiring-arrow rect { fill: currentColor; }
+.wiring-say { flex: 1; min-width: 0; color: var(--ink); }
+.wiring-time { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--muted); }
+.wiring-open { padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px;
+  background: #f3f4f6; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
+.wiring-row pre { flex: 1 0 100%; margin: 2px 0 6px; padding: 6px 10px; max-height: 220px;
+  overflow: auto; background: #f3f4f6; border-radius: 8px; font-size: 11.5px; line-height: 1.35;
+  color: var(--ink); }
+.wiring-row[hidden] { display: none; }
+/* The grey shadow row: what the simple word matcher alone made of the same words. */
+.wiring-row[data-kind="shadow"] { color: #9aa3b2; }
+.wiring-row[data-kind="shadow"] .wiring-say { color: #6b7280; font-style: italic; }
+/* A step marker between the steps of one plan, so the loop is a shape, not a list. */
+.wiring-row[data-kind="step"] { border-top: 1px dashed var(--line); margin-top: 2px; }
+.wiring-row[data-kind="step"] .wiring-say { font-size: 11.5px; font-weight: 700; color: var(--muted);
+  letter-spacing: 0.06em; text-transform: uppercase; }
+.wiring-row[data-kind="note"] .wiring-say { font-weight: 600; }
+.wiring-hint { margin: 6px 2px; font-size: 13px; color: var(--muted); }
+.wiring-rows:not(:empty) ~ .wiring-hint { display: none; }
+#wiring.replaying .wiring-rows { border-color: var(--blue); }
+
+@media (min-width: 1200px) {
+  #app { max-width: 1680px; }
+  #work { grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); align-items: start; }
+  .wiring-rows { max-height: calc(100vh - 230px); }
+}
+@media (max-width: 899px) {
+  .wiring-fold { display: inline; margin-left: auto; }
+  #wiring-replay { margin-left: 0; }
+  #wiring:not(.open) .wiring-head, #wiring:not(.open) .wiring-rows,
+  #wiring:not(.open) .wiring-hint, #wiring:not(.open) #wiring-replay { display: none; }
+}
 
 /* Details (plan 5.2), collapsed. */
 details { border: 1px solid var(--line); border-radius: 12px; background: white; }

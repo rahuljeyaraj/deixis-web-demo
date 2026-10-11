@@ -1,9 +1,16 @@
 """The arm's agent (plan 6.4): what the person said, as the arm's tool calls.
 
-The tools are the profile's actions (move, home) plus the core's standard ones (adjust,
-confirm, cancel, stop, ask_user), as the core describes them (`tools_for_agent`, over MCP).
-Objects and places are references to the words ("that" is word 1), never coordinates: the
-core finds them.
+The tools are the profile's actions (move, home, undo, decline) plus the core's standard ones
+(adjust, confirm, cancel, stop, ask_user), as the core describes them (`tools_for_agent`, over
+MCP). Objects and places are references to the words ("that" is word 1), never coordinates:
+the core finds them.
+
+One command may need several steps ("stack them all up", "swap the red and the blue"), so the
+model answers with a **plan**: up to `MAX_STEPS` calls in the order the arm should do them,
+from one model call (advanced-commands-plan.md section 6). The page runs them one at a time
+and has the core measure the table again between steps, so step 2 is planned against the table
+as it is then. A longer plan is refused out loud rather than attempted badly: the literature
+is clear that reliability falls away and hallucinations pile up over long plans.
 
 `ArmAgent` asks Nemotron 3.5 Lightning on Nebius Token Factory for every command, "yes" and
 "stop" included (one call per command, one retry with the validation errors): the model is
@@ -30,11 +37,21 @@ from typing import Any, Literal
 
 from deixis.actions import Call, CallError, check_call, parse_call
 from deixis.profile import Profile
-from deixis.refs import norm_word
+from deixis.refs import EmptySpace, NamedPlace, norm_word
 
 log = logging.getLogger("webdemo.agent")
 
 DEFAULT_MODEL = "nvidia/Nemotron-3_5-Lightning"
+
+#: The longest plan the arm will attempt (open decision D5: 4).
+MAX_STEPS = 4
+#: Actions that are an answer to the person, not a step of a plan: they only ever come alone.
+ALONE = frozenset({"confirm", "cancel", "stop", "undo", "ask_user", "decline"})
+
+TOO_MANY = "That's more steps than I can plan at once. Ask me for up to four."
+NOT_FOLLOWED = "Sorry, I didn't follow that. Try one thing at a time."
+#: What the arm says to anything that isn't about moving these blocks (the `decline` action).
+DECLINED = "I only move the blocks on this table."
 
 
 class AgentUnavailable(RuntimeError):
@@ -55,6 +72,11 @@ class Context:
     # there are any, the agent is given the `pick` tool so the model answers the question
     # itself instead of the server reading the words (rahul, 11 Oct).
     choices: list[str] = field(default_factory=list)
+    # A re-plan (`/api/replan`): the plan that was running, as the model wrote it, which step
+    # the arm could not do, and the arm's own reason. The model gets one go at a new plan.
+    plan: list[str] = field(default_factory=list)
+    failed_step: int | None = None
+    failed_why: str = ""
 
     def lines(self) -> list[str]:
         out = []
@@ -64,6 +86,14 @@ class Context:
             out.append(f'The robot asked: "{self.question}"')
         if self.choices:
             out.append("Choices: " + "; ".join(f"{i}: {c}" for i, c in enumerate(self.choices)))
+        if self.plan and self.failed_step is not None:
+            out.append("You planned these steps for this same command:")
+            out += [f"  {i + 1}. {c}" for i, c in enumerate(self.plan)]
+            out.append(
+                f'Step {self.failed_step + 1} could not be done: "{self.failed_why}" '
+                "The steps before it were done; the table has moved on. Plan the rest again "
+                "from where the arm is now, another way."
+            )
         return out
 
 
@@ -81,12 +111,19 @@ class AgentResult:
     asked_model: bool = False  # Nemotron was asked (it costs, even when it failed)
     key_refused: bool = False  # Token Factory refused the key
     pick: Pick | None = None  # how the model answered an open question (the `pick` tool)
+    # The plan was refused as a whole (too long, or an answer mixed into a plan): what the
+    # robot says instead of acting. The rule parser is not asked to have a go at these.
+    refusal: str | None = None
     # Token Factory's counts over all attempts: prompt, cached (part of prompt), completion
     usage: dict[str, int] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
         return bool(self.calls) or self.pick is not None
+
+    @property
+    def steps(self) -> int:
+        return len(self.calls)
 
     def summary(self) -> dict[str, Any]:
         return {
@@ -96,6 +133,7 @@ class AgentResult:
             "calls": [c.to_dict() for c in self.calls],
             "raw": self.raw,
             "errors": self.errors,
+            "refusal": self.refusal,
             "attempts": self.attempts,
             "usage": self.usage,
         }
@@ -103,11 +141,17 @@ class AgentResult:
 
 SYSTEM = """You turn what a person says to a small robot arm into the arm's tool calls.
 The arm stands at a table with three 30 mm blocks (people also say boxes or cubes): red,
-green and blue. The person points at blocks and spots on the table with a finger (or
-a mouse) while talking.
+green and blue. Three flat coloured squares are painted on the arm's mat: the red square,
+the green square and the blue square. A square cannot be picked up; it is a place to put a
+block in. The person points at blocks and spots on the table with a finger (or a mouse)
+while talking.
 
 Rules:
 - Reply only with tool calls. Never reply with plain text.
+- One sentence often needs several steps ("stack them all up", "put each one on its own
+  colour"). Give one tool call per step, in the order the arm should do them, at most 4.
+  The arm has one gripper, so it carries one block at a time, and a block with another block
+  on top of it cannot be picked up until the top one has been moved.
 - Never write coordinates or sizes. Blocks and places are references to the person's words:
   {"deixis": "that", "word_index": N}, where N is that word's number in the Words list.
 - word_index must point at a pointing word itself - one of here, there, this, that, these,
@@ -116,9 +160,23 @@ Rules:
 - The object: a pointed block {"deixis": "that", "word_index": N}; a block by colour
   {"label": "blue one"}; "it" (the block just moved) {"last": true}.
 - The place: a pointed spot {"deixis": "here", "word_index": N}; where they pointed with no
-  word for it {"pointed": true}; next to, on, left of, right of, behind or in front of a
-  block {"relation": "next_to", "target": <object>}; between two blocks
+  word for it {"pointed": true}; next to, on, left of, right of, behind, in front of or
+  inside a block or a square {"relation": "next_to", "target": <object>}; between two blocks
   {"relation": "between", "target": <object>, "target2": <object>}.
+- A square is named like a block: {"label": "red square"}. "in the red square" is
+  {"relation": "inside", "target": {"label": "red square"}}.
+- A square holds one block in the middle. A second block into the same square goes beside the
+  one that is already there: {"relation": "next_to", "target": <that block>}.
+- The arm reaches a ring around itself only, so there is no place name it can trust: never
+  write {"named": ...} and never {"empty_space": true}. A free spot is always beside
+  something: {"relation": "next_to", "target": <another block>}.
+- A spot a block has just been moved away from stays in the scene as {"label": "the spot it
+  left"} until something is put there. That is how one block goes where another one was, so
+  a swap takes three steps: park the first block beside the third one, put the second block
+  in the spot it left, then put the first block in the spot the second one left.
+- "a bit left" about the block being previewed is adjust(dx=-1). But "move them all a bit to
+  the left" is one move per block, each to {"relation": "left_of", "target": <that same
+  block>}: a step of a plan is always a move.
 - If they said which block but no word for the place ("move this box", "put this"), they
   pointed at the spot without naming it: the place is {"pointed": true}. Never invent a
   pointing word that is not in the Words list.
@@ -133,9 +191,14 @@ Rules:
 - "put that here", "move this there" -> move(object=..., place=...).
 - "yes", "ok", "go", "do it" -> confirm(). "no", "cancel", "never mind" -> cancel().
 - "stop", "halt", "wait", "freeze" -> stop(). "go home", "go back", "rest" -> home().
-- "a bit left" -> adjust(dx=-1); "a bit right" -> adjust(dx=1); "further away" -> adjust(dy=1);
-  "closer" -> adjust(dy=-1); "a lot" means 3 steps.
-- If you really cannot tell what they want, call ask_user with one short question.
+- "undo", "put that back where it was" -> undo().
+- confirm, cancel, stop, undo, ask_user and decline are never part of a longer plan: send one
+  of them on its own. home may end a plan.
+- Anything that is not about moving these blocks - a question about the world, chit-chat, or
+  a job this arm cannot do (throw it, pour it, draw) - is decline(). Never hand the person
+  their own question back with ask_user, and never answer it.
+- Use ask_user only when a real command about the blocks is too vague to act on, and then ask
+  one short question of your own.
 
 Examples:
 Words: 0:put 1:that 2:here
@@ -170,6 +233,46 @@ confirm({})
 
 Words: 0:go 1:home
 home({})
+
+Words: 0:undo 1:that
+undo({})
+
+Words: 0:put 1:that 2:one 3:here 4:and 5:that 6:one 7:there
+move({"object": {"deixis": "that", "word_index": 1}, "place": {"deixis": "here", "word_index": 3}})
+move({"object": {"deixis": "that", "word_index": 5}, "place": {"deixis": "there", "word_index": 7}})
+
+Words: 0:put 1:the 2:red 3:one 4:on 5:the 6:blue 7:one 8:then 9:go 10:home
+move({"object": {"label": "red one"}, "place": {"relation": "on", "target": {"label": "blue one"}}})
+home({})
+
+Words: 0:stack 1:them 2:all 3:up
+move({"object": {"label": "green one"}, "place": {"relation": "on", "target": {"label": "red one"}}})
+move({"object": {"label": "blue one"}, "place": {"relation": "on", "target": {"label": "green one"}}})
+
+Words: 0:swap 1:the 2:red 3:and 4:the 5:blue
+move({"object": {"label": "red one"}, "place": {"relation": "next_to", "target": {"label": "green one"}}})
+move({"object": {"label": "blue one"}, "place": {"relation": "inside", "target": {"label": "the spot it left"}}})
+move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "the spot it left"}}})
+
+Words: 0:put 1:each 2:block 3:on 4:its 5:own 6:colour
+move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})
+move({"object": {"label": "green one"}, "place": {"relation": "inside", "target": {"label": "green square"}}})
+move({"object": {"label": "blue one"}, "place": {"relation": "inside", "target": {"label": "blue square"}}})
+
+Words: 0:everything 1:except 2:the 3:blue 4:one 5:goes 6:in 7:the 8:red 9:square
+move({"object": {"label": "red one"}, "place": {"relation": "inside", "target": {"label": "red square"}}})
+move({"object": {"label": "green one"}, "place": {"relation": "next_to", "target": {"label": "red one"}}})
+
+Words: 0:move 1:them 2:all 3:a 4:bit 5:to 6:the 7:left
+move({"object": {"label": "red one"}, "place": {"relation": "left_of", "target": {"label": "red one"}}})
+move({"object": {"label": "green one"}, "place": {"relation": "left_of", "target": {"label": "green one"}}})
+move({"object": {"label": "blue one"}, "place": {"relation": "left_of", "target": {"label": "blue one"}}})
+
+Words: 0:what 1:is 2:the 3:capital 4:of 5:france
+decline({})
+
+Words: 0:pick 1:it 2:up 3:and 4:throw 5:it
+decline({})
 
 The robot asked: "The red one or the green one?"
 Choices: 0: the red one; 1: the green one
@@ -306,6 +409,7 @@ def user_message(words: Sequence[str], context: Context | None = None) -> str:
 
 STOP = {"stop", "halt", "freeze", "wait", "pause"}
 HOME = {"home", "rest"}
+UNDO = {"undo"}
 YES = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "correct", "go", "do"}
 NO = {"no", "nope", "cancel", "nevermind"}
 MOVE = {"put", "move", "place", "stack", "set", "take", "bring", "drop", "pick"}
@@ -388,6 +492,9 @@ def parse(words: Sequence[str], context: Context | None = None) -> list[dict[str
         return []
     if s & STOP:
         return [{"name": "stop", "args": {}}]
+    # "undo", "put that back where it was": one word, so the word matcher can have it too.
+    if s & UNDO or ("back" in s and "was" in s):
+        return [{"name": "undo", "args": {}}]
     if s & HOME or (s & {"go", "come"} and "back" in s and not s & MOVE):
         return [{"name": "home", "args": {}}]
     verb = next((i for i, w in enumerate(ws) if w in MOVE), None)
@@ -426,6 +533,37 @@ def parse(words: Sequence[str], context: Context | None = None) -> list[dict[str
     return []
 
 
+def out_of_reach(call: Call) -> str | None:
+    """A place this arm can never use, however well the core resolves it: a named region of
+    the work area ("the top left corner") or the largest empty space. Both are worked out in
+    the core's 500 x 250 mm rectangle, while the arm reaches a half ring inside it (L2), so
+    they land off the mat and the page then says "I can't reach there". Robot-side knowledge,
+    not a core limit: the message goes back for the retry."""
+    place = call.ref("place") if call.name == "move" else None
+    if isinstance(place, NamedPlace):
+        what = f'"{place.named}" is a place name'
+    elif isinstance(place, EmptySpace):
+        what = "empty space is worked out over the whole table"
+    else:
+        return None
+    return (
+        f"place: {what}, and the arm reaches a ring around itself only, so it would be out "
+        'of reach. Use a pointed spot, or {"relation": "next_to", "target": <a block>}'
+    )
+
+
+def plan_problems(calls: Sequence[Call]) -> list[str]:
+    """What is wrong with the plan as a whole, rather than with any one call: too many steps,
+    or an answer to the person (yes, stop, undo) mixed into a plan of moves."""
+    out: list[str] = []
+    if len(calls) > MAX_STEPS:
+        out.append(f"{len(calls)} steps is too many: plan at most {MAX_STEPS}")
+    alone = [c.name for c in calls if c.name in ALONE]
+    if len(calls) > 1 and alone:
+        out.append(f"{alone[0]} is never a step of a plan: send it on its own")
+    return out
+
+
 def validate(
     profile: Profile, raw: Sequence[dict[str, Any]], words: Sequence[str]
 ) -> tuple[list[Call], list[str]]:
@@ -439,6 +577,9 @@ def validate(
             errors.append(str(e))
             continue
         problems = check_call(call, list(words))
+        unreachable = out_of_reach(call)
+        if unreachable:
+            problems = [*problems, unreachable]
         if problems:
             errors += problems
         else:
@@ -594,12 +735,20 @@ class ArmAgent:
                 take_pick(raw, choices, words) if choices else (raw, None, "")
             )
             calls, errors = validate(self.profile, rest, words)
+            whole = plan_problems(calls)
+            errors += whole
             if bad_pick:
                 errors = [bad_pick, *errors]
             if not raw:
                 errors = ["no tool call; reply only with tool calls (use ask_user to talk)"]
             result.errors += errors
             result.calls = calls
+            # A plan that is wrong as a whole is refused out loud, not trimmed to fit and not
+            # handed to the word matcher: the person is told, and can ask for less.
+            result.refusal = None
+            if whole:
+                result.calls = []
+                result.refusal = TOO_MANY if len(calls) > MAX_STEPS else NOT_FOLLOWED
             if not errors:
                 break
             if attempt < self.max_retries:
@@ -635,7 +784,9 @@ class ArmAgent:
             try:
                 res = self.run(words, key, context, shared)
                 res.asked_model = True
-                if res.ok:
+                # A refusal is the model's answer too: the rule parser never gets a second
+                # go at a plan that was too long.
+                if res.ok or res.refusal:
                     return res
                 why = "; ".join(res.errors)
             except AgentUnavailable as e:

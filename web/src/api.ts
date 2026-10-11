@@ -66,16 +66,39 @@ export interface Limits {
   own_key_helps: boolean;
 }
 
+/** One row of the wiring panel (`server/webdemo/trace.py`). */
+export interface TraceRow {
+  from: string;
+  to: string;
+  say: string;
+  detail?: unknown;
+  ms?: number;
+  kind?: string;
+}
+
+/**
+ * The plan the model answered with: up to four tool calls, in the order the arm should do
+ * them. Only the first is resolved in the reply; the page asks for each later one with
+ * `/api/step` just before it runs it.
+ */
+export interface PlanReply {
+  calls: { name: string; args: Record<string, unknown> }[];
+  steps: number;
+}
+
 export interface CommandReply {
   words: HeardWord[];
   word_rules?: WordRules;
   /** This command's tokens at Token Factory's list price, US$. */
   cost_usd?: number;
   agent: AgentSummary;
+  plan?: PlanReply | null;
   result: CoreResponse | null;
   error: string | null;
   /** What the robot says out loud (a question, "didn't get that"), if the server decided. */
   say: string | null;
+  /** What each part said to the next, for the wiring panel. */
+  trace?: TraceRow[];
   timings: Timings;
   limits: Limits;
   /** The visitor's own key was refused by Nebius (the page forgets it). */
@@ -86,6 +109,18 @@ export interface AnswerReply {
   result: CoreResponse | null;
   error: string | null;
   say: string | null;
+  timings: Timings;
+  trace?: TraceRow[];
+}
+
+/** `POST /api/step`: one step of the running plan, measured against the table as it is now. */
+export interface StepReply {
+  index: number;
+  steps: number;
+  result: CoreResponse | null;
+  error: string | null;
+  say: string | null;
+  trace?: TraceRow[];
   timings: Timings;
 }
 
@@ -191,6 +226,9 @@ export interface PageEvent {
   why?: string;
   latency_s?: number;
   block?: string;
+  /** Which step of a plan this was about, and how many there were. */
+  step?: number;
+  steps?: number;
 }
 
 /** What happened on the page (the guess shown, yes, done...), for the server's log only.
@@ -211,5 +249,34 @@ export async function sendAnswer(candidate: number): Promise<AnswerReply> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ candidate }),
     }),
+  );
+}
+
+const JSON_POST = { method: 'POST', headers: { 'Content-Type': 'application/json' } };
+
+/**
+ * One step of the plan the last command set off, measured now. `things` is the table as the
+ * page sees it at this moment: that is the point of asking again rather than resolving the
+ * whole plan up front.
+ */
+export async function sendStep(
+  index: number,
+  things: Thing[],
+  context: Record<string, unknown>,
+): Promise<StepReply> {
+  return check(await reach('/api/step', { ...JSON_POST, body: JSON.stringify({ index, things, context }) }));
+}
+
+/** A step could not be done: Nemotron is told which and why, and plans the rest again. */
+export async function sendReplan(
+  index: number,
+  why: string,
+  things: Thing[],
+  context: Record<string, unknown>,
+  key?: string | null,
+): Promise<CommandReply> {
+  const headers = { ...JSON_POST.headers, ...(key ? { 'X-Nebius-Key': key } : {}) };
+  return check(
+    await reach('/api/replan', { ...JSON_POST, headers, body: JSON.stringify({ index, why, things, context }) }),
   );
 }

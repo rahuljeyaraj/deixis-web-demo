@@ -25,6 +25,11 @@
         <button type="button" class="chip">a bit left</button>
         <button type="button" class="chip">yes</button>
       </div>
+      <div id="work">
+      <div id="scene-col">
+      <!-- Nemotron's plan (advanced-commands-plan.md 5.2), while a plan of several steps
+           is previewed or runs. One step says itself, out loud. -->
+      <div id="plan-strip" role="status" aria-live="polite" hidden></div>
       <div id="stage" class="starting">
         <!-- The robot's speech bubble, over the scene: no empty space while it is quiet (rahul, 5 Oct). -->
         <div id="bubble" aria-live="polite"></div>
@@ -74,6 +79,26 @@
         <h2>What the robot heard and saw</h2>
         <svg id="strip-svg" role="img" aria-label="Your words and your pointing on one timeline"></svg>
       </section>
+      </div>
+
+      <!-- The live wiring panel (advanced-commands-plan.md 5.1): what each part of the demo
+           said to the next, filling in as the command runs. Always open on a laptop; folded
+           away under 900 px, where there is no room for it (open decision D4). -->
+      <section id="wiring" aria-label="What each part said to the next">
+        <div class="wiring-top">
+          <h2>What each part said to the next</h2>
+          <button id="wiring-fold" class="link wiring-fold" type="button">Show</button>
+          <button id="wiring-replay" class="link" type="button" title="Step through this command again, about one message a second">Replay</button>
+        </div>
+        <div class="wiring-head">
+          <span class="wiring-lanes"></span>
+          <span class="wiring-what">what it said</span>
+        </div>
+        <ol class="wiring-rows"></ol>
+        <p class="wiring-hint">Say or type a command: every message between the parts shows up here as it happens. Plain words on the row, the real JSON on the button.</p>
+      </section>
+      </div>
+
       <details id="details">
         <summary>Details: the tool calls, the core’s answer, the timings</summary>
         <div id="details-body"><p>Nothing yet. Say or type a command first.</p></div>

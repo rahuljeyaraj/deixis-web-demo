@@ -32,6 +32,29 @@ export const REACH_MM = { min: 140, max: 280 } as const;
 /** The blocks are cubes of this size. */
 export const BLOCK_MM = 30;
 
+/** The painted squares are this big (advanced-commands-plan.md 3.1). */
+export const SQUARE_MM = 70;
+
+/**
+ * Three flat coloured squares painted on the reach mat: somewhere to put a block that is not
+ * another block ("put each one on its own colour", "everything in the blue square"), and the
+ * first use of the core's `inside` relation.
+ *
+ * They are painted, not objects: no physics, no weld, nothing to grip. They sit 210 mm from
+ * the arm's base, so every corner is between 161 and 259 mm from it - well inside the pick
+ * and place ring (REACH_MM) - and 100 mm of bare mat is left between them.
+ */
+export const SQUARES = [
+  { id: 'red-square', color: 'red', xMm: 79.3, yMm: 127.7 },
+  { id: 'green-square', color: 'green', xMm: 250, yMm: 40 },
+  { id: 'blue-square', color: 'blue', xMm: 420.7, yMm: 127.7 },
+] as const;
+
+export type Square = (typeof SQUARES)[number];
+
+/** How far a block's centre must stay from a square's centre to be clear of it. */
+export const CLEAR_OF_SQUARE_MM = (SQUARE_MM + BLOCK_MM) / 2 + 5;
+
 export type Vec2 = [number, number];
 export type Vec3 = [number, number, number];
 

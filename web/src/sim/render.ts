@@ -5,7 +5,7 @@
 
 import * as THREE from 'three';
 import type { MjData, MjModel, Mujoco } from './mujoco';
-import { AREA_MM, BASE_MM, REACH_MM, tableToWorld } from './table';
+import { AREA_MM, BASE_MM, REACH_MM, SQUARES, SQUARE_MM, tableToWorld } from './table';
 
 const VISIBLE_GROUPS = new Set([0, 1, 2]); // 3 and 4 are the arm's collision shapes
 
@@ -61,7 +61,8 @@ export class TableView {
   private readonly geoms: { id: number; obj: THREE.Object3D }[] = [];
   private readonly meshOfGeom = new Map<number, THREE.Mesh>();
   private readonly tableGeom: number;
-  private readonly ghost: THREE.Mesh;
+  /** One ghost block per step of a plan; made as they are needed. */
+  private readonly ghosts: THREE.Mesh[] = [];
 
   constructor(
     readonly canvas: HTMLCanvasElement | null,
@@ -80,7 +81,7 @@ export class TableView {
     this.addLights();
     this.addGeoms(mj);
     this.addMat();
-    this.ghost = this.makeGhost();
+    this.addSquares();
   }
 
   private static makeRenderer(canvas: HTMLCanvasElement, transparent: boolean): THREE.WebGLRenderer {
@@ -159,14 +160,25 @@ export class TableView {
    * point, or hide it.
    */
   showGhost(at: [number, number, number] | null, colorOfGeom?: number): void {
-    this.ghost.visible = at !== null;
-    if (!at) return;
-    this.ghost.position.set(at[0], at[1], at[2]);
-    const src = colorOfGeom === undefined ? null : this.meshOfGeom.get(colorOfGeom);
-    const color = src ? (src.material as THREE.MeshStandardMaterial).color : new THREE.Color(0xffffff);
-    const mats = this.ghost.material as THREE.MeshBasicMaterial;
-    mats.color.copy(color);
-    (this.ghost.children[0] as THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>).material.color.copy(color);
+    this.showGhosts(at ? [{ at, geom: colorOfGeom }] : []);
+  }
+
+  /**
+   * Show one ghost block per step of a plan, each in its block's colour: what the table will
+   * look like when the whole plan has run. Exactly these, and no others.
+   */
+  showGhosts(items: { at: [number, number, number]; geom?: number }[]): void {
+    while (this.ghosts.length < items.length) this.ghosts.push(this.makeGhost());
+    this.ghosts.forEach((ghost, i) => {
+      const item = items[i];
+      ghost.visible = item !== undefined;
+      if (!item) return;
+      ghost.position.set(item.at[0], item.at[1], item.at[2]);
+      const src = item.geom === undefined ? null : this.meshOfGeom.get(item.geom);
+      const color = src ? (src.material as THREE.MeshStandardMaterial).color : new THREE.Color(0xffffff);
+      (ghost.material as THREE.MeshBasicMaterial).color.copy(color);
+      (ghost.children[0] as THREE.LineSegments<THREE.EdgesGeometry, THREE.LineBasicMaterial>).material.color.copy(color);
+    });
   }
 
   private makeGhost(): THREE.Mesh {
@@ -334,4 +346,37 @@ export class TableView {
     mat.receiveShadow = true;
     this.scene.add(mat);
   }
+
+  /**
+   * The three painted squares (advanced-commands-plan.md 3.1): flat colour on the mat with a
+   * thin dark edge, drawn only. They are paint, not objects - no body, no physics, nothing to
+   * grip - so they are not in the simulation and a finger pointing at one goes through to the
+   * table under it. The colours are the blocks' own, softened, so a block standing on its
+   * square still stands out.
+   */
+  private addSquares(): void {
+    const half = SQUARE_MM / 2000;
+    const edge = 0.0015;
+    for (const s of SQUARES) {
+      const [X, Y] = tableToWorld(s.xMm, s.yMm);
+      const layer = (size: number, color: number, z: number) => {
+        const m = new THREE.Mesh(
+          new THREE.PlaneGeometry(size, size),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95 }),
+        );
+        m.position.set(X, Y, z);
+        m.raycast = () => {}; // pointing goes to the table, not the paint
+        this.scene.add(m);
+      };
+      layer(2 * (half + edge), LOOK.edge, 0.0005);
+      layer(2 * half, PAINT[s.color], 0.0006);
+    }
+  }
 }
+
+/** The painted squares' colours: each block's colour, mixed half into the mat's. */
+const PAINT: Record<string, number> = {
+  red: 0xe09a95,
+  green: 0x9ccfa4,
+  blue: 0x9bb0e2,
+};

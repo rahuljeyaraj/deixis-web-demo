@@ -22,14 +22,46 @@ CENTRES = {"red": (180.0, 100.0), "green": (225.0, 100.0), "blue": (300.0, 90.0)
 HERE = (330.0, 50.0)  # an empty spot on the mat, 213 mm from the arm's base
 
 
-def block(name: str, t: float) -> dict:
-    """A block as the page sends it (plan 6.2): footprint, height, colour."""
-    cx, cy = CENTRES[name]
+def block(name: str, t: float, centre: tuple[float, float] | None = None, z: float = 0) -> dict:
+    """A block as the page sends it (plan 6.2): footprint, height, colour.
+
+    `one` is in the attributes because "the red one" now names two things, the block and the
+    red square: the core takes an exact match over a word-by-word one, so an exact "red one"
+    on the block keeps the demo's oldest phrase meaning the block (web/src/flow/things.ts)."""
+    cx, cy = centre or CENTRES[name]
     return {"id": name, "label": f"{name} block", "box_mm": [cx - 15, cy - 15, 30, 30],
-            "height_mm": 30, "attrs": {"color": name, "also": "box cube"}, "t": t}  # fmt: skip
+            "height_mm": 30 + z, "t": t,
+            "attrs": {"color": name, "one": f"{name} one", "also": "box cube"}}  # fmt: skip
 
 
 BLOCKS = [block(n, t) for t, n in enumerate(CENTRES, start=1)]
+
+# The three painted squares (advanced-commands-plan.md 3.1), as the page reports them
+# (web/src/sim/table.ts, web/src/flow/things.ts). Flat, and never selectable: a square is a
+# place to put a block in, not a thing to pick up. `test_plan.py` checks these numbers still
+# match the page's.
+SQUARE_MM = 70.0
+SQUARES = {"red": (79.3, 127.7), "green": (250.0, 40.0), "blue": (420.7, 127.7)}
+
+
+def square(colour: str) -> dict:
+    cx, cy = SQUARES[colour]
+    h = SQUARE_MM / 2
+    return {"id": f"{colour}-square", "label": f"{colour} square", "height_mm": 0, "t": 0,
+            "box_mm": [cx - h, cy - h, SQUARE_MM, SQUARE_MM], "selectable": False,
+            "attrs": {"also": "patch area zone"}}  # fmt: skip
+
+
+PAINT = [square(c) for c in SQUARES]
+#: The whole table as the page now sends it: the blocks and the paint.
+SCENE = [*BLOCKS, *PAINT]
+
+
+def spot(x: float, y: float, t: float = 9.0) -> dict:
+    """The spot a block was moved away from, as the page reports it while a plan runs."""
+    return {"id": "left-spot", "label": "the spot it left", "height_mm": 0, "t": t,
+            "box_mm": [x - 15, y - 15, 30, 30], "selectable": False,
+            "attrs": {"also": "gap"}}  # fmt: skip
 
 
 def words(*timed: tuple[str, float]) -> list[dict]:
