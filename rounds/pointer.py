@@ -23,12 +23,33 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol, runtime_checkable
 
-from rounds.scene import Thing
+
+@runtime_checkable
+class Thing(Protocol):
+    """Anything a point can land on: it needs an id and a place, nothing else.
+
+    A protocol rather than a class so there is exactly one cone in the codebase. The end
+    demo's shelf (`end_demo/scene.py`) has twelve things and two arms and this module knows
+    nothing about either; it still weighs them, and the page shows the numbers it produced
+    rather than its own copy of this arithmetic.
+    """
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def pos(self) -> tuple[float, float, float]: ...
+
 
 #: Pointing error, standard deviation in degrees, on each of the two angles.
 SIGMA_DEG = 3.0
+#: The narrowest cone the maths will use. See `weigh`: it keeps a zero pointing error from
+#: dividing by zero, and it is far below any aim a person or a sensor actually has.
+MIN_SIGMA_DEG = 0.01
 #: Things further off the ray than this are not candidates at all.
 CONE_DEG = 9.0
 #: The core's rule: if the best two are closer than this in likelihood, ask (resolver.py).
@@ -98,17 +119,25 @@ def ray(across: float, up: float) -> tuple[float, float, float]:
 
 def weigh(
     pointed: tuple[float, float],
-    things: list[Thing],
+    things: Sequence[Thing],
     sigma_deg: float = SIGMA_DEG,
     cone_deg: float = CONE_DEG,
 ) -> Cone:
-    """Every thing inside the cone, with how much of the cone it holds."""
+    """Every thing inside the cone, with how much of the cone it holds.
+
+    A pointing error of zero is a legitimate thing to ask for - a mouse click, a laser, or
+    a test that wants to be about a rule rather than about a wobble - so the width is
+    floored rather than special-cased. The floor is far below any real aim, and it gives
+    exactly the limiting behaviour: the thing on the ray takes the whole cone and a
+    neighbour 5.7 degrees away takes none of it.
+    """
     direction = ray(*pointed)
+    width = max(sigma_deg, MIN_SIGMA_DEG)
     raw: list[tuple[str, float, float]] = []
     for t in things:
         off = separation_deg(direction, t.pos)
         if off <= cone_deg:
-            raw.append((t.id, off, math.exp(-(off**2) / (2 * sigma_deg**2))))
+            raw.append((t.id, off, math.exp(-(off**2) / (2 * width**2))))
     total = sum(w for _, _, w in raw) or 1.0
     cands = [Candidate(i, round(off, 2), w / total) for i, off, w in raw]
     cands.sort(key=lambda c: -c.weight)
@@ -117,7 +146,7 @@ def weigh(
 
 def point_at(
     target: Thing,
-    things: list[Thing],
+    things: Sequence[Thing],
     rng: random.Random,
     sigma_deg: float = SIGMA_DEG,
     cone_deg: float = CONE_DEG,

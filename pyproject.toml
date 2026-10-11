@@ -47,7 +47,7 @@ deixis = { path = "../deixis", editable = true }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["server", "tests"]
+pythonpath = ["server", "tests", "."]
 addopts = "--import-mode=importlib -m 'not network'"
 markers = [
     "network: needs internet access, model downloads or API keys",
@@ -56,10 +56,10 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-src = ["server", "tests", "scripts"]
+src = ["server", "tests", "scripts", "."]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["deixis", "webdemo"]
+known-first-party = ["deixis", "webdemo", "rounds", "end_demo"]
