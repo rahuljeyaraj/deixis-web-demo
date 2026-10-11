@@ -45,19 +45,19 @@ below. These are simulator numbers; a real arm's error would be larger.
 The hosted demo is for the hackathon judges: its address is given only to them. Nemotron runs
 on our Nebius key, with a safety limit in case the address leaks: **2,000 commands a day** in
 all (about $1), and 500 a day from one network, so one person can't use up everyone's day.
-No judge should reach either. Past them, a **simple word matcher** answers instead, and a
-banner says so. It knows the demo's phrases ("put that here", "put the blue one next to
-that", "a bit left", "yes") but not free wording. A visitor can paste their own Nebius key to
-keep using Nemotron. One command can be sent every 1.5 s; the page waits by itself.
+No judge should reach either. Past them **nothing answers**: the robot says so and the page
+offers the box for a visitor's own Nebius key, which skips the daily caps. There is no
+stand-in. A simple word matcher used to answer in Nemotron's place; it was taken out on
+11 Oct 2026, because a demo whose claim is "the model decides" must not quietly be answered
+by a word list. One command can be sent every 1.5 s; the page waits by itself.
 
 The counts live in the server's memory: they start again at midnight UTC and when the server
 restarts. A network is a scrambled form of the visitor's address, never logged.
 
 Within those limits Nemotron answers **every** command, "yes", "stop" and the answer to the
-robot's own question included: nothing is decided by matching words behind the model's back.
-The word matcher still runs beside it on every command, but only so the details panel can
-show what it alone would have made of the same words. The one thing the model is never asked
-to judge is where a finger pointed: when an answer is only pointed at ("this one"), the model
+robot's own question included: nothing is decided by matching words behind the model's back,
+and nothing else on the server understands a person at all. The one thing the model is never
+asked to judge is where a finger pointed: when an answer is only pointed at ("this one"), the model
 says so and the core works out which block, because the words genuinely do not carry it.
 
 ## L6. A plan is four steps at most, and one re-plan

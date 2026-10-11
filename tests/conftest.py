@@ -7,8 +7,11 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from tests import wordrules
 
 from deixis.mcp import DeixisClient
+from webdemo.agent import AgentResult, ArmAgent, Context
 from webdemo.app import create_app
 from webdemo.settings import ROOT, Settings
 from webdemo.speech import PARAKEET, Speech
@@ -58,9 +61,29 @@ def api(settings, core, speech) -> Iterator[TestClient]:
         yield c
 
 
+def _by_rules(agent: ArmAgent):
+    """Nemotron's seat, filled by `tests/wordrules.py`. The key is ignored and nothing leaves
+    this process. It replaces the method on this one agent, never on the class: other tests
+    in the same run build their own app with a fake model and must still get it."""
+
+    def understand(words, key, context: Context | None = None, no_key_why: str = "",
+                   shared: bool = False) -> AgentResult:  # fmt: skip
+        return wordrules.rules(agent.profile, words, context)
+
+    return understand
+
+
 @pytest.fixture
-def rules_api(settings, core, speech) -> Iterator[TestClient]:
-    """The app with the rule parser instead of Nemotron (no key, no network)."""
-    settings.ai = "rules"
-    with TestClient(create_app(settings, client=core, speech=speech)) as c:
+def rules_api(settings, core, speech, monkeypatch) -> Iterator[TestClient]:
+    """The app with a stand-in for Nemotron: a small word parser that gets the simple
+    commands right, so the server's own plumbing - the limits, the flow, the pointing, the
+    plan loop - can be tested without a key, a network or a bill.
+
+    The demo has no such fallback. The word matcher was taken out of the server on 11 Oct
+    2026 (rahul): nothing but the model may answer a person, or appear in the diagram. What
+    is left is this double, which the server cannot reach by itself."""
+    settings.nebius_api_key = SecretStr("not-a-real-key")
+    app = create_app(settings, client=core, speech=speech)
+    with TestClient(app) as c:  # the agent is built when the app starts
+        monkeypatch.setattr(app.state.agent, "understand", _by_rules(app.state.agent))
         yield c

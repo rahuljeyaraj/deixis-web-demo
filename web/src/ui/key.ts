@@ -1,6 +1,6 @@
 /**
  * The visitor's own Nebius key (plan 8.2) and the day's limits on ours (8.1): the footer's
- * "Use your own Nebius key" panel, the simple-mode banner, and the note on the models list.
+ * "Use your own Nebius key" panel, the banner when Nemotron is off, and the models list's note.
  *
  * The key lives only in this module's memory: not in `localStorage`, not in the page (the box
  * is emptied on Save), gone when the tab closes. It goes to our server with each command, in
@@ -40,8 +40,8 @@ export function limitsShown(l: Limits | null, hasKey: boolean): LimitsShown {
   if (hasKey) return { banner: null, offerKey: false, off: null, left: 'Your own key answers your commands now.' };
   if (!l) return { banner: null, offerKey: false, off: null, left: '' };
   const left =
-    l.mode === 'simple'
-      ? 'Our key can’t answer you right now, so the simple word matcher does.'
+    l.mode === 'off'
+      ? 'Our key can’t answer you right now. With your own, the robot understands you again.'
       : `Our key: ${l.left_today} of ${l.per_day} commands left for you today.`;
   return { banner: l.banner, offerKey: l.own_key_helps, off: l.off, left };
 }
@@ -112,7 +112,7 @@ export class KeyPanel {
       this.forget('That key didn’t work, so I forgot it. Check it and paste it again.', true);
       return r.limits.mode === 'ours'
         ? 'Your key didn’t work, so our key answered this time.'
-        : 'Your key didn’t work, so the simple word matcher answered.';
+        : 'Your key didn’t work, and our key can’t answer you right now.';
     }
     if (key && r.limits.mode === 'own' && r.agent.source === 'nemotron') this.tell('Your key works.');
     this.render();

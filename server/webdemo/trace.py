@@ -20,10 +20,11 @@ from typing import Any
 LANES = ("you", "mediapipe", "parakeet", "page", "nemotron", "core", "arm")
 
 #: Row kinds that are not a message from one lane to another.
-#: - "shadow": what the simple word matcher alone would have made of the same words.
-#: - "step":   a marker between the steps of one plan.
-#: - "note":   something the page or the server decided, with no second lane.
-KINDS = ("shadow", "step", "note")
+#: - "step": a marker between the steps of one plan.
+#: - "note": something the page or the server decided, with no second lane.
+#: (There was a third, "shadow": what a word matcher would have made of the same words. The
+#: word matcher is gone, and with it the row - rahul, 11 Oct.)
+KINDS = ("step", "note")
 
 
 @dataclass
@@ -140,15 +141,20 @@ def _where_phrase(where: dict[str, Any]) -> str:
 
 
 def measured(result: dict[str, Any]) -> str:
-    """What the core answered, in plain words."""
+    """What the core answered, in plain words.
+
+    A move comes back as two places - the thing and the spot - so they are joined by an arrow
+    rather than a semicolon: "green block at (2, 186) mm -> (337, 95) mm, 30 mm up" says which
+    is which, where "a; b" left the reader to guess.
+    """
     if result.get("status") == "ask":
         return f"it asks: {result['ask']['question']}"
     out: list[str] = []
     for c in result.get("calls") or []:
-        for value in (c.get("args") or {}).values():
-            if isinstance(value, dict) and value.get("frame"):
-                out.append(_where_phrase(value))
-    return "; ".join(out) or "nothing to measure"
+        args = c.get("args") or {}
+        here = [_where_phrase(v) for v in args.values() if isinstance(v, dict) and v.get("frame")]
+        out.append(" → ".join(here) if len(here) == 2 else "; ".join(here))
+    return "; ".join(p for p in out if p) or "nothing to measure"
 
 
 # ---------------------------------------------------------------- the rows
@@ -217,31 +223,39 @@ def model_rows(words: Sequence[str], things: Sequence[dict[str, Any]],
     return rows
 
 
-def shadow_row(word_rules: dict[str, Any], drove: bool) -> Row:
-    """The grey row: what the simple word matcher alone made of the very same words. It never
-    drives the arm unless Nemotron could not be asked at all (`drove`)."""
-    made = word_rules["words"] if word_rules["understood"] else "not understood"
-    same = " (the same as Nemotron)" if word_rules.get("same") and not drove else ""
-    who = "the simple word matcher answered instead" if drove else "the simple word matcher"
-    return Row("page", "page", f"{who}, same words: {_quote(made)}{same}",
-               detail={"calls": word_rules["calls"]}, kind="shadow")  # fmt: skip
-
-
 def step_row(index: int, steps: int) -> Row | None:
-    """The marker between the steps of a plan (none when there is only one step)."""
+    """The marker between the steps of a plan (none when there is only one step).
+
+    The page draws these itself, as each step starts (`stepRow` in `web/src/flow/flow.ts`):
+    that is the moment the step really begins, and it covers the steps the server never sees
+    because they needed no measuring again. Kept here for the shape, and for the tests.
+    """
     if steps < 2:
         return None
     return Row("page", "page", f"step {index + 1} of {steps}", kind="step")
 
 
+#: What a measurement is for, said on the row. The whole plan is measured once against the
+#: table as it *will* be, to draw it; then every step again, for real, before the arm moves.
+#: Kept short on purpose: a prefix long enough to wrap the row pushes the words themselves
+#: onto a second line, and the row stops being scannable.
+PHASES = {
+    "show": "to draw the plan: ",
+    "again": "again, for real: ",
+}
+
+
 def core_rows(calls: Sequence[dict[str, Any]], result: dict[str, Any] | None, error: str | None,
-              core_s: float | None, again: bool = False) -> list[Row]:  # fmt: skip
-    """The page asking the core where, and the core's answer. `again`: this step is being
-    measured again, just before it runs, against the table as it is now."""
+              core_s: float | None, phase: str | None = None) -> list[Row]:  # fmt: skip
+    """The page asking the core where, and the core's answer.
+
+    `phase` says why this measurement is happening - see `PHASES`. Without it the row is the
+    plain question, which is what the first step of a command is.
+    """
     if not calls:
         return []
     ask = asked_for(calls)
-    rows = [Row("page", "core", ("measure again: " if again else "") + ask,
+    rows = [Row("page", "core", PHASES.get(phase or "", "") + ask,
                 detail={"calls": list(calls)})]  # fmt: skip
     if error:
         rows.append(Row("core", "page", f"it refused the request: {error}", ms=_ms(core_s)))

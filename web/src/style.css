@@ -81,9 +81,9 @@ button.big:disabled { opacity: 0.5; cursor: default; }
 #start .small a { white-space: nowrap; }
 .small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
 /* While the start card shows, only the scene and the footer: no buttons or panels yet. */
-#stage.starting ~ #controls, #stage.starting ~ #strip,
-#app:has(#stage.starting) #details, #app:has(#stage.starting) #wiring,
-#app:has(#stage.starting) #chips, #app:has(#stage.starting) #plan-strip { display: none; }
+#stage.starting ~ #controls, #app:has(#stage.starting) #wiring,
+#app:has(#stage.starting) #chips, #app:has(#stage.starting) #plan-strip,
+#app:has(#stage.starting) #see-inside { display: none; }
 
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
 #controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -123,11 +123,9 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 #stage[data-flow="preview"] ~ #controls #go-btn { border-color: var(--blue); background: var(--blue);
   color: white; font-weight: 600; }
 
-/* The thinking strip (plan 5.2). */
-#strip { margin-top: 10px; padding: 6px 14px 2px; border: 1px solid var(--line); border-radius: 12px;
-  background: white; }
-#strip h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
-#strip-svg { display: block; width: 100%; height: 84px; overflow: visible; }
+/* The thinking strip (plan 5.2): inside the wiring panel (rahul, 11 Oct), so it has no box
+   of its own - it is part 1 of what happened, and the messages are part 2. */
+#strip-svg { display: block; width: 100%; max-width: 940px; height: 84px; overflow: visible; }
 #strip-svg .row-label { font-size: 12px; fill: var(--muted); }
 #strip-svg .note { font-size: 15px; fill: var(--muted); }
 #strip-svg .word { font-size: 16px; fill: var(--ink); }
@@ -143,9 +141,6 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 
 /* Nemotron's plan (advanced-commands-plan.md 5.2): one line above the scene, each step
    lighting as it runs. A step that could not be done turns amber. */
-/* It takes the room the "Try saying" hints had, so the scene never changes size mid-command
-   and the thinking strip stays on screen on a 1366 x 768 laptop (web demo item 5). */
-#app:has(#plan-strip:not([hidden])) #chips { display: none; }
 #plan-strip { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;
   padding: 6px 12px; border: 1.5px solid #f0c3c3; border-radius: 10px; background: #fdf3f3;
   font-size: 14.5px; }
@@ -157,92 +152,144 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 .plan-step.done { border-color: #86c9a8; color: var(--ink); }
 .plan-step.failed { border-color: #e0a43a; background: #fff4dc; color: #6b3d00; font-weight: 600; }
 
-/* The live wiring panel (advanced-commands-plan.md 5.1): always open, filling in row by row.
-   Above 1200 px it sits beside the scene; below, under it; under 900 px it folds away. */
+/* The live wiring panel (advanced-commands-plan.md 5.1): under the scene, the full width of
+   the page, never folded away. It is the one place a judge sees every part talking to every
+   other, so it is built to be *read*: seven named columns that say where each part runs, one
+   numbered row per message, the words starting at the same place on every row, and the real
+   JSON a button away.
+   It sat beside the scene until 11 Oct, where seven lanes in a 460 px column left the names
+   on two crushed lines ("it is all crushed together and it is very difficult to read"). Full
+   width fits them on one line each, with room for what they are. */
 #work { display: grid; gap: 12px; }
-#wiring { padding: 8px 14px 6px; border: 1px solid var(--line); border-radius: 12px;
-  background: white; min-width: 0; }
+/* One set of columns for the lane heads and every row, so the words line up down the panel:
+   the row number, the lanes, what was said, how long it took, the JSON button. */
+#wiring { --cols: 22px 46% 1fr 58px 46px; padding: 10px 16px 10px; border: 1px solid var(--line);
+  border-radius: 12px; background: white; min-width: 0; }
 .wiring-top { display: flex; gap: 10px; align-items: baseline; }
-#wiring h2 { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); }
+#wiring h2 { margin: 0; font-size: 16.5px; font-weight: 700; color: var(--ink); }
+#wiring h3 { display: flex; gap: 7px; align-items: center; margin: 12px 0 2px; font-size: 13.5px;
+  font-weight: 600; color: var(--muted); }
+.step-no { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: #e8ebf1; color: var(--page); font-size: 11px; font-weight: 700; }
 #wiring .link { font-size: 13.5px; }
 #wiring-replay { margin-left: auto; }
-.wiring-fold { display: none; }
-/* Seven names over a narrow panel collide, so they sit on two lines, every other one lower
-   (a sequence diagram's trick). The full name and where it runs are in each one's tooltip. */
-.wiring-head { display: flex; gap: 8px; align-items: flex-end; height: 30px; margin-top: 4px; }
-.wiring-lanes { position: relative; flex: 0 0 52%; height: 100%; }
-.wiring-lane { position: absolute; top: 1px; transform: translateX(-50%); font-size: 10px;
-  font-weight: 700; white-space: nowrap; color: var(--page); }
-.wiring-lane:nth-child(even) { top: 15px; }
+
+/* How to read the diagram, in one sentence, in the parts' own colours. */
+.wiring-key { margin: 4px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.wiring-key b[data-lane="you"] { color: var(--you); }
+.wiring-key b[data-lane="parakeet"] { color: var(--local); }
+.wiring-key b[data-lane="nemotron"] { color: var(--nemotron); }
+.wiring-key b[data-lane="core"] { color: var(--core); }
+.wiring-key b[data-lane="arm"] { color: var(--arm); }
+.key-json { padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; background: #f3f4f6;
+  font-size: 11px; color: var(--muted); }
+
+/* The seven lanes, named, with where each one runs under it. */
+.wiring-head { position: sticky; top: 0; z-index: 2; display: grid;
+  grid-template-columns: var(--cols); column-gap: 10px; align-items: end; margin-top: 4px;
+  padding-bottom: 2px; background: white; }
+.wiring-lanes { grid-column: 2; position: relative; height: 32px; }
+.wiring-lane { position: absolute; bottom: 1px; width: 14%; transform: translateX(-50%);
+  text-align: center; font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--page); }
+.wiring-lane small { display: block; font-size: 9.5px; font-weight: 400; color: var(--muted); }
 .wiring-lane[data-lane="you"] { color: var(--you); }
 .wiring-lane[data-lane="mediapipe"], .wiring-lane[data-lane="parakeet"] { color: var(--local); }
 .wiring-lane[data-lane="nemotron"] { color: var(--nemotron); }
 .wiring-lane[data-lane="core"] { color: var(--core); }
 .wiring-lane[data-lane="arm"] { color: var(--arm); }
-.wiring-what { flex: 1; align-self: flex-end; font-size: 10.5px; font-weight: 700;
-  color: var(--muted); }
-.wiring-rows { margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto;
+.wiring-what { grid-column: 3; align-self: end; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; color: #9aa3b2; }
+
+/* The rows. They grow the panel rather than scrolling inside it: a scroll box inside a page
+   that already scrolls hides the end of the story. */
+.wiring-rows { margin: 4px 0 0; padding: 0; list-style: none; counter-reset: msg;
   border-top: 1px solid var(--line); }
 .wiring-rows:empty { border-top: 0; }
-.wiring-row { display: flex; gap: 8px; align-items: center; padding: 1px 0; font-size: 13.5px;
-  color: var(--page); }
+.wiring-row { display: grid; grid-template-columns: var(--cols); column-gap: 10px;
+  align-items: center; padding: 3px 0; font-size: 14px; color: var(--page);
+  border-bottom: 1px solid #f2f4f8; }
+.wiring-row::before { grid-column: 1; counter-increment: msg; content: counter(msg);
+  text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: #aeb6c2; }
 .wiring-row[data-from="you"] { color: var(--you); }
 .wiring-row[data-from="mediapipe"], .wiring-row[data-from="parakeet"] { color: var(--local); }
 .wiring-row[data-from="nemotron"] { color: var(--nemotron); }
 .wiring-row[data-from="core"] { color: var(--core); }
 .wiring-row[data-from="arm"] { color: var(--arm); }
-.wiring-track { position: relative; flex: 0 0 52%; height: 22px; }
-.wiring-rail { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid var(--line); }
-.wiring-arrow { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.wiring-arrow line { stroke: currentColor; stroke-width: 1.6; vector-effect: non-scaling-stroke; }
-.wiring-arrow polygon, .wiring-arrow rect { fill: currentColor; }
-.wiring-say { flex: 1; min-width: 0; color: var(--ink); }
-.wiring-time { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--muted); }
-.wiring-open { padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px;
+.wiring-track { grid-column: 2; position: relative; height: 24px; }
+.wiring-rail { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid #e4e8ef; }
+/* Each rail in a pale shade of its part's colour, so a column belongs to the name above it. */
+.wiring-rail[data-lane="you"] { border-left-color: #ebd09b; }
+.wiring-rail[data-lane="mediapipe"], .wiring-rail[data-lane="parakeet"] { border-left-color: #b3d2f2; }
+.wiring-rail[data-lane="nemotron"] { border-left-color: #efb6b6; }
+.wiring-rail[data-lane="core"] { border-left-color: #a8d9c0; }
+.wiring-rail[data-lane="arm"] { border-left-color: #d2bbe4; }
+/* The arrow: a dot where the message starts, a line, a head where it lands. Each piece keeps
+   its own size however wide the panel is (see `arrow()` in wiring.ts). */
+.wiring-arrow { position: absolute; inset: 0; }
+.wiring-line { position: absolute; top: 50%; height: 0; border-top: 2px solid currentColor; }
+.wiring-dot { position: absolute; top: 50%; width: 7px; height: 7px; margin: -4px 0 0 -3.5px;
+  border-radius: 50%; background: currentColor; }
+.wiring-tip { position: absolute; top: 50%; width: 0; height: 0; border: 5px solid transparent;
+  margin-top: -5px; }
+.wiring-tip[data-dir="right"] { border-left-color: currentColor; margin-left: -10px; }
+.wiring-tip[data-dir="left"] { border-right-color: currentColor; }
+.wiring-self { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px;
+  border-radius: 2px; background: currentColor; }
+.wiring-say { grid-column: 3; min-width: 0; color: var(--ink); }
+.wiring-time { grid-column: 4; text-align: right; font-variant-numeric: tabular-nums;
+  font-size: 12.5px; color: var(--muted); }
+.wiring-open { grid-column: 5; padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px;
   background: #f3f4f6; color: var(--muted); font: inherit; font-size: 11px; cursor: pointer; }
-.wiring-row pre { flex: 1 0 100%; margin: 2px 0 6px; padding: 6px 10px; max-height: 220px;
-  overflow: auto; background: #f3f4f6; border-radius: 8px; font-size: 11.5px; line-height: 1.35;
+.wiring-row pre { grid-column: 3 / -1; margin: 2px 0 6px; padding: 7px 10px; max-height: 260px;
+  overflow: auto; background: #f3f4f6; border-radius: 8px; font-size: 11.5px; line-height: 1.4;
   color: var(--ink); }
 .wiring-row[hidden] { display: none; }
-/* The grey shadow row: what the simple word matcher alone made of the same words. */
-.wiring-row[data-kind="shadow"] { color: #9aa3b2; }
-.wiring-row[data-kind="shadow"] .wiring-say { color: #6b7280; font-style: italic; }
 /* A step marker between the steps of one plan, so the loop is a shape, not a list. */
-.wiring-row[data-kind="step"] { border-top: 1px dashed var(--line); margin-top: 2px; }
+.wiring-row[data-kind="step"] { background: #f7f8fb; }
 .wiring-row[data-kind="step"] .wiring-say { font-size: 11.5px; font-weight: 700; color: var(--muted);
   letter-spacing: 0.06em; text-transform: uppercase; }
 .wiring-row[data-kind="note"] .wiring-say { font-weight: 600; }
-.wiring-hint { margin: 6px 2px; font-size: 13px; color: var(--muted); }
+.wiring-hint { margin: 8px 2px 2px; font-size: 13px; color: var(--muted); }
 .wiring-rows:not(:empty) ~ .wiring-hint { display: none; }
+/* Who answered, how long it took and what it cost: the one line the details box was worth. */
+.wiring-foot { margin: 8px 2px 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.wiring-foot:empty { display: none; }
 #wiring.replaying .wiring-rows { border-color: var(--blue); }
 
-@media (min-width: 1200px) {
-  #app { max-width: 1680px; }
-  #work { grid-template-columns: minmax(0, 1fr) minmax(380px, 460px); align-items: start; }
-  .wiring-rows { max-height: calc(100vh - 230px); }
-}
+/* "Scroll down to see what each part said", after a command has finished (rahul, 11 Oct).
+   The page hides it again when the panel is already on screen. */
+#see-inside { display: block; margin: 10px auto 0; padding: 8px 20px; border: 1.5px solid var(--blue);
+  border-radius: 999px; background: #eaf2fd; color: var(--blue); font: inherit; font-size: 15px;
+  font-weight: 600; cursor: pointer; }
+#see-inside[hidden] { display: none; }
+#see-inside span { font-size: 17px; }
+
+/* Narrow (a small laptop window): the arrows get the width and the words sit under them. */
 @media (max-width: 899px) {
-  .wiring-fold { display: inline; margin-left: auto; }
-  #wiring-replay { margin-left: 0; }
-  #wiring:not(.open) .wiring-head, #wiring:not(.open) .wiring-rows,
-  #wiring:not(.open) .wiring-hint, #wiring:not(.open) #wiring-replay { display: none; }
+  #wiring { --cols: 22px 1fr 54px 44px; }
+  .wiring-head { grid-template-columns: 22px 1fr; }
+  .wiring-what { display: none; }
+  .wiring-lane { font-size: 10px; }
+  .wiring-lane small { display: none; }
+  .wiring-lane:nth-child(even) { bottom: 16px; }
+  .wiring-row::before { grid-row: 1 / 3; align-self: start; }
+  .wiring-track { grid-column: 2 / -1; grid-row: 1; }
+  .wiring-say { grid-column: 2; grid-row: 2; }
+  .wiring-time { grid-column: 3; grid-row: 2; }
+  .wiring-open { grid-column: 4; grid-row: 2; }
+  .wiring-row pre { grid-column: 2 / -1; grid-row: 3; }
 }
 
-/* Details (plan 5.2), collapsed. */
+/* The footer's panels (the models, your own key, privacy) are the only collapsed boxes left:
+   the details box went on 11 Oct, because the wiring panel says all of it, in order. */
 details { border: 1px solid var(--line); border-radius: 12px; background: white; }
 details > summary { padding: 9px 14px; cursor: pointer; font-size: 15px; color: var(--ink); }
 details[open] > summary { border-bottom: 1px solid var(--line); }
-#details { margin-top: 8px; }
-#details-body { padding: 4px 14px 10px; }
-#details-body h3 { margin: 10px 0 2px; font-size: 13px; color: var(--muted); font-weight: 600; }
-#details-body p { margin: 0; }
-#details-body pre { margin: 2px 0 0; padding: 8px 10px; max-height: 260px; overflow: auto;
-  background: #f3f4f6; border-radius: 8px; font-size: 12.5px; line-height: 1.35; }
-#details-body pre.small-pre { font-size: 11px; padding: 4px 8px; color: var(--muted); }
 
 /* Try saying (plan 5.2): a chip only shows the words; it doesn't run them. */
-#chips { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap;
+#chips { display: flex; flex-direction: column; gap: 5px; align-items: center;
   margin-bottom: 10px; }
+.chips-row { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; }
 .chips-label { font-weight: 600; font-size: 15px; margin-right: 2px; }
 .chip { padding: 4px 11px; border: 1.5px solid #8b91f0; border-radius: 9px; background: #eef0ff;
   color: var(--ink); font: inherit; font-size: 14.5px; cursor: pointer; }
@@ -260,7 +307,8 @@ footer details .off { color: #b45309; font-weight: 600; }
 #models-list .small { margin: 4px 16px 10px; }
 .foot-link { padding: 9px 4px; font-size: 15px; }
 
-/* Simple mode (plan 8.1): the word matcher answers instead of Nemotron. */
+/* When Nemotron cannot answer this visitor (plan 8.1): nothing answers in its place, so
+   the banner says what is missing and offers the box for their own key. */
 #banner { display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px;
   padding: 8px 14px; border: 1.5px solid #e0a43a; border-radius: 10px; background: #fff4dc;
   color: #6b3d00; font-size: 15px; }

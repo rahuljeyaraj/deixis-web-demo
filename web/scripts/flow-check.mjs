@@ -56,6 +56,7 @@ const browser = await chromium.launch({
     '--use-fake-ui-for-media-stream',
     `--use-file-for-fake-audio-capture=${micFile}`,
     '--autoplay-policy=no-user-gesture-required',
+    '--mute-audio', // with ?quiet below: the page never speaks out loud (rahul, 11 Oct)
   ],
 });
 const context = await browser.newContext({ viewport: { width: 1312, height: 940 } });
@@ -63,7 +64,7 @@ await context.grantPermissions(['microphone'], { origin: new URL(url).origin });
 const page = await context.newPage();
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
 page.on('console', (m) => m.type() === 'error' && console.log('console.error:', m.text().slice(0, 200)));
-await page.goto(url);
+await page.goto(url + '?quiet=1');
 await page.waitForFunction(() => window.__sim, null, { timeout: 30000 });
 
 // The blocks where the server tests have them; the spot is empty and on the mat.

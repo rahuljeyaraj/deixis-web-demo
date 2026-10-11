@@ -19,6 +19,7 @@ import re
 
 import pytest
 from pydantic import SecretStr
+from tests.wordrules import parse, rules
 
 from test_agent import FakeLLM, agent, click, post, that
 from test_arm_core import BLOCKS, CENTRES, HERE, PAINT, SCENE, SQUARE_MM, SQUARES, block, spot
@@ -28,9 +29,7 @@ from webdemo.agent import (
     NOT_FOLLOWED,
     SYSTEM,
     TOO_MANY,
-    parse,
     plan_problems,
-    rules,
     validate,
 )
 from webdemo.app import create_app
@@ -68,8 +67,10 @@ SWAP = [
 ]
 
 
-def step(api, index: int, things: list[dict], context: dict | None = None) -> dict:
-    r = api.post("/api/step", json={"index": index, "things": things, "context": context or {}})
+def step(api, index: int, things: list[dict], context: dict | None = None,
+         showing: bool = False) -> dict:  # fmt: skip
+    body = {"index": index, "things": things, "context": context or {}, "showing": showing}
+    r = api.post("/api/step", json=body)
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -330,12 +331,12 @@ def test_the_trace_says_what_each_part_said_to_the_next(settings, core):
         assert model["say"] == "a plan: 3 tool calls"
         assert model["detail"]["calls"][0]["name"] == "move"
         assert model["ms"] is not None
-        # The grey shadow row: the word matcher, on the same words, every time.
-        shadow = next(r for r in rows if r.get("kind") == "shadow")
-        assert "the simple word matcher, same words" in shadow["say"]
-        assert "not understood" in shadow["say"]
-        # A step marker, because this command is a plan.
-        assert next(r for r in rows if r.get("kind") == "step")["say"] == "step 1 of 3"
+        # No word matcher anywhere on the panel: the model is the only thing that decides.
+        assert not [r for r in rows if r.get("kind") == "shadow"]
+        assert not [r for r in rows if "matcher" in r["say"]]
+        # No step marker from the server: the page draws one as each step really starts, and
+        # this reply only measures the first step to show the plan.
+        assert not [r for r in rows if r.get("kind") == "step"]
         # And the core's row says, in words, what it measured.
         measured_row = next(r for r in rows if r["from"] == "core")
         assert "red block" in measured_row["say"]
@@ -343,8 +344,11 @@ def test_the_trace_says_what_each_part_said_to_the_next(settings, core):
         # Each later step brings its own rows, marked as a fresh measurement.
         later = step(c, 1, [*SCENE, spot(*CENTRES["red"])])
         says = [r["say"] for r in later["trace"]]
-        assert "step 2 of 3" in says
-        assert any(s.startswith("measure again:") for s in says)
+        assert any(s.startswith("again, for real:") for s in says)
+        # The same step, measured to draw the plan, says that is what it is for: the panel
+        # must not call a prediction a measurement.
+        shown = step(c, 1, [*SCENE, spot(*CENTRES["red"])], showing=True)
+        assert any(s.startswith("to draw the plan:") for s in [r["say"] for r in shown["trace"]])
 
 
 def test_one_command_one_step_has_no_step_markers(settings, core):
@@ -356,13 +360,16 @@ def test_one_command_one_step_has_no_step_markers(settings, core):
     assert next(r for r in body["trace"] if r["from"] == "nemotron")["say"] == "one tool call: move"
 
 
-def test_the_trace_says_when_nemotron_was_not_asked(rules_api):
-    body = post(rules_api, {"text": "put that here", "things": SCENE, "t": 12.0,
-                            "holds": [click(10, *CENTRES["red"]), click(11, *HERE)]})  # fmt: skip
+def test_the_trace_says_when_nemotron_was_not_asked(settings, core):
+    """Past the day's share, the panel says the model was not asked and why. Nothing
+    answers in its place and no second row appears (rahul, 11 Oct)."""
+    with app_with(settings, core, FakeLLM()) as c:
+        settings.nebius_api_key = None
+        body = post(c, {"text": "put that here", "things": SCENE, "t": 12.0,
+                        "holds": [click(10, *CENTRES["red"]), click(11, *HERE)]})  # fmt: skip
     back = next(r for r in body["trace"] if r["from"] == "nemotron")
     assert back["say"].startswith("not asked:")
-    shadow = next(r for r in body["trace"] if r.get("kind") == "shadow")
-    assert "answered instead" in shadow["say"]
+    assert body["agent"]["calls"] == []
 
 
 def test_the_trace_words_for_references_and_places():
@@ -373,6 +380,12 @@ def test_the_trace_words_for_references_and_places():
         "place": {"frame": "table", "mean_mm": [330.0, 50.4], "cov_mm2": [[16, 0], [0, 16]]},
     }}]}  # fmt: skip
     assert measured(result) == "(330, 50) mm ± 4 mm"
+    # A move's two places, the thing and the spot, with an arrow between: which is which.
+    both = {"status": "ok", "calls": [{"name": "move", "args": {
+        "object": {"frame": "table", "label": "green block", "mean_mm": [2.0, 186.0]},
+        "place": {"frame": "table", "mean_mm": [337.0, 95.0], "z_mm": 30.0},
+    }}]}  # fmt: skip
+    assert measured(both) == "green block at (2, 186) mm → (337, 95) mm, 30 mm up"
     ask = {"status": "ask", "ask": {"question": "The red one or the green one?"}}
     assert measured(ask) == "it asks: The red one or the green one?"
 

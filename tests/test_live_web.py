@@ -5,8 +5,8 @@
 Needs NEBIUS_API_KEY in .env. Every other app test answers with a fake model, so this is the
 one place that checks what the judges will see: the real key, the real core over MCP, and
 Nemotron deciding every command. The demo's promise is that the model decides every time
-(rahul, 8 Oct), so each command here must come back `source: "nemotron"`; a command answered
-by the word matcher fails the test and prints why the model didn't answer.
+(rahul, 8 Oct), and since 11 Oct nothing else can answer at all: a command that comes back
+without calls fails the test and prints why the model didn't answer.
 """
 
 from __future__ import annotations
@@ -32,7 +32,6 @@ def live_api(core, tmp_path_factory):
                  command_log=tmp_path_factory.mktemp("log") / "commands.jsonl")  # fmt: skip
     if not s.nebius_api_key:
         pytest.skip("NEBIUS_API_KEY is not set")
-    assert s.ai == "nemotron", "AI is turned off in .env (AI=rules)"
     with TestClient(create_app(s, client=core)) as c:
         yield c
 
@@ -147,15 +146,14 @@ def test_nudges(live_api, text, want):
         assert args[k] == v
 
 
-def test_a_phrase_the_word_matcher_misses(live_api):
-    """ "pop that one onto the red one": the word matcher has no "pop", so this only works
-    because Nemotron answered. The reply carries both, for the details panel (item 18)."""
+def test_a_phrase_no_word_list_would_catch(live_api):
+    """ "pop that one onto the red one": no list of verbs has "pop", and there is no list on
+    this server any more. It works because Nemotron read the sentence."""
     body = ask(live_api, "pop that one onto the red one", t=81.0,
                holds=[click(80, *CENTRES["blue"])])  # fmt: skip
     assert names(body) == ["move"]
     assert ok(body)["object"]["thing"] == "blue"
-    assert body["word_rules"]["understood"] is False
-    assert body["word_rules"]["same"] is False
+    assert "word_rules" not in body
 
 
 def test_nonsense_is_the_models_answer_not_a_guess(live_api):

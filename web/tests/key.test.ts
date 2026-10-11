@@ -20,10 +20,10 @@ const ours: Limits = {
 };
 const usedUp: Limits = {
   ...ours,
-  mode: 'simple',
+  mode: 'off',
   left_today: 0,
   why: 'total',
-  banner: 'Today’s AI budget is used up, so a simple word matcher is answering.',
+  banner: 'Today’s AI budget is used up. Add your own Nebius key to carry on.',
   off: 'off right now: today’s budget is used up',
   own_key_helps: true,
 };
@@ -58,7 +58,8 @@ describe('the banner and the models line', () => {
 
   test('simple mode: the banner, the offer of a key, the note on Nemotron', () => {
     const s = limitsShown(usedUp, false);
-    expect(s.banner).toContain('simple word matcher');
+    // Nothing answers in Nemotron's place, so the banner says what to do about it.
+    expect(s.banner).toContain('your own Nebius key');
     expect(s.offerKey).toBe(true);
     expect(s.off).toContain('used up');
   });
@@ -67,9 +68,10 @@ describe('the banner and the models line', () => {
     expect(limitsShown(usedUp, true)).toMatchObject({ banner: null, offerKey: false, off: null });
   });
 
-  test('when the server runs the word matcher only, a key would not help', () => {
-    const rules: Limits = { ...usedUp, why: 'rules', own_key_helps: false };
-    expect(limitsShown(rules, false).offerKey).toBe(false);
+  test('with no key at all on the server, their own key is the only way', () => {
+    const none: Limits = { ...usedUp, why: 'no_key', off: 'off on this server: it has no key' };
+    expect(limitsShown(none, false).offerKey).toBe(true);
+    expect(limitsShown(none, false).left).toContain('With your own');
   });
 });
 

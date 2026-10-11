@@ -3,16 +3,16 @@
  * the next, filling in row by row as a command runs.
  *
  * It is here because a judge could otherwise finish the whole demo without ever seeing the
- * word "Nemotron": both details panels are collapsed, and the only place the model's name
- * appeared unprompted was the banner that says it is off. So this panel is always open, it
- * fills in live rather than being a log read afterwards, and it is one colour per part -
- * Nemotron red, the core green, the arm purple, the models on this computer blue, you amber -
- * so a glance says *red decided, green measured*.
+ * word "Nemotron": the details panels were collapsed, and the only place the model's name
+ * appeared unprompted was the banner that says it is off. So this panel is always open (never
+ * folded away, rahul 11 Oct), it fills in live rather than being a log read afterwards, and it
+ * is one colour per part - Nemotron red, the core green, the arm purple, the models on this
+ * computer blue, you amber - so a glance says *red decided, green measured*.
+ *
+ * It is under the scene and the full width of the page. Beside it, seven lanes in a 460 px
+ * column put the names on two crushed lines and nobody could read them.
  *
  * Plain words on the row; the real JSON on click. Nothing hidden, nothing shouted.
- *
- * The grey shadow row - what the simple word matcher alone made of the same words - is the
- * strongest single piece of evidence on the page, and used to be two clicks deep.
  */
 
 import type { TraceRow } from '../flow/flow';
@@ -21,19 +21,24 @@ export interface Lane {
   id: string;
   /** As the panel heads the column. */
   name: string;
-  /** Where it runs, for the title text. */
-  where: string;
+  /** Where it runs, on the second line under the name: short enough for one lane's width. */
+  runs: string;
+  /** What it does, in the column's tooltip. */
+  does: string;
 }
 
-/** The lanes, left to right, as `server/webdemo/trace.py` names them. */
+/**
+ * The lanes, left to right, as `server/webdemo/trace.py` names them. Each one says where it
+ * runs under its name: three of the seven are on your own computer, and that is the point.
+ */
 export const LANES: Lane[] = [
-  { id: 'you', name: 'You', where: 'at the table' },
-  { id: 'mediapipe', name: 'MediaPipe', where: 'your browser: where your fingertip is' },
-  { id: 'parakeet', name: 'Parakeet', where: 'our server: your words, with their times' },
-  { id: 'page', name: 'The page', where: 'your browser: the robot side' },
-  { id: 'nemotron', name: 'Nemotron', where: 'Nebius Token Factory: what to do' },
-  { id: 'core', name: 'deixis core', where: 'over MCP: where' },
-  { id: 'arm', name: 'The arm', where: 'your browser: MuJoCo' },
+  { id: 'you', name: 'You', runs: 'at the table', does: 'you point, and you speak' },
+  { id: 'mediapipe', name: 'MediaPipe', runs: 'your browser', does: 'where your fingertip is' },
+  { id: 'parakeet', name: 'Parakeet', runs: 'our server', does: 'your words, with their times' },
+  { id: 'page', name: 'The page', runs: 'your browser', does: 'the robot side: it runs the plan' },
+  { id: 'nemotron', name: 'Nemotron', runs: 'Nebius', does: 'Nebius Token Factory: what to do' },
+  { id: 'core', name: 'deixis core', runs: 'over MCP', does: 'it measures where, and answers' },
+  { id: 'arm', name: 'The arm', runs: 'MuJoCo', does: 'your browser: it does the moving' },
 ];
 
 const INDEX = new Map(LANES.map((l, i) => [l.id, i]));
@@ -90,8 +95,6 @@ export function lanePercent(i: number): number {
   return ((i + 0.5) / LANES.length) * 100;
 }
 
-const SVG = 'http://www.w3.org/2000/svg';
-
 /**
  * The panel. `add` appends rows as they happen; `clear` starts a new command; `replay` steps
  * through the rows it has at about one a second, for the film and for a judge who wants a
@@ -100,6 +103,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 export class Wiring {
   private readonly track: HTMLElement;
   private readonly list: HTMLElement;
+  private readonly foot: HTMLElement | null;
   private rows: TraceRow[] = [];
   private timer = 0;
 
@@ -109,6 +113,7 @@ export class Wiring {
   ) {
     this.track = root.querySelector('.wiring-lanes')!;
     this.list = root.querySelector('.wiring-rows')!;
+    this.foot = root.querySelector('.wiring-foot');
     this.drawLaneNames();
     this.replayButton?.addEventListener('click', () => this.replay());
   }
@@ -119,6 +124,12 @@ export class Wiring {
     this.rows = [];
     this.list.replaceChildren();
     this.root.classList.remove('replaying');
+    if (this.foot) this.foot.textContent = '';
+  }
+
+  /** Who answered, how long it took and what it cost: one line under the rows. */
+  summary(line: string | null): void {
+    if (this.foot) this.foot.textContent = line ?? '';
   }
 
   add(rows: TraceRow[] | undefined): void {
@@ -129,7 +140,8 @@ export class Wiring {
       this.rows.push(row);
       this.list.append(this.draw(row));
     }
-    this.list.lastElementChild?.scrollIntoView({ block: 'nearest' });
+    // No scrollIntoView: the list does not scroll inside itself any more, and pulling the
+    // page down to it would take the scene away from someone watching the arm.
   }
 
   /** Step through the rows again, about one a second. */
@@ -159,8 +171,11 @@ export class Wiring {
         el.className = 'wiring-lane';
         el.dataset.lane = lane.id;
         el.style.left = `${lanePercent(i)}%`;
-        el.textContent = lane.name;
-        el.title = `${lane.name} - ${lane.where}`;
+        el.append(lane.name);
+        const runs = document.createElement('small');
+        runs.textContent = lane.runs;
+        el.append(runs);
+        el.title = `${lane.name} - ${lane.does}`;
         return el;
       }),
     );
@@ -175,9 +190,10 @@ export class Wiring {
 
     const track = document.createElement('span');
     track.className = 'wiring-track';
-    for (let i = 0; i < LANES.length; i++) {
+    for (const [i, lane] of LANES.entries()) {
       const line = document.createElement('i');
       line.className = 'wiring-rail';
+      line.dataset.lane = lane.id; // each rail a pale shade of its own part's colour
       line.style.left = `${lanePercent(i)}%`;
       track.append(line);
     }
@@ -214,41 +230,41 @@ export class Wiring {
   }
 }
 
-/** The arrow from one lane to another, in the sending lane's colour. */
-function arrow(s: RowShape): SVGSVGElement {
+/**
+ * The arrow from one lane to another, in the sending lane's colour: a dot where it starts, a
+ * line, a head where it lands.
+ *
+ * Plain elements placed by percentage, not an SVG: the panel is as wide as the page, and an
+ * SVG stretched to that width turns a round dot into a wide pill and the head into a wedge.
+ * These keep their size whatever the panel's width.
+ */
+function arrow(s: RowShape): HTMLElement {
   const a = lanePercent(s.from);
   const b = lanePercent(s.to);
-  const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('class', 'wiring-arrow');
-  svg.setAttribute('viewBox', '0 0 100 10');
-  svg.setAttribute('preserveAspectRatio', 'none');
-  const line = document.createElementNS(SVG, 'line');
-  line.setAttribute('x1', String(a));
-  line.setAttribute('x2', String(b));
-  line.setAttribute('y1', '5');
-  line.setAttribute('y2', '5');
-  svg.append(line);
-  // The head: a small triangle at the receiving end, drawn in screen units so it keeps its
-  // shape however wide the panel is.
-  const head = document.createElementNS(SVG, 'polygon');
-  const dir = s.rightwards ? -1 : 1;
-  head.setAttribute('points', `${b},5 ${b + dir * 1.6},2.2 ${b + dir * 1.6},7.8`);
-  svg.append(head);
-  return svg;
+  const wrap = document.createElement('span');
+  wrap.className = 'wiring-arrow';
+  const line = document.createElement('i');
+  line.className = 'wiring-line';
+  line.style.left = `${Math.min(a, b)}%`;
+  line.style.width = `${Math.abs(b - a)}%`;
+  const tail = document.createElement('i');
+  tail.className = 'wiring-dot';
+  tail.style.left = `${a}%`;
+  const head = document.createElement('i');
+  head.className = 'wiring-tip';
+  head.dataset.dir = s.rightwards ? 'right' : 'left';
+  head.style.left = `${b}%`;
+  wrap.append(line, tail, head);
+  return wrap;
 }
 
-/** A row a part sent to itself (the word matcher, a note): a dot on that lane. */
-function blip(s: RowShape): SVGSVGElement {
-  const svg = document.createElementNS(SVG, 'svg');
-  svg.setAttribute('class', 'wiring-arrow');
-  svg.setAttribute('viewBox', '0 0 100 10');
-  svg.setAttribute('preserveAspectRatio', 'none');
-  const dot = document.createElementNS(SVG, 'rect');
-  dot.setAttribute('x', String(lanePercent(s.from) - 1.2));
-  dot.setAttribute('y', '3.4');
-  dot.setAttribute('width', '2.4');
-  dot.setAttribute('height', '3.2');
-  dot.setAttribute('rx', '1');
-  svg.append(dot);
-  return svg;
+/** A row a part sent to itself (a note it made): a square on that lane. */
+function blip(s: RowShape): HTMLElement {
+  const wrap = document.createElement('span');
+  wrap.className = 'wiring-arrow';
+  const self = document.createElement('i');
+  self.className = 'wiring-self';
+  self.style.left = `${lanePercent(s.from)}%`;
+  wrap.append(self);
+  return wrap;
 }

@@ -20,8 +20,10 @@ class Settings(BaseSettings):
     nebius_api_key: SecretStr | None = None
     nebius_base_url: str = "https://api.tokenfactory.nebius.com/v1/"
     nemotron_model: str = "nvidia/Nemotron-3_5-Lightning"
-    # "rules": the rule parser only (tests, simple mode); "nemotron": Nemotron, rules if it fails.
-    ai: Literal["nemotron", "rules"] = "nemotron"
+    # Only Nemotron understands a person here. The word matcher that used to stand in for
+    # it when it could not be reached was taken out on 11 Oct 2026 (rahul); what is left of
+    # it is a test double, `tests/wordrules.py`, which the server cannot reach.
+    ai: Literal["nemotron"] = "nemotron"
 
     # How much of our key each visitor may use (plan 8.1, D4: judges only, 2,000 a day and 500
     # per network, rahul 5 Oct); see `limits.py`.

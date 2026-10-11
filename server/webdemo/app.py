@@ -41,7 +41,7 @@ from deixis.mcp import DeixisClient
 from deixis.profile import load_profile
 from deixis.refs import DEMONSTRATIVES, norm_word
 from webdemo import __version__, trace
-from webdemo.agent import MAX_STEPS, AgentResult, ArmAgent, Context, rules
+from webdemo.agent import MAX_STEPS, AgentResult, ArmAgent, Context
 from webdemo.command import (
     MAX_SAMPLES,
     Meta,
@@ -59,7 +59,7 @@ from webdemo.command import (
 )
 from webdemo.limits import NO_KEY_WHY, Caps, Limits, Mode, Why, view
 from webdemo.models import NOT_USED, models_in_use
-from webdemo.record import CommandLog, cost_usd, in_words
+from webdemo.record import CommandLog, cost_usd
 from webdemo.settings import Settings
 from webdemo.speech import ClipError, Speech
 
@@ -68,6 +68,10 @@ MAX_AUDIO_BYTES = 44 + 12 * 16000 * 2 + 1024  # 12 s of 16 kHz 16-bit mono, plus
 MAX_KEY_CHARS = 4096
 #: One re-plan per command, so a model that keeps failing cannot run away (section 8).
 MAX_REPLANS = 1
+
+#: What the robot says when Nemotron cannot be asked. The banner above the scene says why,
+#: and offers the box for the visitor's own key; this is the arm's own line about it.
+OFF_SAY = "I can't reach my brain right now, so I don't know what you'd like me to do."
 
 log = logging.getLogger("webdemo")
 
@@ -92,7 +96,7 @@ def load_speech(settings: Settings) -> Speech | None:
 def log_command(words: list[dict[str, Any]], agent: AgentResult, result: dict[str, Any] | None,
                 error: str | None, notes: list[str], mode: str = "") -> None:  # fmt: skip
     """One line per command for the console: the words, the calls, what the core said, and
-    whose key (ours, own, simple). No audio, no key, no address."""
+    whose key (ours, own, nobody). No audio, no key, no address."""
     said = " ".join(w["text"] for w in words)
     calls = "; ".join(str(c) for c in agent.calls) or "-"
     if error:
@@ -151,6 +155,9 @@ class StepBody(BaseModel):
     index: int = Field(ge=0, le=MAX_STEPS)
     things: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
     context: dict[str, Any] = Field(default_factory=dict)
+    #: This is the measurement that draws the plan, on the table as it *will* be by then, not
+    #: the one taken for real just before the arm moves. It only changes what the panel says.
+    showing: bool = False
 
 
 class ReplanBody(BaseModel):
@@ -245,9 +252,7 @@ def create_app(
         return limits.address_of(ip)
 
     def our_key(sid: str, addr: str) -> tuple[str | None, Why | None]:
-        """Our key if this visitor may use it now, else why not (simple mode)."""
-        if settings.ai == "rules":
-            return None, "rules"
+        """Our key if this visitor may use it now, else why not (and then nobody answers)."""
         if not settings.nebius_api_key:
             return None, "no_key"
         _, why = limits.left(sid, addr)
@@ -255,7 +260,7 @@ def create_app(
 
     def limits_now(sid: str, addr: str, mode: Mode, why: Why | None) -> dict[str, Any]:
         left, _ = limits.left(sid, addr)
-        if why in ("rules", "no_key"):
+        if why == "no_key":
             left = 0
         return view(mode, left, limits.caps.visitor, why)
 
@@ -267,7 +272,7 @@ def create_app(
         sid = visitor(response, sid)
         addr = address(request)
         key, why = our_key(sid, addr)
-        lim = limits_now(sid, addr, "ours" if key else "simple", why)
+        lim = limits_now(sid, addr, "ours" if key else "off", why)
         key = None
         models = models_in_use(settings.nemotron_model, off=lim["off"])
         return {
@@ -381,9 +386,10 @@ def create_app(
 
     async def ask_model(sid: str, addr: str, own: str | None, texts: list[str],
                         context: Context) -> Asked:  # fmt: skip
-        """The agent for one command (or one re-plan): Nemotron with the visitor's own key, or
-        ours within the day's limits; else the rule parser (simple mode). A refused own key:
-        as if none was sent. Gives back what it decided, whose key, why not ours, whether the
+        """The agent for one command (or one re-plan): Nemotron with the visitor's own key,
+        or ours within the day's limits. If neither can be used nobody answers and the robot
+        says so - there is no word matcher behind it (rahul, 11 Oct). A refused own key: as
+        if none was sent. Gives back what it decided, whose key, why not ours, whether the
         own key was refused, and how long the whole thing took."""
         agent: ArmAgent = app.state.agent
         loop = asyncio.get_running_loop()
@@ -396,9 +402,7 @@ def create_app(
                 None, partial(agent.understand, texts, key, context, no_key_why, shared)
             )
 
-        if settings.ai == "rules":
-            own = None
-        res = AgentResult([], source="rules", model="rules", errors=["no words"])
+        res = AgentResult([], errors=["no words"])
         refused = False
         mode: Mode = "own"
         why: Why | None = None
@@ -408,7 +412,7 @@ def create_app(
             refused = res.key_refused
         if refused or not own:
             key, why = our_key(sid, addr)
-            mode = "ours" if key else "simple"
+            mode = "ours" if key else "off"
             if texts:
                 res = await understand(key, why, shared=True)
                 if key and res.asked_model:
@@ -416,28 +420,12 @@ def create_app(
             key = None
         return res, mode, why, refused, time.perf_counter() - t
 
-    def shadow(texts: list[str], context: Context, calls: list[dict[str, Any]]) -> dict[str, Any]:
-        """What the simple word rules alone would have done with the same words (item 18):
-        the rule parser runs in well under a millisecond, beside Nemotron."""
-        agent: ArmAgent = app.state.agent
-        plain = rules(agent.profile, texts, context) if texts else None
-        plain_calls = [c.to_dict() for c in plain.calls] if plain else []
-        return {
-            "understood": bool(plain_calls),
-            "words": in_words(plain_calls),
-            "calls": plain_calls,
-            "same": plain_calls == calls,
-        }
-
     def model_trace(tr: trace.Trace, texts: list[str], things: list[dict[str, Any]],
-                    res: AgentResult, agent_s: float,
-                    word_rules: dict[str, Any]) -> None:  # fmt: skip
-        """The Nemotron rows and the grey word-matcher row under them."""
+                    res: AgentResult, agent_s: float) -> None:  # fmt: skip
+        """The two Nemotron rows: what it was sent, and what it sent back."""
         agent: ArmAgent = app.state.agent
-        drove = res.source == "rules"
-        off = (res.errors[0] if res.errors else "it did not answer") if drove else None
+        off = None if res.asked_model else (res.errors[0] if res.errors else "it was not asked")
         tr.add(*trace.model_rows(texts, things, agent.tools, res, agent_s, off))
-        tr.add(trace.shadow_row(word_rules, drove))
         if res.refusal:
             tr.add(trace.refusal_row(res.refusal))
 
@@ -453,7 +441,8 @@ def create_app(
         """One command (plan 4.2, 7.2): words (from the clip, or typed), the agent's tool
         calls, the core's places over MCP. A visitor's own key (`X-Nebius-Key`) is used for
         this request's Nemotron call only; it is never stored, logged or sent back. Our key
-        is used within the day's limits (plan 8.1), else the rule parser (simple mode).
+        is used within the day's limits (plan 8.1); past them, nobody answers and the
+        robot says so.
 
         The model may answer with a plan of up to four steps. Only the first is resolved
         here; the rest come back in `plan` and the page asks for each one with `/api/step`
@@ -504,8 +493,8 @@ def create_app(
         else:
             raise HTTPException(400, "send a clip (audio) or a typed sentence (meta.text)")
 
-        # The agent: Nemotron with the visitor's own key, or ours within the day's limits;
-        # else the rule parser (simple mode). A refused own key: as if none was sent.
+        # The agent: Nemotron with the visitor's own key, or ours within the day's limits.
+        # A refused own key: as if none was sent. Nothing else ever answers.
         texts = [w["text"] for w in words]
         # While a question is open, the agent is given the `pick` tool with the choices the
         # page glows, so Nemotron answers the question itself (rahul, 11 Oct).
@@ -562,6 +551,11 @@ def create_app(
             say = "Sorry, something went wrong." if error else say_for(result, first)
         if agent_res.refusal:
             say = agent_res.refusal
+        # Nemotron could not be asked at all (no key, or this visitor's day is used up).
+        # Nothing answers in its place, so the robot says that, rather than "I didn't get
+        # that", which would blame the person for the server's limit (rahul, 11 Oct).
+        if not agent_res.asked_model and texts and not entry:
+            say = OFF_SAY
         if result is not None or entry is not None or first:
             timings["core_s"] = round(time.perf_counter() - t, 3)
         # The plan, kept until it is done: the page asks for step 1 onwards when it gets there.
@@ -570,16 +564,14 @@ def create_app(
         else:
             plans.drop(sid)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
-        whose = f"{mode} key" if mode != "simple" else f"simple: {why}"
+        whose = f"{mode} key" if mode != "off" else f"nobody: {why}"
         if key_refused:
             whose = f"own key refused, {whose}"
         log_command(words, agent_res, result, error, notes, whose)
-        word_rules = shadow(texts, context, calls)
         tr = trace.Trace()
         tr.add(trace.pointing_row(len(m.samples), len(m.holds), audio is None))
         tr.add(*trace.heard_rows(words, audio is None, audio_s, timings.get("asr_s")))
-        model_trace(tr, texts, m.things, agent_res, timings["agent_s"], word_rules)
-        tr.add(trace.step_row(0, len(calls)))
+        model_trace(tr, texts, m.things, agent_res, timings["agent_s"])
         tr.add(*trace.core_rows(first, result, error, timings.get("core_s")))
         cost = cost_usd(agent_res.usage, settings.price_in_per_m, settings.price_out_per_m)
         record.write(
@@ -590,12 +582,10 @@ def create_app(
             status=(result or {}).get("status") if not error else "error",
             ask=((result or {}).get("ask") or {}).get("reason"), error=error,
             timings=timings, usage=agent_res.usage, cost_usd=cost,
-            word_rules={"understood": word_rules["understood"], "same": word_rules["same"]},
             last_word_t1=words[-1]["t1"] if words else None,
         )  # fmt: skip
         return {
             "words": words,
-            "word_rules": word_rules,
             "cost_usd": cost,
             "agent": agent_res.summary(),
             "plan": {"calls": calls, "steps": len(calls)},
@@ -676,8 +666,8 @@ def create_app(
         timings["total_s"] = timings["core_s"]
         say = "Sorry, something went wrong." if error else say_for(result, [call])
         tr = trace.Trace()
-        tr.add(trace.step_row(body.index, plan.steps))
-        tr.add(*trace.core_rows([call], result, error, timings["core_s"], again=body.index > 0))
+        tr.add(*trace.core_rows([call], result, error, timings["core_s"],
+                                phase="show" if body.showing else "again"))  # fmt: skip
         log.info("step %d of %d: %s -> %s", body.index + 1, plan.steps, call["name"],
                  error or (result or {}).get("status"))  # fmt: skip
         return {"index": body.index, "steps": plan.steps, "result": result, "error": error,
@@ -734,12 +724,10 @@ def create_app(
             plans.drop(sid)
         timings["total_s"] = round(time.perf_counter() - t_start, 3)
         log_command(plan.words, res, result, error, [f"re-plan after step {body.index + 1}"],
-                    f"{mode} key" if mode != "simple" else f"simple: {why}")  # fmt: skip
-        word_rules = shadow(texts, context, calls)
+                    f"{mode} key" if mode != "off" else f"nobody: {why}")  # fmt: skip
         tr = trace.Trace()
         tr.add(trace.Row("arm", "page", f"step {body.index + 1} failed: {body.why}", kind="note"))
-        model_trace(tr, texts, body.things, res, timings["agent_s"], word_rules)
-        tr.add(trace.step_row(0, len(calls)))
+        model_trace(tr, texts, body.things, res, timings["agent_s"])
         tr.add(*trace.core_rows(calls[:1], result, error, timings.get("core_s")))
         record.write("replan", sid, said=" ".join(texts), step=body.index, why=body.why[:120],
                      source=res.source, model=res.model, calls=calls, steps=len(calls),

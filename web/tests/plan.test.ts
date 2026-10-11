@@ -240,6 +240,25 @@ describe('a plan of several steps, in the browser', async () => {
     expect(Math.hypot(...sub(centre(spots[3]), was('blue')))).toBeLessThan(6);
   });
 
+  test('the panel gets a row for each step, and two for each move of the arm', async () => {
+    // The arm's lane was empty on every command until 11 Oct: the last link in the chain,
+    // the one that actually moves the block, said nothing.
+    const { flow, view } = await start('swap the red and the blue');
+    view.traced.length = 0;
+    await pump(flow.go());
+    expect(view.traced).toEqual([
+      'step 1 of 3',
+      'pick up the red block, put it at (265, 100) mm',
+      'done, the block is there',
+      'step 2 of 3',
+      'pick up the blue block, put it at (180, 100) mm',
+      'done, the block is there',
+      'step 3 of 3',
+      'pick up the red block, put it at (300, 90) mm',
+      'done, the block is there',
+    ]);
+  });
+
   test('stack them all up: a tower of three, built in the right order', async () => {
     const { flow, view } = await start('stack them all up');
     expect(view.said).toEqual(['Two steps, like this?']);

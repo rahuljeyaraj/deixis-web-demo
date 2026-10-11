@@ -14,13 +14,14 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from tests.wordrules import parse, rules
 
 from conftest import VOICE, needs_parakeet, needs_voice
 from deixis.actions import tools_for_agent
 from deixis.profile import load_profile
 from test_arm_core import BLOCKS, CENTRES, HERE
 from view import Finger
-from webdemo.agent import ArmAgent, Context, parse, rules
+from webdemo.agent import ArmAgent, Context
 from webdemo.app import create_app
 from webdemo.command import NOT_UNDERSTOOD, typed_words
 from webdemo.settings import ROOT
@@ -158,10 +159,13 @@ def test_a_bad_call_is_fixed_on_the_retry():
     assert "word 2 is 'here'" in msgs[2]["content"]
 
 
-def test_a_timeout_falls_back_to_the_rules_without_the_key():
+def test_a_timeout_answers_with_nothing_and_never_leaks_the_key():
+    """Nothing stands in for the model (rahul, 11 Oct): a timeout is no calls and a reason,
+    and the page turns that into "the robot's brain isn't answering right now"."""
     llm = FakeLLM(TimeoutError("timed out talking to sk-visitor-123456789"))
     res = agent(llm).understand(["put", "that", "here"], "sk-visitor-123456789")
-    assert res.source == "rules" and [c.name for c in res.calls] == ["move"]
+    assert res.calls == [] and not res.ok
+    assert res.asked_model and "timed out" in res.errors[0]
     assert "sk-visitor" not in json.dumps(res.summary())
 
 
@@ -169,7 +173,8 @@ def test_a_refused_key_says_so():
     err = Exception("Incorrect API key provided: sk-vis****789")
     err.status_code = 401
     res = agent(FakeLLM(err)).understand(["confirm", "it"], "sk-visitor-123456789")
-    assert res.source == "rules" and res.errors[0] == "the Nebius key was refused"
+    assert res.calls == [] and res.key_refused
+    assert res.errors[0] == "the Nebius key was refused"
 
 
 def test_even_stop_and_yes_go_to_the_model():
@@ -198,18 +203,20 @@ def test_our_key_keeps_one_connection_and_a_visitors_key_never_does():
 
 def test_the_retry_is_dropped_once_the_person_has_waited_long_enough():
     """One slow attempt must not cost the person a second wait: past the budget the agent
-    keeps what it has (here: nothing, so the rule parser answers)."""
+    keeps what it has, which here is nothing at all."""
     llm = FakeLLM([("move", {"object": that(2), "place": that(2, "here")})])  # a bad call
     a = ArmAgent(PROFILE, TOOLS, "https://example.invalid/v1/", budget_s=0.0,
                  client_factory=llm.factory)  # fmt: skip
     res = a.understand(["put", "that", "here"], "sk-ours", shared=True)
     assert res.attempts == 1 and len(llm.requests) == 1  # no second go
-    assert res.source == "rules" and [c.name for c in res.calls] == ["move"]
+    assert res.calls == [] and not res.ok
 
 
-def test_no_key_is_simple_mode():
+def test_no_key_means_nobody_answers():
+    """No key, no answer. There is no word matcher behind Nemotron any more."""
     res = agent(FakeLLM()).understand(["confirm", "it"], None)
-    assert res.source == "rules" and res.errors[0] == "no Nebius key: simple mode"
+    assert res.calls == [] and not res.asked_model
+    assert res.errors[0] == "no Nebius key"
 
 
 # --- the routes, end to end over MCP ---
@@ -231,7 +238,7 @@ def test_typed_with_clicks_put_that_here(rules_api):
     meta = {"text": "put that here", "holds": [click(10, *CENTRES["red"]), click(11.5, *HERE)],
             "things": BLOCKS, "t": 12.0}  # fmt: skip
     body = post(rules_api, meta)
-    assert body["agent"]["source"] == "rules" and body["error"] is None
+    assert body["error"] is None
     res = body["result"]
     assert res["status"] == "ok"
     args = res["calls"][0]["args"]
@@ -312,7 +319,7 @@ def test_the_visitors_key_is_used_for_their_call_only(settings, core, caplog):
                    headers={"X-Nebius-Key": "sk-visitor-9999999999"})  # fmt: skip
     assert llm.keys == ["sk-ours-0000000000", "sk-visitor-9999999999", "sk-visitor-9999999999"]
     assert a.json()["agent"]["source"] == b.json()["agent"]["source"] == "nemotron"
-    assert d.json()["agent"]["source"] == "rules"  # the timeout fell back
+    assert d.json()["agent"]["calls"] == []  # the timeout: nothing answers in its place
     for r in (a, b, d):
         assert "sk-ours" not in r.text and "sk-visitor" not in r.text
     assert "sk-ours" not in caplog.text and "sk-visitor" not in caplog.text

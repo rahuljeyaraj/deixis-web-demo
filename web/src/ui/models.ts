@@ -52,7 +52,7 @@ function setOff(li: HTMLElement, text: string | null): void {
   li.append(off);
 }
 
-/** Mark one model as off right now (simple mode: "off right now: today's budget is used
+/** Mark one model as off right now ("off right now: today's budget is used
  * up"), or on again (`null`). */
 export function setModelOff(list: HTMLElement, id: string, text: string | null): void {
   const li = list.querySelector<HTMLElement>(`li[data-id="${id}"]`);

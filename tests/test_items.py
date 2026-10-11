@@ -16,7 +16,7 @@ from test_agent import TOOLS, FakeLLM, click, post, that
 from test_arm_core import BLOCKS, CENTRES, HERE
 from webdemo.agent import SYSTEM, ArmAgent
 from webdemo.app import create_app
-from webdemo.record import cost_usd, in_words, visitor_tag
+from webdemo.record import cost_usd, visitor_tag
 from webdemo.settings import ROOT
 
 
@@ -50,9 +50,9 @@ def test_yes_asks_the_model_too_and_a_command_costs(settings, core):
     assert yes["agent"]["calls"][0]["name"] == "confirm"
 
 
-def test_word_rules_line_and_the_log(settings, core):
-    """'pop that one on top of the red one': Nemotron gets it; the simple word rules don't
-    ('pop' is not a verb they know). Both are in the reply and the log."""
+def test_the_command_log(settings, core):
+    """One line per command and per page event: the words, the calls, the tokens and the
+    cost, and never a key or an address."""
     call = (
         "move",
         {"object": that(1), "place": {"relation": "on", "target": {"label": "red one"}}},
@@ -64,30 +64,22 @@ def test_word_rules_line_and_the_log(settings, core):
         body = post(c, meta)
         ev = c.post("/api/event", json={"kind": "preview", "latency_s": 2.4, "block": "blue"})
         bad = c.post("/api/event", json={"kind": "dance"})
-    wr = body["word_rules"]
     assert body["agent"]["source"] == "nemotron"
-    assert wr == {"understood": False, "words": "not understood", "calls": [], "same": False}
+    assert "word_rules" not in body  # the word matcher is gone (rahul, 11 Oct)
     assert ev.status_code == 200 and bad.status_code == 400
     rows = [json.loads(x) for x in settings.command_log.read_text().splitlines()]
     cmd, preview = rows
     assert cmd["kind"] == "command" and cmd["said"] == "pop that one on top of the red one"
     assert cmd["usage"]["prompt"] == 7000 and cmd["cost_usd"] > 0 and cmd["status"] == "ok"
-    assert cmd["word_rules"] == {"understood": False, "same": False}
     assert preview == {**preview, "kind": "event", "event": "preview", "latency_s": 2.4}
     assert cmd["visitor"] == preview["visitor"] and len(cmd["visitor"]) == 10
     text = settings.command_log.read_text()
     assert "sk-ours" not in text and "testclient" not in text  # no key, no address
 
 
-def test_in_words():
-    assert in_words([]) == "not understood"
-    assert in_words([{"name": "move", "args": {"object": {"last": True},
-                     "place": {"deixis": "here", "word_index": 5}}}]) == (
-        "move the block moved last (“it”) to where you pointed (“here”)")  # fmt: skip
-    between = {"relation": "between", "target": {"label": "green one"},
-               "target2": {"label": "blue one"}}  # fmt: skip
-    move = {"name": "move", "args": {"object": {"label": "red one"}, "place": between}}
-    assert in_words([move]) == "move the red one between the green one and the blue one"
+def test_the_cost_and_the_visitor_tag():
+    """Token Factory's list price, and the short hash that stands in for a visitor in the
+    log. (These were checked beside `in_words`, which went with the word matcher.)"""
     assert cost_usd({"prompt": 1_000_000, "completion": 1_000_000}, 0.06, 0.24) == 0.30
     assert visitor_tag("a") != visitor_tag("b")
 

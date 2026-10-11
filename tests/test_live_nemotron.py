@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import pytest
 from pydantic import SecretStr
+from tests.wordrules import rules
 
 from test_agent import PHRASES, PROFILE, TOOLS
-from webdemo.agent import MAX_STEPS, ArmAgent, rules
+from webdemo.agent import MAX_STEPS, ArmAgent
 from webdemo.settings import Settings
 
 pytestmark = pytest.mark.network
@@ -47,7 +48,10 @@ def live():
 
 
 @pytest.mark.parametrize("text", [p[0] for p in PHRASES])
-def test_nemotron_agrees_with_the_rules(live, text):
+def test_nemotron_agrees_with_the_plain_reading(live, text):
+    """`tests/wordrules.py` says what the plain reading of each phrase is, and the real model
+    must come to the same answer. It is a test double for stating the expectation: the demo
+    has no word matcher in it (rahul, 11 Oct)."""
     agent, key = live
     words = text.split()
     res = agent.run(words, key.get_secret_value())

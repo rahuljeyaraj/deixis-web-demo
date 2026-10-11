@@ -2,8 +2,9 @@
 
 With our key a visitor gets `visitor` Nemotron commands a day, an address (several visitors
 behind one network, or one visitor clearing cookies) `address`, and everyone together `total`
-(about $1 a day). Past any of them the visitor gets simple mode: the rule parser, with a
-banner. A visitor's own key skips the daily caps, not the burst limit.
+(about $1 a day). Past any of them Nemotron will not answer them again today, and the page
+says so and offers the box for their own Nebius key; nothing else answers in its place
+(rahul, 11 Oct). A visitor's own key skips the daily caps, not the burst limit.
 
 The demo is for the judges only (rahul, 5 Oct, D4): its address is given only in Devpost's
 private field, so the caps are set where no judge reaches them; they are there in case the
@@ -28,9 +29,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-# Why a visitor is in simple mode: their own day's share, their network's, everyone's, the
-# server has no key, or the server runs the rule parser only (`ai = "rules"`).
-Why = Literal["visitor", "address", "total", "no_key", "rules"]
+# Why Nemotron is not answering this visitor: their own day's share is used, their
+# network's, everyone's, or the server has no key at all.
+Why = Literal["visitor", "address", "total", "no_key"]
 
 
 @dataclass(frozen=True)
@@ -116,43 +117,43 @@ class Limits:
             self._total += 1
 
 
-# What the page says (plan 8.1): the banner in simple mode, the note on the models list's
-# Nemotron line, and why in the details panel.
+# What the page says (plan 8.1): the banner when Nemotron is off for this visitor, and the
+# note on the models list's Nemotron line. Nothing answers in its place, so these say what is
+# missing and what to do about it, rather than introducing a stand-in (rahul, 11 Oct).
 BANNER: dict[Why, str] = {
-    "visitor": "You’ve used today’s free AI commands, so a simple word matcher is answering.",
-    "address": "Today’s free AI commands for your network are used, so a simple word matcher is "
-    "answering.",
-    "total": "Today’s AI budget is used up, so a simple word matcher is answering.",
-    "no_key": "This server has no Nebius key, so a simple word matcher is answering.",
-    "rules": "The AI is turned off on this server, so a simple word matcher is answering.",
+    "visitor": "You’ve used today’s free AI commands. Add your own Nebius key to carry on.",
+    "address": "Today’s free AI commands for your network are used. Add your own Nebius key to "
+    "carry on.",
+    "total": "Today’s AI budget is used up. Add your own Nebius key to carry on.",
+    "no_key": "This server has no Nebius key, so the robot cannot understand you. Add your own "
+    "to carry on.",
 }
 OFF: dict[Why, str] = {
     "visitor": "off for you right now: today’s free commands are used",
     "address": "off for your network right now: today’s free commands are used",
     "total": "off right now: today’s budget is used up",
     "no_key": "off on this server: it has no key",
-    "rules": "off on this server",
 }
 NO_KEY_WHY: dict[Why, str] = {
-    "visitor": "today’s free AI commands are used: simple mode",
-    "address": "today’s free AI commands for this network are used: simple mode",
-    "total": "today’s AI budget is used up: simple mode",
-    "no_key": "no Nebius key on this server: simple mode",
-    "rules": "the server runs the word matcher only",
+    "visitor": "today’s free AI commands are used",
+    "address": "today’s free AI commands for this network are used",
+    "total": "today’s AI budget is used up",
+    "no_key": "no Nebius key on this server",
 }
 
-Mode = Literal["ours", "own", "simple"]
+#: Whose key answered this command, or "off": nobody did, and the robot said so.
+Mode = Literal["ours", "own", "off"]
 
 
 def view(mode: Mode, left: int, per_day: int, why: Why | None) -> dict[str, object]:
     """`limits` in `/api/info` and in each command's reply."""
-    simple = mode == "simple" and why is not None
+    off = mode == "off" and why is not None
     return {
         "mode": mode,
         "left_today": left,  # commands left today with our key
         "per_day": per_day,
-        "why": why if simple else None,
-        "banner": BANNER[why] if simple else None,  # type: ignore[index]
-        "off": OFF[why] if simple else None,  # type: ignore[index]
-        "own_key_helps": simple and why != "rules",
+        "why": why if off else None,
+        "banner": BANNER[why] if off else None,  # type: ignore[index]
+        "off": OFF[why] if off else None,  # type: ignore[index]
+        "own_key_helps": off,
     }

@@ -15,11 +15,12 @@ const url = args.find((a) => !a.startsWith('--')) ?? 'http://localhost:5173/';
 const realKey = args.includes('--real-key');
 const pictures = path.resolve(import.meta.dirname, '..', '..', 'out', 'pictures');
 
-const browser = await chromium.launch({ channel: 'chrome' });
+// --mute-audio and ?quiet: the page never speaks while shots are taken (rahul, 11 Oct).
+const browser = await chromium.launch({ channel: 'chrome', args: ['--mute-audio'] });
 const context = await browser.newContext({ viewport: { width: 1312, height: 940 } }); // no mic: typing
 const page = await context.newPage();
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
-await page.goto(url);
+await page.goto(url + '?quiet=1');
 await page.waitForFunction(() => !document.getElementById('start-mouse').disabled, null, { timeout: 30000 });
 await page.click('#start-mouse');
 await page.waitForFunction(() => document.body.classList.contains('typing'), null, { timeout: 10000 });
@@ -41,7 +42,7 @@ async function type(words) {
 await page.waitForFunction(() => !document.getElementById('banner').hidden, null, { timeout: 10000 });
 await type('go home');
 console.log('banner:', await banner());
-console.log('understood by:', await text('#details-body section:nth-of-type(2) p'));
+console.log('understood by:', await text('.wiring-foot'));
 await page.screenshot({ path: path.join(pictures, '14-simple-mode.png') });
 
 // 2. "Add your own Nebius key" opens the footer's panel.
@@ -70,7 +71,7 @@ if (realKey) {
   await page.click('#key-save');
   await type('go home');
   console.log('good key:', await text('#key-status'));
-  console.log('understood by:', await text('#details-body section:nth-of-type(2) p'));
+  console.log('understood by:', await text('.wiring-foot'));
   console.log('banner:', await banner(), '| models, Nemotron:', await nemotronLine());
   const html = await page.content();
   console.log('key in the page:', html.includes(key) ? 'YES (bad)' : 'no');

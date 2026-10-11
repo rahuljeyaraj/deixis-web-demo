@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from test_agent import FakeLLM
-from webdemo.app import create_app
+from webdemo.app import OFF_SAY, create_app
 from webdemo.limits import BANNER, Caps, Limits
 
 OURS = "sk-ours-0000000000"
@@ -107,22 +107,25 @@ def say(c: TestClient, text: str, key: str | None = None, **headers):
     return c.post("/api/command", data={"meta": json.dumps({"text": text})}, headers=headers)
 
 
-def test_past_the_share_the_word_matcher_answers(settings, core):
+def test_past_the_share_nobody_answers(settings, core):
+    """Past the day's share Nemotron is not asked, and nothing answers in its place: the
+    page gets no calls and a banner that offers the visitor's own key (rahul, 11 Oct)."""
     llm = FakeLLM(YES, YES)
     with app(settings, core, llm, caps(visitor=2)) as c:
         assert c.get("/api/info").json()["limits"]["left_today"] == 2
         first, second, third = (say(c, "confirm it").json() for _ in range(3))
         info = c.get("/api/info").json()
     assert llm.keys == [OURS] and len(llm.requests) == 2  # one client, reused; two calls
-    sources = [r["agent"]["source"] for r in (first, second, third)]
-    assert sources == ["nemotron", "nemotron", "rules"]
     assert first["limits"]["mode"] == "ours" and first["limits"]["left_today"] == 1
     assert first["limits"]["banner"] is None
+    assert first["result"]["calls"][0]["name"] == "confirm"
+    assert second["result"]["calls"][0]["name"] == "confirm"
     lim = third["limits"]
-    assert lim["mode"] == "simple" and lim["why"] == "visitor" and lim["left_today"] == 0
+    assert lim["mode"] == "off" and lim["why"] == "visitor" and lim["left_today"] == 0
     assert lim["banner"] == BANNER["visitor"] and lim["own_key_helps"] is True
-    assert third["agent"]["errors"][0] == "today’s free AI commands are used: simple mode"
-    assert third["result"]["calls"][0]["name"] == "confirm"  # the word matcher still works
+    assert third["agent"]["errors"][0] == "today’s free AI commands are used"
+    assert third["agent"]["calls"] == [] and third["result"] is None
+    assert third["say"] == OFF_SAY
     assert info["limits"]["why"] == "visitor"
     nemotron = next(m for m in info["models"] if m["id"] == "nemotron")
     assert nemotron["off"] == "off for you right now: today’s free commands are used"
@@ -181,7 +184,7 @@ def test_an_own_key_skips_the_share(settings, core):
     assert llm.keys == [THEIRS, THEIRS]
     assert a["agent"]["source"] == b["agent"]["source"] == "nemotron"
     assert a["limits"]["mode"] == "own" and a["limits"]["banner"] is None
-    assert mine["limits"]["mode"] == "simple"
+    assert mine["limits"]["mode"] == "off"
 
 
 def test_a_refused_key_falls_back_to_ours_and_says_so(settings, core, caplog):
@@ -197,11 +200,12 @@ def test_a_refused_key_falls_back_to_ours_and_says_so(settings, core, caplog):
     assert THEIRS not in r.text and THEIRS not in caplog.text
 
 
-def test_a_refused_key_past_the_share_is_simple_mode(settings, core):
+def test_a_refused_key_past_the_share_leaves_nobody(settings, core):
     llm = FakeLLM(Refused("401"))
     with app(settings, core, llm, caps(visitor=0)) as c:
         body = say(c, "confirm it", key=THEIRS).json()
-    assert body["key_refused"] is True and body["limits"]["mode"] == "simple"
+    assert body["key_refused"] is True and body["limits"]["mode"] == "off"
+    assert body["agent"]["calls"] == []
     assert llm.keys == [THEIRS]
 
 
@@ -212,14 +216,6 @@ def test_no_key_on_the_server(settings, core):
         own = say(c, "confirm it", key=THEIRS).json()
     assert info["why"] == "no_key" and info["own_key_helps"] is True and info["left_today"] == 0
     assert own["agent"]["source"] == "nemotron" and own["limits"]["mode"] == "own"
-
-
-def test_rules_mode_ignores_every_key(settings, core):
-    settings.ai = "rules"
-    llm = FakeLLM()
-    with app(settings, core, llm, caps()) as c:
-        r = say(c, "confirm it", key=THEIRS).json()
-    assert not llm.keys and r["limits"]["why"] == "rules" and r["limits"]["own_key_helps"] is False
 
 
 def test_the_burst_limit_on_the_route(settings, core):

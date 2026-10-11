@@ -131,7 +131,7 @@ export type FlowEvent =
 /** The server, for the parts of a plan the page asks for as it goes. */
 export interface FlowServer {
   /** Measure step `index` of the plan the last command set off, against this scene. */
-  step(index: number, things: Thing[], context: Record<string, unknown>): Promise<StepReply>;
+  step(index: number, things: Thing[], context: Record<string, unknown>, showing?: boolean): Promise<StepReply>;
   /** Step `index` cannot be done: ask Nemotron for the rest another way. */
   replan(index: number, why: string, things: Thing[], context: Record<string, unknown>): Promise<FlowReply>;
 }
@@ -417,7 +417,8 @@ export class Flow {
       let resolved = k === 0 ? (first.calls[0] ?? null) : null;
       if (!resolved) {
         const scene = sceneFor(blocks, (id) => this.movedAt.get(id) ?? 0, spot, this.opts.now());
-        const reply = await this.opts.server!.step(k, scene, planContext(ghosts, this.lastThing));
+        // `true`: this measurement is to draw the plan, on the table as it will be by then.
+        const reply = await this.opts.server!.step(k, scene, planContext(ghosts, this.lastThing), true);
         if (reply.result?.status === 'ask' && reply.result.ask) {
           this.showAsk(reply.result.ask);
           return;
@@ -604,7 +605,12 @@ export class Flow {
   private async doMove(move: Move): Promise<MoveResult> {
     const from = this.placeOf(move.block);
     this.set({ kind: 'acting', block: move.block });
+    // The last two rows of the panel: the arm is the only part that was never on it, and its
+    // lane sat empty through every command.
+    this.view.trace?.([armRow(move)]);
+    const began = this.opts.now();
     const res = await this.arm.move(move.block, move.place);
+    this.view.trace?.([armBack(res, (this.opts.now() - began) * 1000)]);
     if (res.ok) {
       this.lastThing = move.block;
       this.movedAt.set(move.block, this.opts.now());
@@ -766,6 +772,25 @@ function placeOf(call: ResolvedCall): Where | null {
 
 function stepRow(index: number, steps: number): TraceRow {
   return { from: 'page', to: 'page', say: `step ${index + 1} of ${steps}`, kind: 'step' };
+}
+
+/** What the page tells the arm to do: a block, and millimetres. */
+export function armRow(move: Move): TraceRow {
+  const { xMm, yMm, zMm } = move.place;
+  const up = zMm > 0 ? `, ${zMm.toFixed(0)} mm up` : '';
+  return {
+    from: 'page',
+    to: 'arm',
+    say: `pick up the ${move.block} block, put it at (${xMm.toFixed(0)}, ${yMm.toFixed(0)}) mm${up}`,
+    detail: { block: move.block, place: move.place },
+  };
+}
+
+/** And what the arm made of it. A move it could not finish says so in its own words. */
+export function armBack(res: MoveResult, ms: number): TraceRow {
+  const why =
+    res.reason === 'stopped' ? 'stopped' : res.reason === 'slipped' ? 'it slipped out of the grip' : res.reason;
+  return { from: 'arm', to: 'page', say: res.ok ? 'done, the block is there' : `could not: ${why}`, ms };
 }
 
 /** What the robot understood, said back: "Move the red block here?" (web demo item 1). */

@@ -1,5 +1,5 @@
 // The look check (measure list M34; web demo items 5 and 10), in a real Chrome.
-//   (start `uv run webdemo` with AI=rules, and `npm run dev`, first)
+//   (start `uv run webdemo` with a Nebius key, and `npm run dev`, first)
 //   node scripts/look-check.mjs [url] [out folder]
 //
 // 1. Layout at a 1366 x 768 laptop (Chrome's page is about 1366 x 657): after a typed
@@ -20,14 +20,14 @@ fs.mkdirSync(out, { recursive: true });
 
 const VISIONS = ['none', 'protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'];
 const BLOCKS = ['red', 'green', 'blue'];
-const browser = await chromium.launch({ channel: 'chrome', args: ['--use-fake-device-for-media-stream'] });
+const browser = await chromium.launch({ channel: 'chrome', args: ['--use-fake-device-for-media-stream', '--mute-audio'] });
 const report = { url, when: new Date().toISOString(), layout: {}, pictures: [] };
 
 // ---- 1. layout at 1366 x 657
 {
   const page = await browser.newPage({ viewport: { width: 1366, height: 657 } });
   page.on('pageerror', (e) => console.log('pageerror:', e.message));
-  await page.goto(url + '?start=skip');
+  await page.goto(url + '?start=skip&quiet=1');
   await page.waitForFunction(() => window.__sim, null, { timeout: 60000 });
   await page.click('#type-toggle');
   await page.fill('#type-box', 'put the red one here');
@@ -48,7 +48,7 @@ const report = { url, when: new Date().toISOString(), layout: {}, pictures: [] }
 // ---- 2. the marks on each block, through each vision
 const page = await browser.newPage({ viewport: { width: 1312, height: 800 } });
 const cdp = await page.context().newCDPSession(page);
-await page.goto(url + '?start=skip');
+await page.goto(url + '?start=skip&quiet=1');
 await page.waitForFunction(() => window.__sim, null, { timeout: 60000 });
 await page.evaluate(() => {
   const { arm, flow } = window.__sim;

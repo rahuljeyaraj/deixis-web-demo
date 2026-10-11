@@ -1,6 +1,7 @@
 /**
  * The page's panels (plan W10) on the server's real replies (`tests/fixtures/replies.json`):
- * the thinking strip's words, holds and links, and the details panel's lines.
+ * the thinking strip's words, holds and links, the wiring panel's rows and lanes, the plan
+ * strip, and the one summary line under the panel.
  */
 
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ import { describe, expect, test } from 'vitest';
 import type { HeardWord } from '../src/api';
 import type { CoreResponse } from '../src/core';
 import type { Plan, PlanStep, StepState } from '../src/flow/flow';
-import { callLine, coreJson, costLine, pickLine, timingsLine, understoodBy } from '../src/ui/details';
+import { costLine, summaryLine, timingsLine, understoodBy } from '../src/ui/summary';
 import { MARK, planLine } from '../src/ui/plan';
 import { layoutWords, stripModel } from '../src/ui/strip';
 import { LANES, lanePercent, laneOf, rowShape, timeLabel } from '../src/ui/wiring';
@@ -74,57 +75,55 @@ describe('the thinking strip', () => {
   });
 });
 
-describe('the details panel', () => {
-  test('a tool call reads as one line, with references, not coordinates', () => {
-    const line = callLine({
-      name: 'move',
-      args: { object: { deixis: 'that', word_index: 1 }, place: { deixis: 'here', word_index: 2 } },
-    });
-    expect(line).toBe('move(object={"deixis":"that","word_index":1}, place={"deixis":"here","word_index":2})');
-  });
-
-  test("the pick that answered the robot's question reads as a line too", () => {
-    // Named: the model chose it. Pointed: the model handed it to the core, and the line says so.
-    expect(pickLine({ choice: 1, word_index: null })).toBe('pick(choice=1)');
-    expect(pickLine({ choice: null, word_index: 0 })).toContain('pick(word_index=0)');
-    expect(pickLine({ choice: null, word_index: 0 })).toContain('the core says which');
-  });
-
-  test("the core's answer without empty fields or its working notes", () => {
-    const json = coreJson(result('put that here')!);
-    const back = JSON.parse(json);
-    expect(back.status).toBe('ok');
-    expect(back.calls[0].args.place.mean_mm).toEqual([330, 50]);
-    expect(back).not.toHaveProperty('log');
-    expect(back).not.toHaveProperty('ask');
-    expect(json).not.toContain('null');
-  });
+describe('the line under the panel', () => {
+  const agent = {
+    source: 'nemotron' as const, model: 'nvidia/Nemotron-3_5-Lightning', calls: [], raw: [],
+    errors: [], attempts: 1,
+  }; // prettier-ignore
+  const t = { asr_s: 0.41, agent_s: 1.2, core_s: 0.012, total_s: 1.7 };
 
   test('who understood, and how long it took', () => {
-    const agent = { model: 'nvidia/Nemotron-3_5-Lightning', calls: [], raw: [], errors: [], attempts: 1 };
     expect(understoodBy({ ...agent, source: 'nemotron' })).toContain('Nemotron 3.5 Lightning');
-    expect(understoodBy({ ...agent, source: 'rules', errors: ['timeout'] })).toContain('timeout');
+    expect(understoodBy({ ...agent, source: 'nemotron' }, 'own')).toContain('with your own key');
+    // The only thing that is not the model: the person clicking one of the robot's choices.
+    expect(understoodBy({ ...agent, source: 'answer' })).toContain('Your answer');
     expect(understoodBy(undefined)).toContain('answer');
-    const t = { asr_s: 0.41, agent_s: 1.2, core_s: 0.012, total_s: 1.7 };
     expect(timingsLine(t, { ...agent, source: 'nemotron' })).toBe(
       'Parakeet 0.41 s · Nemotron 1.20 s · core 0.012 s · server in all 1.70 s',
     );
-    expect(timingsLine(t)).toContain('word matcher 1.20 s');
+    // A clicked answer took no model at all, so the line names the answer, not a model.
+    expect(timingsLine(t, { ...agent, source: 'answer' })).toContain('answer 1.20 s');
   });
 
   test('tokens and cost at list price (item 11)', () => {
-    const agent = {
-      source: 'nemotron' as const, model: 'm', calls: [], raw: [], errors: [], attempts: 1,
-      usage: { prompt: 7051, cached: 4192, completion: 64 },
-    };
-    expect(costLine(agent, 0.00043842)).toBe('7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price');
+    const paid = { ...agent, usage: { prompt: 7051, cached: 4192, completion: 64 } };
+    expect(costLine(paid, 0.00043842)).toBe('7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price');
     expect(costLine({ ...agent, usage: {} }, 0)).toBeNull();
+  });
+
+  test('all three as the one line the details box used to be a boxful of', () => {
+    const paid = { ...agent, usage: { prompt: 7051, cached: 4192, completion: 64 } };
+    const line = summaryLine({ agent: paid, timings: t, cost_usd: 0.00043842 });
+    expect(line.split(' — ')).toEqual([
+      'Understood by NVIDIA Nemotron 3.5 Lightning (nvidia/Nemotron-3_5-Lightning), on Nebius Token Factory',
+      'Parakeet 0.41 s · Nemotron 1.20 s · core 0.012 s · server in all 1.70 s',
+      '7,051 tokens in (4,192 cached), 64 out: $0.00044 at list price',
+    ]);
+    // A clicked answer asks no model at all: no tokens, nothing to leave a dangling dash.
+    expect(summaryLine({ timings: { total_s: 0.01 } })).toBe(
+      'Understood by Your answer to the robot’s question (no language model needed) — server in all 0.01 s',
+    );
   });
 });
 
 describe('the live wiring panel (advanced-commands-plan.md 5.1)', () => {
   test('the lanes are the ones the server names, left to right', () => {
     expect(LANES.map((l) => l.id)).toEqual(['you', 'mediapipe', 'parakeet', 'page', 'nemotron', 'core', 'arm']);
+    // Every lane says where it runs, under its name, short enough for one lane's width.
+    expect(LANES.map((l) => l.runs)).toEqual([
+      'at the table', 'your browser', 'our server', 'your browser', 'Nebius', 'over MCP', 'MuJoCo',
+    ]);
+    for (const lane of LANES) expect(lane.runs.length).toBeLessThanOrEqual(13);
     expect(laneOf('nemotron')).toBe(4);
     expect(laneOf('core')).toBe(5);
     // Nemotron's lane sits between the page's and the core's, as the learn diagrams have it.
@@ -138,9 +137,9 @@ describe('the live wiring panel (advanced-commands-plan.md 5.1)', () => {
     expect(asked.opens).toBe(true);
     const back = rowShape({ from: 'nemotron', to: 'page', say: 'a plan: 3 tool calls', ms: 613 });
     expect([back.rightwards, back.time]).toEqual([false, '0.61 s']);
-    // The word matcher's grey row is a part talking to itself: a dot, not an arrow.
-    const shadow = rowShape({ from: 'page', to: 'page', say: 'the simple word matcher', kind: 'shadow' });
-    expect([shadow.single, shadow.kind, shadow.opens]).toEqual([true, 'shadow', false]);
+    // A row a part sends to itself (a step marker) is a dot, not an arrow.
+    const note = rowShape({ from: 'page', to: 'page', say: 'step 2 of 3', kind: 'step' });
+    expect([note.single, note.kind, note.opens]).toEqual([true, 'step', false]);
   });
 
   test('only the rows that cost something show a time', () => {

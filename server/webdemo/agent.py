@@ -18,10 +18,10 @@ what the demo shows, so nothing is decided behind its back (rahul, 8 Oct). While
 has a question open it also gets `pick`, so the answer to that question is the model's call
 too, not words read on the server (rahul, 11 Oct); where the answer was only pointed at
 ("this one"), `pick` hands the choosing to the core, which is the one part the model cannot
-know. `parse` is a small rule parser for the arm's phrases: the fallback when Nemotron can't
-be reached or the day's budget is used up ("simple mode"), the comparison the details panel
-prints beside the model's answer, and the agent for the tests. The arm's instant stop is the
-page's Stop button (Esc), which never waits for anything. Shaped after deixis-doodle's
+know. Nothing else here understands a person: when the model cannot be reached, or the day's
+budget is used up, the robot says so rather than falling back on a word list (rahul, 11 Oct;
+the parser that used to do it is a test double now, `tests/wordrules.py`). The arm's instant
+stop is the page's Stop button (Esc), which never waits for anything. Shaped after deixis-doodle's
 `vacuum/agent.py` (7a7e9cc).
 """
 
@@ -102,9 +102,10 @@ class AgentResult:
     """What the agent decided for one command."""
 
     calls: list[Call]
-    source: Literal["nemotron", "rules", "answer"] = "nemotron"
+    #: "answer": the person clicked one of the robot's choices, so no model was asked.
+    source: Literal["nemotron", "answer"] = "nemotron"
     model: str = ""
-    raw: list[dict[str, Any]] = field(default_factory=list)  # as the model (or rules) wrote them
+    raw: list[dict[str, Any]] = field(default_factory=list)  # as the model wrote them
     errors: list[str] = field(default_factory=list)  # validation errors seen (and fixed?)
     attempts: int = 0
     latency_s: float = 0.0
@@ -421,134 +422,6 @@ def user_message(words: Sequence[str], context: Context | None = None) -> str:
     return "\n".join(lines)
 
 
-# ------------------------------------------------------------------ the rule parser
-
-STOP = {"stop", "halt", "freeze", "wait", "pause"}
-HOME = {"home", "rest"}
-UNDO = {"undo"}
-YES = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "correct", "go", "do"}
-NO = {"no", "nope", "cancel", "nevermind"}
-MOVE = {"put", "move", "place", "stack", "set", "take", "bring", "drop", "pick"}
-COLOURS = {"red", "green", "blue"}
-BLOCK_WORDS = ("block", "blocks", "cube", "cubes", "box", "boxes")
-POINTING = {"this", "that", "these", "those", "here", "there"}
-SPOTS = {"here", "there"}
-LEFT, RIGHT = {"left"}, {"right"}
-AWAY = {"further", "farther", "away", "forward", "forwards", "back", "backwards"}
-CLOSER = {"closer", "nearer", "toward", "towards"}
-FILLERS = {"um", "uh", "er", "so", "well", "please", "now", "and", "oh", "can", "you", "could"}
-YES_PHRASES = {"thats right", "all right", "alright", "go ahead", "do it", "sounds good", "fine"}
-# Relation phrases, longest first: the words, and the core's relation name.
-RELATIONS = [
-    (("on", "top", "of"), "on"),
-    (("in", "front", "of"), "in_front_of"),
-    (("next", "to"), "next_to"),
-    (("to", "the", "left", "of"), "left_of"),
-    (("to", "the", "right", "of"), "right_of"),
-    (("left", "of"), "left_of"),
-    (("right", "of"), "right_of"),
-    (("on",), "on"),
-    (("onto",), "on"),
-    (("beside",), "next_to"),
-    (("by",), "next_to"),
-    (("behind",), "behind"),
-]
-
-
-def _norm(words: Sequence[str]) -> list[str]:
-    return [norm_word(w).replace("'", "") for w in words]
-
-
-def _object_at(ws: list[str], i: int) -> tuple[dict[str, Any], int] | None:
-    """An object reference starting at word i (skipping "the"), and the index after it."""
-    while i < len(ws) and ws[i] in ("the", "a", "up", *BLOCK_WORDS):
-        i += 1
-    if i >= len(ws):
-        return None
-    w = ws[i]
-    if w in ("this", "that"):
-        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", *BLOCK_WORDS))
-        return {"deixis": w, "word_index": i}, end
-    if w == "it":
-        return {"last": True}, i + 1
-    if w in COLOURS:
-        end = i + 1 + (i + 1 < len(ws) and ws[i + 1] in ("one", *BLOCK_WORDS))
-        return {"label": f"{w} one"}, end
-    return None
-
-
-def _relation_at(ws: list[str], i: int) -> tuple[str, int] | None:
-    for phrase, rel in RELATIONS:
-        if tuple(ws[i : i + len(phrase)]) == phrase:
-            return rel, i + len(phrase)
-    return None
-
-
-def _place_after(ws: list[str], i: int) -> dict[str, Any] | None:
-    """The place reference in the words after the object (from word i)."""
-    for k in range(i, len(ws)):
-        rel = _relation_at(ws, k)
-        if rel:
-            target = _object_at(ws, rel[1])
-            if target:
-                return {"relation": rel[0], "target": target[0]}
-        if ws[k] in SPOTS:
-            return {"deixis": ws[k], "word_index": k}
-        if ws[k] in ("this", "that") and (k + 1 >= len(ws) or ws[k + 1] not in ("one", "block")):
-            # "put that there" said as "put that that": the second pointing word is the place.
-            return {"deixis": ws[k], "word_index": k}
-    return None
-
-
-def parse(words: Sequence[str], context: Context | None = None) -> list[dict[str, Any]]:
-    """The arm's phrases, by rule: raw calls ({"name", "args"}), or [] if not understood."""
-    ws = _norm(words)
-    s = set(ws)
-    if not ws:
-        return []
-    if s & STOP:
-        return [{"name": "stop", "args": {}}]
-    # "undo", "put that back where it was": one word, so the word matcher can have it too.
-    if s & UNDO or ("back" in s and "was" in s):
-        return [{"name": "undo", "args": {}}]
-    if s & HOME or (s & {"go", "come"} and "back" in s and not s & MOVE):
-        return [{"name": "home", "args": {}}]
-    verb = next((i for i, w in enumerate(ws) if w in MOVE), None)
-    steps = 3 if s & {"lot", "much", "far"} else 1
-    adj: dict[str, Any] = {}
-    if s & LEFT:
-        adj["dx"] = -steps
-    elif s & RIGHT:
-        adj["dx"] = steps
-    if s & AWAY:
-        adj["dy"] = steps
-    elif s & CLOSER:
-        adj["dy"] = -steps
-    has_place_word = bool(s & SPOTS) or any(_relation_at(ws, k) for k in range(len(ws)))
-    if verb is not None or (s & POINTING and not (s & YES or s & NO)):
-        start = verb + 1 if verb is not None else 0
-        obj = _object_at(ws, start)
-        # "a bit left" during a move ("move it a bit left"): an adjustment, not a new move.
-        if adj and not has_place_word:
-            return [{"name": "adjust", "args": adj}]
-        if obj is not None and (verb is not None or has_place_word):
-            place = _place_after(ws, obj[1]) or {"pointed": True}
-            return [{"name": "move", "args": {"object": obj[0], "place": place}}]
-        if obj is not None:
-            return []  # "this one", "the red one": an answer to a question, not a command
-    first = next((w for w in ws if w not in FILLERS), "")
-    if first in NO or ("never" in s and "mind" in s):
-        return [{"name": "cancel", "args": {}}]
-    said = " ".join(w for w in ws if w not in FILLERS)
-    if said in YES_PHRASES:
-        return [{"name": "confirm", "args": {}}]
-    if adj:
-        return [{"name": "adjust", "args": adj}]
-    if first in YES:
-        return [{"name": "confirm", "args": {}}]
-    return []
-
-
 def out_of_reach(call: Call) -> str | None:
     """A place this arm can never use, however well the core resolves it: a named region of
     the work area ("the top left corner") or the largest empty space. Both are worked out in
@@ -601,15 +474,6 @@ def validate(
         else:
             calls.append(call)
     return calls, errors
-
-
-def rules(profile: Profile, words: Sequence[str], context: Context | None = None) -> AgentResult:
-    """The rule parser, as an agent."""
-    t = time.perf_counter()
-    raw = parse(words, context)
-    calls, errors = validate(profile, raw, words)
-    return AgentResult(calls, source="rules", model="rules", raw=raw, errors=errors,
-                       attempts=1, latency_s=time.perf_counter() - t)  # fmt: skip
 
 
 # ------------------------------------------------------------------ Nemotron
@@ -759,8 +623,8 @@ class ArmAgent:
                 errors = ["no tool call; reply only with tool calls (use ask_user to talk)"]
             result.errors += errors
             result.calls = calls
-            # A plan that is wrong as a whole is refused out loud, not trimmed to fit and not
-            # handed to the word matcher: the person is told, and can ask for less.
+            # A plan that is wrong as a whole is refused out loud, not trimmed to fit: the
+            # person is told, and can ask for less.
             result.refusal = None
             if whole:
                 result.calls = []
@@ -787,30 +651,24 @@ class ArmAgent:
         words: Sequence[str],
         key: str | None,
         context: Context | None = None,
-        no_key_why: str = "no Nebius key: simple mode",
+        no_key_why: str = "no Nebius key",
         shared: bool = False,
     ) -> AgentResult:
-        """Nemotron if it answers with calls, else the rule parser (with why in `errors`).
-        Every command goes to the model, "yes" and "stop" included: the rule parser only ever
-        answers when the model couldn't (no key, an error, the day's budget).
-        `no_key_why` is the reason given when there is no key (simple mode, plan 8.1)."""
-        why = no_key_why
-        refused = False
-        if key:
-            try:
-                res = self.run(words, key, context, shared)
-                res.asked_model = True
-                # A refusal is the model's answer too: the rule parser never gets a second
-                # go at a plan that was too long.
-                if res.ok or res.refusal:
-                    return res
-                why = "; ".join(res.errors)
-            except AgentUnavailable as e:
-                why = str(e)
-                refused = isinstance(e, KeyRefused)
-                log.warning("nemotron unavailable, using the rule parser: %s", why)
-        res = rules(self.profile, words, context)
-        res.errors = [why, *res.errors]
-        res.asked_model = bool(key)
-        res.key_refused = refused
-        return res
+        """Nemotron, or nothing.
+
+        Every command goes to the model, "yes" and "stop" included, and when the model cannot
+        answer the robot says so. Nothing else on this server understands a person: the word
+        matcher that used to catch these was taken out on 11 Oct 2026 (rahul), because a demo
+        whose claim is "the model decides" must not quietly be answered by a word list.
+        `no_key_why` is the reason given when there is no key to use (plan 8.1).
+        """
+        if not key:
+            return AgentResult([], errors=[no_key_why], asked_model=False)
+        try:
+            res = self.run(words, key, context, shared)
+            res.asked_model = True
+            return res
+        except AgentUnavailable as e:
+            log.warning("nemotron unavailable: %s", e)
+            return AgentResult([], errors=[str(e)], asked_model=True,
+                               key_refused=isinstance(e, KeyRefused))  # fmt: skip

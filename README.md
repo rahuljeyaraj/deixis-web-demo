@@ -50,8 +50,9 @@ npx tsc --noEmit                 # type check
 
 `uv run pytest` answers every command with a fake model, so the `-m network` run is the one
 that checks what a judge will see: `tests/test_live_web.py` drives the whole server with the
-real key and asserts that **every** command came back from Nemotron, never from the word
-matcher.
+real key and asserts that **every** command came back from Nemotron. Nothing else on the
+server can answer one: there is no word-matching fallback (`tests/wordrules.py` is a test
+double, and the server cannot reach it).
 
 The block at the top of this file (between the `---` lines) holds the Hugging Face Space
 settings (plan W14).

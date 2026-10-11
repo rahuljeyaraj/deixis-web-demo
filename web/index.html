@@ -9,21 +9,34 @@
   </head>
   <body>
     <main id="app">
-      <!-- Simple mode (plan 8.1): only when the word matcher answers instead of Nemotron. -->
+      <!-- Only when Nemotron cannot answer this visitor (plan 8.1): the day's free
+           commands are used up, or the server has no key. Nothing answers in its place. -->
       <div id="banner" role="status" hidden>
         <span id="banner-text"></span>
         <button id="banner-key" type="button" class="link">Add your own Nebius key to use Nemotron</button>
       </div>
-      <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). -->
+      <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). Two lines: one
+           move, then a whole job in one sentence - which is the thing to try (rahul, 11 Oct).
+           Every one of these was checked against the real Nemotron on 11 Oct. -->
       <div id="chips" aria-label="Try saying">
         <!-- After the first move: "Now say it your own way." (item 18). These are hand-picked
-             sentences the simple word rules miss; they are never counted in the held-out test. -->
-        <span class="chips-label" id="chips-label">Try saying:</span>
-        <button type="button" class="chip">put that here</button>
-        <button type="button" class="chip">pop that one on top of the red one</button>
-        <button type="button" class="chip">put the red cube between the green and the blue</button>
-        <button type="button" class="chip">a bit left</button>
-        <button type="button" class="chip">yes</button>
+             sentences; they are never counted in the held-out test. -->
+        <div class="chips-row">
+          <span class="chips-label" id="chips-label">Try saying:</span>
+          <button type="button" class="chip">put that here</button>
+          <button type="button" class="chip">pop that one on top of the red one</button>
+          <button type="button" class="chip">put the red cube between the green and the blue</button>
+          <button type="button" class="chip">a bit left</button>
+          <button type="button" class="chip">yes</button>
+        </div>
+        <div class="chips-row">
+          <span class="chips-label">Or a whole job at once:</span>
+          <button type="button" class="chip">stack them all up</button>
+          <button type="button" class="chip">swap the red and the blue</button>
+          <button type="button" class="chip">put each block on its own colour</button>
+          <button type="button" class="chip">put the red one in the red square</button>
+          <button type="button" class="chip">undo that</button>
+        </div>
       </div>
       <div id="work">
       <div id="scene-col">
@@ -74,35 +87,51 @@
         <button id="type-toggle" class="link" type="button">Type instead</button>
       </div>
 
-      <!-- The thinking strip (plan 5.2): the words and the pointing on one timeline. -->
-      <section id="strip" aria-label="What the robot heard and saw">
-        <h2>What the robot heard and saw</h2>
-        <svg id="strip-svg" role="img" aria-label="Your words and your pointing on one timeline"></svg>
-      </section>
+      <!-- "Scroll down and see inside" (rahul, 11 Oct): shown when a command has finished
+           and the panel below is off screen. -->
+      <button id="see-inside" type="button" hidden>
+        Done. Scroll down to see what each part said <span aria-hidden="true">↓</span>
+      </button>
       </div>
 
       <!-- The live wiring panel (advanced-commands-plan.md 5.1): what each part of the demo
-           said to the next, filling in as the command runs. Always open on a laptop; folded
-           away under 900 px, where there is no room for it (open decision D4). -->
+           said to the next, filling in as the command runs. Under the scene and the full width
+           of the page, never folded away, with what the robot heard and saw inside it: a judge
+           has to be able to read it (rahul, 11 Oct). -->
       <section id="wiring" aria-label="What each part said to the next">
         <div class="wiring-top">
           <h2>What each part said to the next</h2>
-          <button id="wiring-fold" class="link wiring-fold" type="button">Show</button>
           <button id="wiring-replay" class="link" type="button" title="Step through this command again, about one message a second">Replay</button>
         </div>
-        <div class="wiring-head">
-          <span class="wiring-lanes"></span>
-          <span class="wiring-what">what it said</span>
-        </div>
-        <ol class="wiring-rows"></ol>
-        <p class="wiring-hint">Say or type a command: every message between the parts shows up here as it happens. Plain words on the row, the real JSON on the button.</p>
+        <p class="wiring-key">
+          One row for every message, in the order it happened.
+          <b data-lane="you">Amber</b> is you,
+          <b data-lane="parakeet">blue</b> the two small models we run ourselves,
+          <b data-lane="nemotron">red</b> Nemotron deciding what to do,
+          <b data-lane="core">green</b> the deixis core measuring where, and
+          <b data-lane="arm">purple</b> the arm. Press <span class="key-json">JSON</span> on a row
+          to see the real message.
+        </p>
+
+        <!-- The thinking strip (plan 5.2): the words and the pointing on one timeline. It sits
+             inside the panel now, because it is the first thing that happened (rahul, 11 Oct). -->
+        <section id="strip" aria-label="What the robot heard and saw">
+          <h3><span class="step-no">1</span> What the robot heard and saw</h3>
+          <svg id="strip-svg" role="img" aria-label="Your words and your pointing on one timeline"></svg>
+        </section>
+
+        <section class="wiring-flow" aria-label="Every message between the parts">
+          <h3><span class="step-no">2</span> Then every message between the parts</h3>
+          <div class="wiring-head">
+            <span class="wiring-lanes"></span>
+            <span class="wiring-what">what it said</span>
+          </div>
+          <ol class="wiring-rows"></ol>
+          <p class="wiring-hint">Say or type a command: every message between the parts shows up here as it happens.</p>
+          <p class="wiring-foot"></p>
+        </section>
       </section>
       </div>
-
-      <details id="details">
-        <summary>Details: the tool calls, the core’s answer, the timings</summary>
-        <div id="details-body"><p>Nothing yet. Say or type a command first.</p></div>
-      </details>
 
       <footer>
         <details id="models">

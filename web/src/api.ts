@@ -16,7 +16,7 @@ export interface HeardWord {
 }
 
 export interface AgentSummary {
-  source: 'nemotron' | 'rules' | 'answer';
+  source: 'nemotron' | 'answer';
   model: string;
   calls: { name: string; args: Record<string, unknown> }[];
   /**
@@ -32,16 +32,6 @@ export interface AgentSummary {
   usage?: { prompt?: number; cached?: number; completion?: number };
 }
 
-/** What the simple word rules alone would have done with the same words (item 18). */
-export interface WordRules {
-  understood: boolean;
-  /** In plain words: "move the red one to where you pointed (“here”)", "not understood". */
-  words: string;
-  calls: { name: string; args: Record<string, unknown> }[];
-  /** The same calls as Nemotron's. */
-  same: boolean;
-}
-
 export interface Timings {
   asr_s?: number;
   agent_s?: number;
@@ -51,18 +41,19 @@ export interface Timings {
 
 /** How much of our key this visitor may still use today (plan 8.1). */
 export interface Limits {
-  /** Who answers: our key, the visitor's own key, or the simple word matcher. */
-  mode: 'ours' | 'own' | 'simple';
+  /** Whose key answers: ours, the visitor's own, or nobody - and then the robot says so.
+   * Nothing stands in for Nemotron (rahul, 11 Oct). */
+  mode: 'ours' | 'own' | 'off';
   /** Commands left today with our key. */
   left_today: number;
   per_day: number;
-  /** Why simple mode (the visitor's share, their network's, everyone's, no key, AI off). */
-  why: 'visitor' | 'address' | 'total' | 'no_key' | 'rules' | null;
-  /** The simple-mode banner, from the server. */
+  /** Why Nemotron is off for this visitor (their share, their network's, everyone's, no key). */
+  why: 'visitor' | 'address' | 'total' | 'no_key' | null;
+  /** The banner that says Nemotron is off and what to do, from the server. */
   banner: string | null;
   /** The note on the models list's Nemotron line. */
   off: string | null;
-  /** Would the visitor's own key help? (Not when the server runs the word matcher only.) */
+  /** Would the visitor's own key help? */
   own_key_helps: boolean;
 }
 
@@ -88,7 +79,6 @@ export interface PlanReply {
 
 export interface CommandReply {
   words: HeardWord[];
-  word_rules?: WordRules;
   /** This command's tokens at Token Factory's list price, US$. */
   cost_usd?: number;
   agent: AgentSummary;
@@ -188,7 +178,7 @@ export interface ModelLine {
   where: string;
   url: string;
   model_id?: string;
-  /** Set when this model is off right now (simple mode). */
+  /** Set when this model is off right now (the day's commands are used up). */
   off?: string | null;
 }
 
@@ -257,14 +247,17 @@ const JSON_POST = { method: 'POST', headers: { 'Content-Type': 'application/json
 /**
  * One step of the plan the last command set off, measured now. `things` is the table as the
  * page sees it at this moment: that is the point of asking again rather than resolving the
- * whole plan up front.
+ * whole plan up front. `showing`: this is the measurement that draws the plan, against the
+ * table as it will be by then - the panel says so, rather than calling it a re-measurement.
  */
 export async function sendStep(
   index: number,
   things: Thing[],
   context: Record<string, unknown>,
+  showing = false,
 ): Promise<StepReply> {
-  return check(await reach('/api/step', { ...JSON_POST, body: JSON.stringify({ index, things, context }) }));
+  const body = JSON.stringify({ index, things, context, showing });
+  return check(await reach('/api/step', { ...JSON_POST, body }));
 }
 
 /** A step could not be done: Nemotron is told which and why, and plans the rest again. */

@@ -3,11 +3,11 @@
 import { chromium } from '@playwright/test';
 
 const [url = 'http://localhost:5173/?start=skip', out = '../out'] = process.argv.slice(2);
-const browser = await chromium.launch({ channel: 'chrome' });
+const browser = await chromium.launch({ channel: 'chrome', args: ['--mute-audio'] });
 const page = await browser.newPage({ viewport: { width: 1312, height: 800 } });
 page.on('pageerror', (e) => console.log('pageerror:', e.message));
 page.on('console', (m) => m.type() === 'error' && console.log('console:', m.text()));
-await page.goto(url);
+await page.goto(url + '?quiet=1');
 await page.waitForFunction(() => window.__sim, null, { timeout: 30000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${out}/a-start.png` });

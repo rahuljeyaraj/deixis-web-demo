@@ -4,9 +4,9 @@
  * on the page clock); one command to the server (W6, W8: words, Nemotron's calls, the core's
  * places over MCP); and the flow (W9: preview, "This one, here?", yes, the arm moves).
  *
- * W10 adds the page around it: the start card, the thinking strip, the details panel, the
+ * W10 adds the page around it: the start card, the thinking strip, the wiring panel, the
  * try-saying chips, the models list (plan 8.4), and typing instead of talking. W11: the day's
- * limits on our key, the simple-mode banner, and the visitor's own key (plan 8.1, 8.2).
+ * limits on our key, the banner when it is off, and the visitor's own key (plan 8.1, 8.2).
  *
  * 6 Oct (test set-up, final/web-demo.md items 1 to 20): the robot says what it understood
  * ("Move the red block here?"), the coach line, the hover outline, "Done.", one prompt for
@@ -45,7 +45,7 @@ import { type Hit, pointAt } from './sim/pick';
 import { TableView } from './sim/render';
 import { BASE_MM, BLOCK_MM, CLEAR_OF_SQUARE_MM, REACH_MM, SQUARES, type Vec3, onMat, tableToWorld } from './sim/table';
 import { COACH, Coach, onPhone } from './ui/coach';
-import { fillDetails } from './ui/details';
+import { summaryLine } from './ui/summary';
 import { KeyPanel, ownKey } from './ui/key';
 import { fillModels, modelsUnavailable } from './ui/models';
 import { drawPlan } from './ui/plan';
@@ -153,17 +153,31 @@ async function start(): Promise<void> {
       if (flow.state.kind !== 'preview' && flow.state.kind !== 'asking') bubble.classList.remove('on');
     }, 6000);
   };
-  const detailsBody = document.getElementById('details-body')!;
   // The live wiring panel and the plan strip (advanced-commands-plan.md 5.1, 5.2).
   const wiring = new Wiring(
     document.getElementById('wiring')!,
     document.getElementById('wiring-replay') as HTMLButtonElement,
   );
   const planStrip = document.getElementById('plan-strip')!;
-  const foldBtn = document.getElementById('wiring-fold') as HTMLButtonElement;
-  foldBtn.addEventListener('click', () => {
-    const open = document.getElementById('wiring')!.classList.toggle('open');
-    foldBtn.textContent = open ? 'Hide' : 'Show';
+
+  /* "Scroll down to see what each part said" (rahul, 11 Oct). The panel is under the scene, so
+     when a command has finished its work, say that there is something to see - unless it is
+     already on the screen, which it is on a tall window. */
+  const wiringEl = document.getElementById('wiring')!;
+  const seeInside = document.getElementById('see-inside') as HTMLButtonElement;
+  let panelOnScreen = false;
+  /** Something actually moved during this command, so there is a story worth reading. */
+  let somethingHappened = false;
+  new IntersectionObserver(
+    ([seen]) => {
+      panelOnScreen = seen.isIntersecting;
+      if (panelOnScreen) seeInside.hidden = true;
+    },
+    { threshold: 0.3 },
+  ).observe(wiringEl);
+  seeInside.addEventListener('click', () => {
+    seeInside.hidden = true;
+    wiringEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   /**
@@ -171,8 +185,8 @@ async function start(): Promise<void> {
    * sends the table as it is at that moment, and its trace rows go straight on the panel.
    */
   const server: FlowServer = {
-    step: async (index, things, context) => {
-      const reply = await sendStep(index, things, context);
+    step: async (index, things, context, showing) => {
+      const reply = await sendStep(index, things, context, showing);
       wiring.add(reply.trace);
       return reply;
     },
@@ -180,7 +194,7 @@ async function start(): Promise<void> {
       const reply = await sendReplan(index, why, things, context, ownKey());
       wiring.add(reply.trace);
       keys.reply(reply);
-      fillDetails(detailsBody, { ...reply, typed: true });
+      wiring.summary(summaryLine(reply));
       return reply;
     },
   };
@@ -212,6 +226,11 @@ async function start(): Promise<void> {
         stage.dataset.flow = s.kind;
         goBtn.disabled = s.kind !== 'preview';
         if (s.kind === 'acting') bubble.classList.remove('on'); // the question is answered
+        // The command is over and the arm moved something: there is a diagram to read.
+        if (s.kind === 'idle' && somethingHappened) {
+          somethingHappened = false;
+          seeInside.hidden = panelOnScreen;
+        }
       },
       event: (kind, data) => {
         // For the server's log: M30 (right first time) and M31 (last word to the guess).
@@ -222,6 +241,7 @@ async function start(): Promise<void> {
         if (kind === 'go') extra.via = goVia;
         if (kind === 'go' || kind === 'cancel' || kind === 'stop') goVia = 'voice';
         sendEvent({ kind, ...data, ...extra });
+        if (kind === 'done') somethingHappened = true;
         if (kind === 'done' && coach.moved(now())) {
           document.getElementById('chips-label')!.textContent = 'Now say it your own way:';
         }
@@ -234,7 +254,7 @@ async function start(): Promise<void> {
   /** The page time the last spoken command's last word ended (null for typed commands). */
   let lastWordT1: number | null = null;
 
-  // The thinking strip and the details panel (plan 5.2).
+  // The thinking strip (plan 5.2), inside the wiring panel.
   const stripEl = document.getElementById('strip')!;
   const stripSvg = document.getElementById('strip-svg') as unknown as SVGSVGElement;
   // Only what the person said and where they pointed; the robot's words go in its bubble.
@@ -265,13 +285,15 @@ async function start(): Promise<void> {
   let lastReply: CommandReply | null = null;
   /** Clicks after this page time belong to the next typed command. */
   let usedClicksUntil = -Infinity;
-  /** One command, spoken (with its clip) or typed: the server, then the strip, the details
-   * and the flow. */
+  /** One command, spoken (with its clip) or typed: the server, then the strip, the panel and
+   * the flow. */
   const runCommand = async (meta: CommandMeta, wav?: ArrayBuffer, prefix = '') => {
     usedClicksUntil = meta.t ?? now();
     flow.thinking();
     coach.sent();
     wiring.clear(); // the panel shows this command, from the first word to the last move
+    somethingHappened = false;
+    seeInside.hidden = true;
     showStrip(wav ? 'Turning your voice into words…' : 'Thinking…', true);
     const reply = await sendCommand(meta, wav, ownKey(), () => say('One moment…'));
     coach.server(true);
@@ -280,8 +302,8 @@ async function start(): Promise<void> {
     const keyNote = keys.reply(reply);
     const heard = reply.words.map((w) => w.text).join(' ');
     wiring.add(reply.trace);
+    wiring.summary(summaryLine(reply));
     showStrip(heard ? stripModel(reply.words, reply.result) : HINT);
-    fillDetails(detailsBody, { ...reply, typed: !wav });
     const line = wav
       ? heard
         ? `${prefix}You said: “${heard}”`
@@ -346,7 +368,6 @@ async function start(): Promise<void> {
     flow.thinking();
     try {
       const reply = await sendAnswer(pick);
-      fillDetails(detailsBody, reply);
       wiring.add(reply.trace);
       if (lastReply) showStrip(stripModel(lastReply.words, lastReply.result, reply.result));
       await flow.handle(reply);

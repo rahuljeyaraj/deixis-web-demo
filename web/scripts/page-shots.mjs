@@ -11,14 +11,18 @@ const url = process.argv[2] ?? 'http://localhost:5173/';
 const pictures = path.resolve(import.meta.dirname, '..', '..', 'out', 'pictures');
 const shot = (page, name, fullPage = false) => page.screenshot({ path: path.join(pictures, name), fullPage });
 
-const browser = await chromium.launch({ channel: 'chrome', args: ['--use-fake-device-for-media-stream'] });
+// --mute-audio and ?quiet: the page never speaks while shots are taken (rahul, 11 Oct).
+const browser = await chromium.launch({
+  channel: 'chrome',
+  args: ['--use-fake-device-for-media-stream', '--mute-audio'],
+});
 const viewport = { width: 1312, height: 940 };
 
 async function open(context) {
   const page = await context.newPage();
   page.on('pageerror', (e) => console.log('pageerror:', e.message));
   page.on('console', (m) => m.type() === 'error' && console.log('console.error:', m.text().slice(0, 200)));
-  await page.goto(url);
+  await page.goto(url + '?quiet=1');
   await page.waitForFunction(() => !document.getElementById('start-mouse').disabled, null, { timeout: 30000 });
   return page;
 }
@@ -77,11 +81,11 @@ const flowLine = async (page) =>
   await clickTable(page, 330, 50); // here: an empty spot
   await type(page, 'put that here', 'preview');
   console.log('typed:', await flowLine(page));
-  await page.click('#details summary');
   await page.mouse.move(5, 5);
   await page.waitForTimeout(300);
+  // The whole page: the wiring panel under the scene has the tool calls and the core's answer
+  // on it, where the details box used to keep them folded away.
   await shot(page, '10-typed-preview.png', true);
-  await page.click('#details summary');
 
   await page.click('#go-btn');
   await page.waitForFunction(() => !window.__sim.arm.busy && window.__sim.flow.state.kind === 'idle', null, {
