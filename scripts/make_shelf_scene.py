@@ -144,6 +144,11 @@ def _home_qpos(things: list[Thing]) -> str:
     out: list[str] = []
     for _ in range(2):
         out += [f"{q:g}" for q in HOME]
+    # The free joints, in the order the bodies are declared: the two parking bodies come
+    # before the shelf, because that is where they are in the worldbody.
+    for arm in arms():
+        X, Y = table_to_world(*arm.base_mm)
+        out += [f"{X:.4f}", f"{Y:.4f}", "0.3000", "1", "0", "0", "0"]
     for t in things:
         x_mm, y_mm, z_mm = t.place_mm
         X, Y = table_to_world(x_mm, y_mm)
@@ -177,9 +182,11 @@ def xml() -> str:
         "  Two arms by <attach prefix>: <replicate> is not in this MuJoCo build",
         "  (web/tests/probes/twoarms.probe.test.ts). so101.xml is unchanged.",
         "",
-        "  Two welds, one per gripper. The old one-arm scene switched its single weld with",
-        "  MuJoCo's global equality-disable flag; with two grips that flag would let go of",
-        "  both at once, so the page must switch these per equality.",
+        "  Two welds and two parking bodies. The old one-arm scene switched its single weld",
+        "  with MuJoCo's global equality-disable flag, which lets go of every grip at once.",
+        "  data.eq_active cannot be touched in this build (a memory_view<bool>; emscripten",
+        "  throws on any access), so both welds stay active and an arm holding nothing has",
+        "  its weld on an invisible parking body. See tests/probes/eqactive.probe.test.ts.",
         "-->",
         '<mujoco model="the end demo: a shelf and two arms">',
         '  <asset><model name="so101" file="so101.xml"/></asset>',
@@ -231,6 +238,19 @@ def xml() -> str:
         '      <attach model="so101" prefix="right_"/>',
         "    </body>",
         "",
+        "    <!-- One parking body per arm: where its weld points while it holds nothing.",
+        "         Declared after the arms and before the shelf, because the keyframe below",
+        "         lists qpos in declaration order and getting that wrong scrambles the",
+        "         scene - it moved the remote 38 mm the first time. See the module",
+        "         docstring: eq_active cannot be switched in this build, so both welds are",
+        "         always on and an idle one holds something harmless. -->",
+        f'    <body name="left_park" pos="{lx:.4f} {ly:.4f} 0.30"><freejoint name="left_park"/>',
+        '      <geom name="left_park" type="sphere" size="0.002" mass="0.0001"',
+        '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
+        f'    <body name="right_park" pos="{rx:.4f} {ry:.4f} 0.30"><freejoint name="right_park"/>',
+        '      <geom name="right_park" type="sphere" size="0.002" mass="0.0001"',
+        '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
+        "",
     ]
     for row, name in ((0, "the raised row at the back"), (1, "the front row")):
         lines.append(f"    <!-- {name} -->")
@@ -248,12 +268,14 @@ def xml() -> str:
         f'    <key name="home" qpos="{_home_qpos(things)}"/>',
         "  </keyframe>",
         "",
-        "  <!-- One weld per gripper. The page points each at whatever that arm is holding",
-        "       (eq_obj2id) and sets the relative pose (eq_data). The targets below are only",
-        "       a starting point so the model compiles. -->",
+        "  <!-- One weld per gripper, both always active. Each starts on its own parking",
+        "       body, which is what an arm holding nothing is welded to. The page retargets a",
+        "       weld to the real thing (eq_obj2id) and sets the relative pose (eq_data) to",
+        "       grip, and points it back at the park to let go. eq_active cannot be switched",
+        "       in this build at all - see the module docstring. -->",
         "  <equality>",
-        f'    <weld name="left_grip" body1="left_gripper" body2="{things[0].id}"/>',
-        f'    <weld name="right_grip" body1="right_gripper" body2="{things[1].id}"/>',
+        '    <weld name="left_grip" body1="left_gripper" body2="left_park"/>',
+        '    <weld name="right_grip" body1="right_gripper" body2="right_park"/>',
         "  </equality>",
         "</mujoco>",
     ]

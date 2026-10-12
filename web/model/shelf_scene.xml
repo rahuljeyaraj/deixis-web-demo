@@ -12,9 +12,11 @@
   Two arms by <attach prefix>: <replicate> is not in this MuJoCo build
   (web/tests/probes/twoarms.probe.test.ts). so101.xml is unchanged.
 
-  Two welds, one per gripper. The old one-arm scene switched its single weld with
-  MuJoCo's global equality-disable flag; with two grips that flag would let go of
-  both at once, so the page must switch these per equality.
+  Two welds and two parking bodies. The old one-arm scene switched its single weld
+  with MuJoCo's global equality-disable flag, which lets go of every grip at once.
+  data.eq_active cannot be touched in this build (a memory_view<bool>; emscripten
+  throws on any access), so both welds stay active and an arm holding nothing has
+  its weld on an invisible parking body. See tests/probes/eqactive.probe.test.ts.
 -->
 <mujoco model="the end demo: a shelf and two arms">
   <asset><model name="so101" file="so101.xml"/></asset>
@@ -61,6 +63,19 @@
     <body name="right_stand" pos="0.1500 -0.1400 0">
       <attach model="so101" prefix="right_"/>
     </body>
+
+    <!-- One parking body per arm: where its weld points while it holds nothing.
+         Declared after the arms and before the shelf, because the keyframe below
+         lists qpos in declaration order and getting that wrong scrambles the
+         scene - it moved the remote 38 mm the first time. See the module
+         docstring: eq_active cannot be switched in this build, so both welds are
+         always on and an idle one holds something harmless. -->
+    <body name="left_park" pos="0.1500 0.1400 0.30"><freejoint name="left_park"/>
+      <geom name="left_park" type="sphere" size="0.002" mass="0.0001"
+        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>
+    <body name="right_park" pos="0.1500 -0.1400 0.30"><freejoint name="right_park"/>
+      <geom name="right_park" type="sphere" size="0.002" mass="0.0001"
+        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>
 
     <!-- the raised row at the back -->
     <body name="bottle_1" pos="0.4000 0.1750 0.1160">
@@ -121,14 +136,16 @@
        row. Order: the two arms' joints as attached, then every thing's freejoint
        (7 numbers each: position then quaternion), left as the bodies were placed. -->
   <keyframe>
-    <key name="home" qpos="0 -1.45 0.75 1.45 0 0.2 0 -1.45 0.75 1.45 0 0.2 0.4000 0.1750 0.1160 1 0 0 0 0.4000 0.1050 0.1160 1 0 0 0 0.4000 0.0350 0.1160 1 0 0 0 0.4000 -0.0350 0.1160 1 0 0 0 0.4000 -0.1050 0.0860 1 0 0 0 0.4000 -0.1750 0.0890 1 0 0 0 0.3000 0.1750 0.0410 1 0 0 0 0.3000 0.1050 0.0410 1 0 0 0 0.3000 0.0350 0.0190 1 0 0 0 0.3000 -0.0350 0.0070 1 0 0 0 0.3000 -0.1050 0.0110 1 0 0 0 0.3000 -0.1750 0.0090 1 0 0 0"/>
+    <key name="home" qpos="0 -1.45 0.75 1.45 0 0.2 0 -1.45 0.75 1.45 0 0.2 0.1500 0.1400 0.3000 1 0 0 0 0.1500 -0.1400 0.3000 1 0 0 0 0.4000 0.1750 0.1160 1 0 0 0 0.4000 0.1050 0.1160 1 0 0 0 0.4000 0.0350 0.1160 1 0 0 0 0.4000 -0.0350 0.1160 1 0 0 0 0.4000 -0.1050 0.0860 1 0 0 0 0.4000 -0.1750 0.0890 1 0 0 0 0.3000 0.1750 0.0410 1 0 0 0 0.3000 0.1050 0.0410 1 0 0 0 0.3000 0.0350 0.0190 1 0 0 0 0.3000 -0.0350 0.0070 1 0 0 0 0.3000 -0.1050 0.0110 1 0 0 0 0.3000 -0.1750 0.0090 1 0 0 0"/>
   </keyframe>
 
-  <!-- One weld per gripper. The page points each at whatever that arm is holding
-       (eq_obj2id) and sets the relative pose (eq_data). The targets below are only
-       a starting point so the model compiles. -->
+  <!-- One weld per gripper, both always active. Each starts on its own parking
+       body, which is what an arm holding nothing is welded to. The page retargets a
+       weld to the real thing (eq_obj2id) and sets the relative pose (eq_data) to
+       grip, and points it back at the park to let go. eq_active cannot be switched
+       in this build at all - see the module docstring. -->
   <equality>
-    <weld name="left_grip" body1="left_gripper" body2="bottle_1"/>
-    <weld name="right_grip" body1="right_gripper" body2="bottle_2"/>
+    <weld name="left_grip" body1="left_gripper" body2="left_park"/>
+    <weld name="right_grip" body1="right_gripper" body2="right_park"/>
   </equality>
 </mujoco>

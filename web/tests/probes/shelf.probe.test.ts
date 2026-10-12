@@ -138,3 +138,30 @@ test('the riser holds the back row at the same clearance as the table holds the 
   model.delete();
   data.delete();
 });
+
+test('loading the resting pose leaves every thing exactly where the scene put it', async () => {
+  // The settling test cannot catch this: it snapshots positions *after* the keyframe is
+  // loaded, so a keyframe whose qpos is in the wrong order looks perfectly stable in a
+  // scene that is already scrambled. The keyframe lists qpos in body declaration order,
+  // and declaring the parking bodies before the arms instead of after put every free joint
+  // one place out - which moved the remote 38 mm and looked like a physics problem.
+  const { mj, model, data } = await compile();
+  const B = mj.mjtObj.mjOBJ_BODY.value;
+  mj.mj_forward(model, data);
+  const wrong: string[] = [];
+  for (const name of THINGS) {
+    const b = id(mj, model, B, name);
+    // Where the scene file declares the body, straight out of the XML.
+    const xml = fs.readFileSync(SCENE, 'utf8');
+    const m = new RegExp(`<body name="${name}" pos="([^"]+)"`).exec(xml);
+    expect(m, name).not.toBeNull();
+    const want = m![1].trim().split(/\s+/).map(Number);
+    const got = [data.xpos[b * 3], data.xpos[b * 3 + 1], data.xpos[b * 3 + 2]];
+    const off = Math.hypot(...got.map((v, i) => v - want[i]));
+    if (off > 1e-6) wrong.push(`${name} is ${(off * 1000).toFixed(1)} mm from where it is declared`);
+  }
+  say(wrong.length ? `keyframe: ${wrong.join('; ')}` : 'keyframe: every thing is where it is declared');
+  expect(wrong).toEqual([]);
+  model.delete();
+  data.delete();
+});
