@@ -232,3 +232,34 @@ def test_nobody_ever_wants_the_tray():
     picks = {pick_target(THINGS, rng).id for _ in range(200)}
     assert "tray" not in picks
     assert picks <= {t.id for t in wanted(THINGS)}
+
+
+# ---------------------------------------------------------------- where a confirming point goes
+
+
+def test_confirming_points_at_the_thing_the_robot_is_showing_them():
+    """Not re-aimed from scratch. The robot has put its gripper over the thing; agreeing
+    means pointing at that. Re-aiming at their own target turned correct yeses into
+    contradictions whenever the wobble landed on a neighbour."""
+    p = person("bottle_3", style="both", sigma_deg=0.0)
+    reply = p.to_this_one("bottle_3")
+    assert reply.said == "yes"
+    assert sole(reply.point) == "bottle_3"
+
+
+def test_rejecting_points_at_what_they_actually_want():
+    p = person("bottle_3", style="both", sigma_deg=0.0)
+    reply = p.to_this_one("mug_1")
+    assert reply.said == "no"
+    assert sole(reply.point) == "bottle_3"  # not mug_1: they are showing the right one
+
+
+def test_the_hand_follows_the_truth_even_when_the_word_does_not():
+    """An unreliable responder says the wrong word and still points honestly. If the hand
+    followed the word instead, both channels would be wrong together and agree - and R5
+    would never catch anything."""
+    p = person("bottle_3", style="both", unreliable=1.0, sigma_deg=0.0)
+    reply = p.to_this_one("bottle_3")
+    assert reply.said == "no"
+    assert sole(reply.point) == "bottle_3"
+    assert read(reply, "bottle_3").kind == "contradiction"

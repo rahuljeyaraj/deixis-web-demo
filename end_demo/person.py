@@ -112,6 +112,12 @@ class Person:
         self.points += 1
         return point_at(self.target, self.things, self.rng, self.sigma_deg)
 
+    def point_to(self, thing_id: str) -> Cone:
+        """They point at a particular thing - with the same wobble as any other point."""
+        self.points += 1
+        thing = next(t for t in self.things if t.id == thing_id)
+        return point_at(thing, self.things, self.rng, self.sigma_deg)
+
     # ------------------------------------------------------------ answering
 
     def _word(self, truth: bool) -> bool:
@@ -126,11 +132,27 @@ class Person:
         return bool(self.silence) and self.rng.random() < self.silence
 
     def to_this_one(self, thing_id: str) -> Reply:
-        """The robot is hovering over `thing_id` and asked "this one?"."""
+        """The robot is hovering over `thing_id` and asked "this one?".
+
+        **Where their confirming point goes matters.** Confirming means pointing at the
+        thing the gripper is already over - the robot has physically indicated it, and the
+        person is agreeing with something in front of them, not re-aiming from scratch.
+        Rejecting means pointing at what they actually want.
+
+        Having them re-aim at their own target even to say yes was wrong, and it was
+        expensive: a correct yes plus a wobbly point that happened to land on the neighbour
+        reads as a contradiction, so the robot refused to act on an answer that was right.
+
+        The point follows the **truth**, never the word. An unreliable responder's yes comes
+        out wrong while their hand stays honest - that is the clinical picture, and it is
+        what leaves R5 with something real to catch.
+        """
         if self._quiet():
             return Reply()
         truth = thing_id == self.target.id
-        cone = self.point() if self.style in ("point", "both") else None
+        cone = None
+        if self.style in ("point", "both"):
+            cone = self.point_to(thing_id if truth else self.target.id)
         word = "" if self.style == "point" else ("yes" if self._word(truth) else "no")
         return Reply(point=cone, said=word)
 

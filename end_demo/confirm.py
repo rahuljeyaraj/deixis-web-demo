@@ -144,20 +144,24 @@ def read(reply: Reply, hovering: str, ratio: float = RATIO) -> Answer:
        answer: the hovered thing means yes, anything else means *that* one instead.
     2. **The word, cross-checked.** A yes that disagrees with the hand is a contradiction
        and the robot acts on neither half of it.
-    3. **The word alone**, when there was no point.
+    3. **The word alone**, when the hand said nothing - either because they did not point,
+       or because the point they made settles nothing.
     4. **Nothing**, which is an answer too: wait, then ask differently, and do not act.
+
+    Step 3 covers more than it looks. A point whose top two are inside the core's 2:1 rule
+    is **not** a disagreement with the word; it is the hand saying nothing at all, and
+    throwing a clean spoken yes away alongside it is waste. Doing that cost 28 points of
+    accuracy in the first run on the twelve-thing shelf: 34 answers in 40 trials were
+    discarded as "the point settled nothing" while the person had said yes or no out loud
+    the whole time. The plan's priority order (8.2) says a point *at the thing* or *at
+    something else* outranks the word - an unreadable point is neither.
     """
     word = reply.nod if reply.nod is not None else yes_no(reply.said)
     said = reply.said.strip()
+    pointed = sole(reply.point, ratio) if reply.point is not None else None
+    vague = reply.point is not None and pointed is None
 
-    if reply.point is not None:
-        pointed = sole(reply.point, ratio)
-        if pointed is None:
-            # They pointed, but the point settles nothing - the top two are inside the
-            # core's 2:1 rule, or the cone is empty. Not an answer; ask differently.
-            empty = not reply.point.candidates
-            why = "nothing in the cone" if empty else "the point was too close to call"
-            return Answer("unclear", word=word, said=said, why=why)
+    if pointed is not None:
         agrees = pointed == hovering
         if word is None:
             return Answer(
@@ -192,12 +196,22 @@ def read(reply: Reply, hovering: str, ratio: float = RATIO) -> Answer:
             "new_target", id=pointed, word=False, said=said, why="said no and showed which one"
         )
 
+    # The hand said nothing. Either they did not point, or the point they made cannot be
+    # read - and an unreadable point is not a disagreement, so the word still stands.
+    how = "their point settled nothing, so the word stands" if vague else "no point, took the word"
     if word is not None:
-        return Answer("yes" if word else "no", word=word, said=said, why="no point, took the word")
+        return Answer("yes" if word else "no", word=word, said=said, why=how)
     if said:
         # Words that are neither yes nor no. Shown as "I heard ...", passed to the brain,
         # and never allowed to block (R6).
         return Answer("said", said=said, why="not a yes or a no")
+    if vague:
+        empty = not (reply.point and reply.point.candidates)
+        return Answer(
+            "unclear",
+            said=said,
+            why="nothing in the cone" if empty else "the point was too close to call",
+        )
     return Answer("nothing", why="no point, no word, no nod")
 
 

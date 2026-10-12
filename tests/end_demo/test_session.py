@@ -502,3 +502,42 @@ def test_each_round_gets_the_prompt_for_its_own_tools():
     point_and_ask(INDEX["phone"], THINGS, person("phone"), model, straight_at("phone"))
     assert "ask_this_one" in model.seen[0][0]["content"]
     assert "ask_choice" not in model.seen[0][0]["content"]
+
+
+def test_a_question_the_model_was_not_given_is_named_as_such():
+    """The 107-times bug. `ask_choice` is a question tool, so a guard that checked the list
+    of all question tools let it through to the malformed-call branch - which told the model
+    its arguments were missing rather than that it did not have the tool. It then tried the
+    same call eleven times and ran the attempt out of steps."""
+
+    class Wayward:
+        """A model that reaches for a tool it was never offered, then settles down."""
+
+        name = "wayward"
+
+        def __init__(self) -> None:
+            from end_demo.brain import Usage
+
+            self.usage = Usage()
+            self.at = 0
+            self.seen: list[list[dict]] = []
+
+        def decide(self, messages, tools, on_reasoning=None):
+            from end_demo.brain import Call
+
+            self.seen.append([dict(m) for m in messages])
+            self.at += 1
+            if self.at == 1:
+                return Call("ask_choice", {"first": "bottle_1", "second": "bottle_2"}, call_id="a")
+            return Call("choose", {"id": "phone"}, call_id="b")
+
+    model = Wayward()
+    a = point_and_ask(
+        INDEX["phone"], THINGS, person("phone"), model, straight_at("phone"), max_questions=3
+    )
+    assert a.ok
+    assert a.questions == 0
+    assert not a.out_of_steps
+    told = " ".join(str(m.get("content", "")) for m in model.seen[-1])
+    assert "do not have a tool called 'ask_choice'" in told
+    assert "choose, ask_this_one" in told

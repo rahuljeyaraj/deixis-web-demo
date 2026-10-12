@@ -28,7 +28,17 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from end_demo.point import Cone
-from end_demo.scene import Arm, Thing, by_id, kind_counts, shelf
+from end_demo.scene import (
+    COLS,
+    ORDINALS,
+    ROW_NAMES,
+    ROWS,
+    Arm,
+    Thing,
+    by_id,
+    kind_counts,
+    shelf,
+)
 from end_demo.scene import arms as default_arms
 
 #: Where a thing may be put. A **reference**, never coordinates: the core's standing
@@ -36,7 +46,24 @@ from end_demo.scene import arms as default_arms
 #: (`deixis/refs.py`). "pointed" means wherever the person is pointing now.
 Where = Literal["tray", "shelf", "pointed"]
 
-ORDINALS = ("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th")
+
+def _columns(arm: Arm, rows: int = ROWS) -> str:
+    """Which part of the shelf an arm can pick up from, in the robot's own words.
+
+    Read out of the measured reach ring rather than written down, so the sentence the model
+    is given can never say something the arm cannot do.
+    """
+    bits = []
+    for row in range(rows):
+        cols = arm.columns(row)
+        where = ROW_NAMES[row]
+        if not cols:
+            bits.append(f"nothing on {where}")
+        elif len(cols) == COLS:
+            bits.append(f"all of {where}")
+        else:
+            bits.append(f"{', '.join(ORDINALS[c] for c in cols)} from the left on {where}")
+    return "; ".join(bits)
 
 
 @dataclass(frozen=True)
@@ -80,14 +107,21 @@ class World:
         return [t for t in self.things if t.id not in self.off_shelf]
 
     def arm_for(self, thing_id: str) -> Arm | None:
-        """An arm that can pick this thing up, nearest first. None if neither can."""
+        """An arm that can pick this thing up. None if neither can.
+
+        Where two arms can both reach it, the nearer one goes - and the tie is broken
+        towards the arm that can also reach the person, because that saves a pass across.
+        Both are kinematics, not judgement: the model is never made to care which arm
+        unless the person said.
+        """
         t = self.index.get(thing_id)
         if t is None:
             return None
         able = [a for a in self.arms if a.can_reach(t) and a.id not in self.held]
         if not able:
             return None
-        return min(able, key=lambda a: abs(a.x - t.pos[0]))
+        x, y, _ = t.place_mm
+        return min(able, key=lambda a: (not a.reaches_person, a.radius_to(x, y)))
 
     def _resolve_arm(self, arm: str | None, thing_id: str | None = None) -> tuple[Arm | None, str]:
         """The arm to use, or a sentence saying why there isn't one."""
@@ -119,8 +153,7 @@ class World:
         return f"Neither arm can reach {thing_id}."
 
     def place_of(self, t: Thing) -> str:
-        row = "top shelf" if t.row == 0 else "lower shelf"
-        return f"{row}, {ORDINALS[t.col]} from the left"
+        return t.where
 
     def describe(self, cone: Cone | None = None, said: str = "") -> str:
         """The scene, as the robot's own camera and arms could report it.
@@ -146,7 +179,7 @@ class World:
             ]
         rows += ["", "THE ARMS:"]
         for a in self.arms:
-            cols = ", ".join(ORDINALS[c] for c in a.reach)
+            cols = _columns(a)
             reach = (
                 "can put things in the person's hand"
                 if a.reaches_person
@@ -154,7 +187,7 @@ class World:
             )
             holding = self.held.get(a.id)
             rows.append(f"  {a.id:<11} {a.seen}")
-            rows.append(f"  {'':<11} picks up from: {cols} from the left; {reach}")
+            rows.append(f"  {'':<11} picks up from {cols}; {reach}")
             if holding:
                 rows.append(f"  {'':<11} holding {holding}")
         if self.with_person:
@@ -192,12 +225,11 @@ class World:
         if got.id in self.held:
             return self._fail(f"{got.id} is already holding {self.held[got.id]}.")
         if not got.can_reach(t):
-            cols = ", ".join(ORDINALS[c] for c in got.reach)
             other = next((a.id for a in self.arms if a.can_reach(t)), "")
             hint = f" {other} can reach it." if other else ""
             return self._fail(
                 f"{got.id} cannot reach {thing_id} ({self.place_of(t)}). It only picks up "
-                f"from: {cols} from the left.{hint}"
+                f"from {_columns(got)}.{hint}"
             )
         if not t.graspable:
             return self._fail(f"I cannot get a grip on {thing_id}.")

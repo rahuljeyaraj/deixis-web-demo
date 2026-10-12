@@ -287,11 +287,21 @@ def point_and_ask(
             a.log.append(f"robot   says it cannot: {call.args.get('why', '')}")
             return finish_attempt(a, counts, person)
 
-        if call.tool not in QUESTIONS:
-            # Nothing else is on the table in a selection round. Tell the model rather than
-            # guessing what it meant.
+        if call.tool not in kit.names():
+            # Against the toolset, not against the list of all question tools. Checking the
+            # latter let a question the model had not been given slip through to the
+            # malformed-call branch, which told it its arguments were missing rather than
+            # that it did not have the tool - so it tried the same call eleven times in a
+            # row and ran the attempt out of steps. Measured 11 Oct, 107 times in 40 trials.
             session.result(call, not_offered(call, kit))
             a.log.append(f"robot   asked for {call.tool}, which it does not have here")
+            continue
+
+        if call.tool not in QUESTIONS:
+            # On the table, but neither a commit nor a question: nothing else exists in a
+            # selection round.
+            session.result(call, not_offered(call, kit))
+            a.log.append(f"robot   asked for {call.tool}, which does nothing here")
             continue
 
         bad = bad_ids(call, index)

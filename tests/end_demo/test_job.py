@@ -14,13 +14,24 @@ from end_demo.confirm import Reply
 from end_demo.job import job
 from end_demo.person import Person
 from end_demo.point import angles, weigh
-from end_demo.scene import by_id, shelf
+from end_demo.scene import arms, by_id, shelf, wanted
 from end_demo.stub import ScriptDecider
 from end_demo.tools import Toolset
 from end_demo.world import World
 
 THINGS = shelf()
 INDEX = by_id(THINGS)
+
+# Read out of the scene, never written down: the arms' reach is computed from a measured
+# ring, so naming a side here would mean testing the name instead of the geometry.
+GIVER = next(a for a in arms() if a.reaches_person)
+FAR = next(a for a in arms() if not a.reaches_person)
+#: Something only the far arm can pick up, so it has to be passed across to be handed over.
+PASSED = next(t for t in wanted(THINGS) if FAR.can_reach(t) and not GIVER.can_reach(t))
+#: Something the near arm can pick up and hand straight over.
+NEAR = next(t for t in wanted(THINGS) if GIVER.can_reach(t))
+#: Another thing the near arm can reach, for "it handed over the wrong one".
+OTHER_NEAR = next(t for t in wanted(THINGS) if GIVER.can_reach(t) and t.id != NEAR.id)
 
 
 def straight_at(thing_id: str):
@@ -43,16 +54,16 @@ def script(*steps) -> ScriptDecider:
 
 
 def test_the_near_arm_just_hands_it_over():
-    model = script(("pick", {"id": "remote", "arm": "right_arm"}), ("hand_over", {}))
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
+    model = script(("pick", {"id": NEAR.id, "arm": GIVER.id}), ("hand_over", {}))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
     assert a.delivered
-    assert a.picked == "remote"
+    assert a.picked == NEAR.id
 
 
 def test_the_job_is_not_a_measurement():
     """It is recorded as its own round so nothing can quietly fold it into a score."""
-    model = script(("pick", {"id": "remote"}), ("hand_over", {}))
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
+    model = script(("pick", {"id": NEAR.id}), ("hand_over", {}))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
     assert a.round == "the job"
 
 
@@ -63,42 +74,42 @@ def test_the_far_arm_recovers_by_passing_it_across():
     """The model tries the hand-over, is told the far arm cannot reach the person, and
     works out the pass itself. This is the whole argument for a second arm."""
     model = script(
-        ("pick", {"id": "bottle_1", "arm": "left_arm"}),
-        ("hand_over", {"arm": "left_arm"}),  # refused, in words
-        ("pass_to", {"arm": "right_arm"}),
-        ("hand_over", {"arm": "right_arm"}),
+        ("pick", {"id": PASSED.id, "arm": FAR.id}),
+        ("hand_over", {"arm": FAR.id}),  # refused, in words
+        ("pass_to", {"arm": GIVER.id}),
+        ("hand_over", {"arm": GIVER.id}),
     )
     w = world()
-    a = job(INDEX["bottle_1"], w, model, person("bottle_1"), straight_at("bottle_1"))
+    a = job(PASSED, w, model, person(PASSED.id), straight_at(PASSED.id))
     assert a.delivered
-    assert w.with_person == ["bottle_1"]
+    assert w.with_person == [PASSED.id]
     refused = [line for line in a.log if "could not" in line]
     assert any("cannot reach the person" in line for line in refused)
-    assert any("Pass bottle_1 to right_arm first" in line for line in refused)
+    assert any(f"Pass {PASSED.id} to {GIVER.id} first" in line for line in refused)
 
 
 def test_the_refusal_reaches_the_model_as_the_tool_result():
     model = script(
-        ("pick", {"id": "bottle_1", "arm": "left_arm"}),
-        ("hand_over", {"arm": "left_arm"}),
-        ("pass_to", {"arm": "right_arm"}),
-        ("hand_over", {"arm": "right_arm"}),
+        ("pick", {"id": PASSED.id, "arm": FAR.id}),
+        ("hand_over", {"arm": FAR.id}),
+        ("pass_to", {"arm": GIVER.id}),
+        ("hand_over", {"arm": GIVER.id}),
     )
-    job(INDEX["bottle_1"], world(), model, person("bottle_1"), straight_at("bottle_1"))
+    job(PASSED, world(), model, person(PASSED.id), straight_at(PASSED.id))
     told = " ".join(str(m.get("content", "")) for m in model.seen[2])
     assert "cannot reach the person" in told
 
 
 def test_the_wrong_arm_for_the_shelf_is_told_which_arm_can():
     model = script(
-        ("pick", {"id": "bottle_1", "arm": "right_arm"}),  # out of reach
-        ("pick", {"id": "bottle_1", "arm": "left_arm"}),
-        ("pass_to", {"arm": "right_arm"}),
+        ("pick", {"id": PASSED.id, "arm": GIVER.id}),  # out of reach
+        ("pick", {"id": PASSED.id, "arm": FAR.id}),
+        ("pass_to", {"arm": GIVER.id}),
         ("hand_over", {}),
     )
-    a = job(INDEX["bottle_1"], world(), model, person("bottle_1"), straight_at("bottle_1"))
+    a = job(PASSED, world(), model, person(PASSED.id), straight_at(PASSED.id))
     assert a.delivered
-    assert any("left_arm can reach it" in line for line in a.log)
+    assert any(f"{FAR.id} can reach it" in line for line in a.log)
 
 
 # ---------------------------------------------------------------- asking, during the job
@@ -106,12 +117,12 @@ def test_the_wrong_arm_for_the_shelf_is_told_which_arm_can():
 
 def test_it_can_ask_before_it_picks():
     model = script(
-        ("ask_this_one", {"id": "mug_2"}),
-        ("pick", {"id": "mug_2", "arm": "left_arm"}),
-        ("pass_to", {"arm": "right_arm"}),
+        ("ask_this_one", {"id": PASSED.id}),
+        ("pick", {"id": PASSED.id, "arm": FAR.id}),
+        ("pass_to", {"arm": GIVER.id}),
         ("hand_over", {}),
     )
-    a = job(INDEX["mug_2"], world(), model, person("mug_2", style="word"), straight_at("mug_2"))
+    a = job(PASSED, world(), model, person(PASSED.id, style="word"), straight_at(PASSED.id))
     assert a.questions == 1
     assert a.delivered
 
@@ -162,22 +173,22 @@ def test_the_question_cap_takes_the_questions_away_rather_than_refusing_them():
 
 def test_a_wrong_hand_over_is_recorded_as_not_delivered():
     """Honest scoring: the thing got into their hand, but it was the wrong thing."""
-    model = script(("pick", {"id": "bottle_4"}), ("hand_over", {}))
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
-    assert a.picked == "bottle_4"
+    model = script(("pick", {"id": OTHER_NEAR.id}), ("hand_over", {}))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
+    assert a.picked == OTHER_NEAR.id
     assert not a.delivered
-    assert any("but they wanted remote" in line for line in a.log)
+    assert any(f"but they wanted {NEAR.id}" in line for line in a.log)
 
 
 def test_the_robot_can_say_it_cannot():
     model = script(("cannot", {"why": "nothing is in their cone"}))
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
     assert a.gave_up and not a.delivered
 
 
 def test_a_model_that_never_stops_is_stopped():
     model = ScriptDecider(script=[("look", {})] * 50)
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"), max_steps=5)
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id), max_steps=5)
     assert a.out_of_steps
     assert a.model_calls == 5
 
@@ -193,16 +204,16 @@ def test_an_unknown_tool_is_reported_to_the_model_not_guessed_at():
     assert not out.ok
     assert "do not have a tool called 'teleport'" in out.text
     assert "hand_over" in out.text
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
     assert not a.delivered and not a.out_of_steps
 
 
 def test_looking_again_shows_what_has_changed():
-    model = script(("pick", {"id": "remote"}), ("look", {}), ("hand_over", {}))
-    a = job(INDEX["remote"], world(), model, person("remote"), straight_at("remote"))
+    model = script(("pick", {"id": NEAR.id}), ("look", {}), ("hand_over", {}))
+    a = job(NEAR, world(), model, person(NEAR.id), straight_at(NEAR.id))
     assert a.delivered
     told = " ".join(str(m.get("content", "")) for m in model.seen[2])
-    assert "holding remote" in told
+    assert f"holding {NEAR.id}" in told
 
 
 def test_the_job_toolset_is_the_whole_body():

@@ -180,3 +180,47 @@ def test_contradictions_are_counted():
     assert counts.unclear == 1
     assert counts.silences == 1
     assert counts.kinds["yes"] == 1
+
+
+# ---------------------------------------------------------------- an unreadable point
+
+
+def test_an_unreadable_point_leaves_the_word_standing():
+    """The expensive bug. A point whose top two are inside the core's 2:1 rule is the hand
+    saying nothing - not the hand disagreeing - so a clean spoken yes still counts. Dropping
+    both cost 28 points of accuracy in the first run on the twelve-thing shelf."""
+    reply = Reply(point=between("bottle_2", "bottle_3"), said="yes")
+    answer = read(reply, "bottle_2")
+    assert answer.kind == "yes"
+    assert answer.acts
+    assert "settled nothing" in answer.why
+
+
+def test_an_unreadable_point_with_a_no_is_still_a_no():
+    answer = read(Reply(point=between("bottle_2", "bottle_3"), said="no"), "bottle_2")
+    assert answer.kind == "no"
+    assert not answer.acts
+
+
+def test_an_unreadable_point_and_no_word_is_still_unclear():
+    answer = read(Reply(point=between("bottle_2", "bottle_3")), "bottle_2")
+    assert answer.kind == "unclear"
+    assert not answer.acts
+
+
+def test_an_empty_cone_with_a_word_takes_the_word():
+    """They pointed at the ceiling and said yes. The point is useless; the yes is not."""
+    from end_demo.point import weigh
+
+    nowhere = weigh((1.2, 1.2), THINGS)
+    assert not nowhere.candidates
+    assert read(Reply(point=nowhere, said="yes"), "bottle_2").kind == "yes"
+
+
+def test_a_contradiction_still_needs_a_readable_point():
+    """R5 must fire on a real disagreement and not on a wobble. The point has to settle on
+    something before it can disagree with anything."""
+    assert read(Reply(point=point_at_thing("bottle_4"), said="yes"), "bottle_2").kind == (
+        "contradiction"
+    )
+    assert read(Reply(point=between("bottle_2", "bottle_3"), said="yes"), "bottle_2").kind == "yes"

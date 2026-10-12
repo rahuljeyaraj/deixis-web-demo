@@ -24,16 +24,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from end_demo.brain import MODEL, SYSTEM, SYSTEM_PORT, Decider, Nemotron
+from end_demo.brain import MODEL, SYSTEM_PORT, Decider, Nemotron
 from end_demo.job import MAX_JOB_QUESTIONS, job
 from end_demo.person import ModelPerson, Person
 from end_demo.point import CONE_DEG, RATIO, SIGMA_DEG
-from end_demo.scene import DIST, STEP_X, STEP_Z, Thing, kind_counts, wanted
+from end_demo.scene import (
+    ORDINALS,
+    STEP_X_MM,
+    Thing,
+    kind_counts,
+    separation_deg,
+    wanted,
+)
 from end_demo.scene import shelf as end_shelf
 from end_demo.score import notes, scoreboard, timing
 from end_demo.session import (
@@ -52,27 +60,42 @@ PUBLISHED_POINTING = "51-69%"
 PUBLISHED_ERROR_DEG = 25
 
 
+@dataclass(frozen=True)
+class FarThing(Thing):
+    """A thing on the harness's old shelf: ten things, 2.5 m away, 250 mm apart.
+
+    This exists for one job - `--shelf rounds`, the port check - and it keeps the old
+    **geometry** as well as the old things. Putting the harness's ten things on the new
+    tabletop layout would change the angles, and then reproducing `three-rounds.md` would
+    prove nothing: the numbers it reports are numbers about those angles.
+
+    Nothing can pick these up. That is fine; the port check measures selection only.
+    """
+
+    @property
+    def place_mm(self) -> tuple[float, float, float]:
+        return (self.col * 250.0, 2500.0, -self.row * 350.0)
+
+    @property
+    def pos(self) -> tuple[float, float, float]:
+        x, y, z = self.place_mm
+        return (x / 1000.0, y / 1000.0, z / 1000.0)
+
+    @property
+    def where(self) -> str:
+        row = "top shelf" if self.row == 0 else "lower shelf"
+        return f"{row}, {ORDINALS[self.col + 2]} from the left"
+
+
 def shelf_for(name: str) -> list[Thing]:
     """The end demo's twelve things, or the harness's ten, for the port check."""
     if name == "rounds":
         from rounds.scene import shelf as rounds_shelf
 
-        # The harness's ten things, as end-demo Things, so the port can be measured against
-        # the numbers in three-rounds.md rather than assumed to match them. Its columns run
-        # -2..2; these run 0..5, and `pos` centres both, so the geometry is the same.
-        out = []
-        for t in rounds_shelf():
-            out.append(
-                Thing(
-                    id=t.id,
-                    kind=t.kind,
-                    seen=t.seen,
-                    says=t.says,
-                    col=t.col + 2,
-                    row=t.row,
-                )
-            )
-        return out
+        return [
+            FarThing(id=t.id, kind=t.kind, seen=t.seen, says=t.says, col=t.col, row=t.row)
+            for t in rounds_shelf()
+        ]
     return end_shelf()
 
 
@@ -154,13 +177,21 @@ def header(a: argparse.Namespace, brain: Decider, things: list[Thing], kit: Tool
     )
     streaming = "" if a.brain == "stub" else (", whole" if a.no_stream else ", streamed")
     prompt_name = "the harness's, for the port check" if a.prompt == "port" else "the end demo's"
+    pair = [t for t in things if t.row == 0 and t.col in (0, 1)]
+    down = [t for t in things if t.col == 0]
+    across = separation_deg(pair[0], pair[1]) if len(pair) == 2 else 0.0
+    up = separation_deg(down[0], down[1]) if len(down) == 2 else 0.0
+    eye_mm = math.dist((0.0, 0.0, 0.0), things[0].pos) * 1000 if things else 0.0
     lines = [
         "THE END DEMO - which thing on the shelf does the person mean?",
         "",
         f"  brain          {brain.name}{reasoning}{streaming}",
         f"  prompt         {prompt_name}",
-        f"  shelf          {len(things)} things ({a.shelf}), {DIST} m away, "
-        f"{STEP_X * 100:.0f} cm apart across and {STEP_Z * 100:.0f} cm up",
+        f"  shelf          {len(things)} things ({a.shelf}), {STEP_X_MM:.0f} mm apart, "
+        f"{eye_mm:.0f} mm from the eye",
+        # The angle, not the distance, is what makes pointing hard - so it is the angle
+        # that belongs in the header beside the score.
+        f"  neighbours     {across:.1f} deg apart across, {up:.1f} deg between rows",
         f"  identical      {same} - no word tells them apart",
         f"  point error    {a.point_error:.1f} deg per axis "
         f"(published mean, harder setup: {PUBLISHED_ERROR_DEG} deg)",
@@ -186,7 +217,10 @@ def run(a: argparse.Namespace) -> tuple[list[Attempt], Decider]:
     things = shelf_for(a.shelf)
     brain = make_brain(a)
     kit = Toolset.selection(choice=a.ask_choice, show_me=a.show_me, cannot=a.cannot)
-    system = SYSTEM_PORT if a.prompt == "port" else SYSTEM
+    # None, not the whole prompt: each round then builds its own from the tools it is
+    # actually given (`brain.system_for`). Passing the full prompt here is how the
+    # model came to be told about `ask_choice` in a round that did not offer it.
+    system = SYSTEM_PORT if a.prompt == "port" else None
     print("\n".join(header(a, brain, things, kit)), flush=True)
     make = person_factory(a, brain)
     order = wanted(things)
@@ -228,7 +262,10 @@ def run_job(a: argparse.Namespace) -> tuple[list[Attempt], Decider]:
     """The whole job, with the arms. The showpiece - not part of the measurement."""
     things = shelf_for(a.shelf)
     brain = make_brain(a)
-    system = SYSTEM_PORT if a.prompt == "port" else SYSTEM
+    # None, not the whole prompt: each round then builds its own from the tools it is
+    # actually given (`brain.system_for`). Passing the full prompt here is how the
+    # model came to be told about `ask_choice` in a round that did not offer it.
+    system = SYSTEM_PORT if a.prompt == "port" else None
     print("\n".join(header(a, brain, things, Toolset.job())), flush=True)
     print("  NOT a measurement: this is the loop, not the score.\n")
     make = person_factory(a, brain)

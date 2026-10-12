@@ -1,21 +1,32 @@
-"""The shelf has to be hard for an honest reason, and the arms have to need each other."""
+"""The shelf has to be hard for an honest reason, and the arms have to need each other.
+
+The geometry tests are the load-bearing ones. The plan put the shelf 2.5 m away so that
+neighbours would be about 5.7 degrees apart, and the arm reaches 280 mm - so the scene had
+to shrink. What must survive the shrinking is the **angle**, because the angle is what makes
+one point cover several things and it is what every measured number is a number about.
+"""
 
 from __future__ import annotations
 
 import math
 import random
 
-from end_demo.point import separation_deg
+from end_demo.point import SIGMA_DEG
 from end_demo.scene import (
     COLS,
-    DIST,
+    GIVE_MM,
+    REACH_MAX_MM,
+    REACH_MIN_MM,
     ROWS,
     arms,
     by_id,
+    column_x,
+    from_eye,
     is_unique,
     kind_counts,
     layout,
     reshuffle,
+    separation_deg,
     shelf,
     wanted,
 )
@@ -29,9 +40,53 @@ def test_twelve_things_in_two_rows():
         assert sorted(t.col for t in things if t.row == row) == list(range(COLS))
 
 
+# ---------------------------------------------------------------- the angles
+
+
+def test_neighbours_are_closer_together_than_a_person_can_point():
+    """5.2 degrees across, against a 3 degree aim. This is the whole difficulty of the
+    scene, and it is the number the plan's 2.5 m shelf was built to get (5.7 degrees)."""
+    index = by_id(shelf())
+    across = separation_deg(index["bottle_1"], index["bottle_2"])
+    assert 4.5 < across < 6.5
+    assert across < 2 * SIGMA_DEG  # inside twice the aim error: one point covers both
+
+
+def test_the_rows_are_further_apart_than_the_columns():
+    """Up and down should be easier than left and right, as on a real shelf - otherwise the
+    ambiguity is coming from the layout being odd rather than from things being alike."""
+    index = by_id(shelf())
+    across = separation_deg(index["bottle_1"], index["bottle_2"])
+    up = separation_deg(index["bottle_1"], index["mug_1"])
+    assert up > across
+    assert 7.0 < up < 11.0
+
+
+def test_the_shelf_is_within_arms_length_of_the_person():
+    """It has to be: the arm reaches 280 mm. The plan's 2.5 m shelf could not have been
+    picked from at all, which is why the scene moved onto the table."""
+    eye_to_shelf = math.dist((0.0, 0.0, 0.0), shelf()[0].pos)
+    assert 0.6 < eye_to_shelf < 0.9
+
+
+def test_the_pointing_geometry_comes_from_the_physics_geometry():
+    """One layout, two coordinate systems. `pos` is derived from `place_mm`, so the thing
+    the arm reaches for and the thing the cone weighs cannot be in different places."""
+    for t in shelf():
+        assert t.pos == from_eye(t.place_mm)
+
+
+def test_columns_are_evenly_spaced_and_centred():
+    xs = [column_x(c) for c in range(COLS)]
+    gaps = {round(b - a, 6) for a, b in zip(xs, xs[1:], strict=False)}
+    assert len(gaps) == 1
+    assert round(sum(xs) / len(xs), 6) == 250.0
+
+
+# ---------------------------------------------------------------- what no word can separate
+
+
 def test_six_things_no_word_can_separate():
-    """Four identical bottles and two identical mugs. This is the whole demo: no word
-    separates bottle 2 from bottle 3, for a judge as completely as for anyone."""
     counts = kind_counts(shelf())
     assert counts["bottle"] == 4
     assert counts["mug"] == 2
@@ -56,7 +111,6 @@ def test_the_baseline_can_still_win():
     one_offs = [t for t in things if is_unique(things, t.id)]
     assert len(one_offs) == 6
     assert is_unique(things, "scissors") and is_unique(things, "phone")
-    # R3: describable by what it is for, not by its name.
     assert any("cutting" in p for p in by_id(things)["scissors"].says)
     assert any("writing" in p for p in by_id(things)["pen"].says)
 
@@ -75,34 +129,68 @@ def test_the_tray_is_not_something_to_want():
     assert len(wanted(things)) == 11
 
 
-def test_neighbours_are_closer_than_a_person_can_point():
-    """At 2.5 m the thing next door is about 5.7 degrees away, and a person's aim is worse
-    than that. Perspective makes the task hard; no noise is added anywhere."""
-    index = by_id(shelf())
-    across = separation_deg(index["bottle_1"].pos, index["bottle_2"].pos)
-    assert 5.0 < across < 6.5
-    up = separation_deg(index["bottle_1"].pos, index["mug_1"].pos)
-    assert 7.0 < up < 9.0
-    assert math.isclose(index["bottle_1"].pos[1], DIST)
-
-
-def test_each_arm_alone_cannot_do_the_job():
-    """Two arms are only worth their cost if they need each other. The arm that can reach
-    the far left cannot reach the person, so a thing there has to be passed across."""
-    left, right = arms()
-    things = by_id(shelf())
-    assert not left.reaches_person
-    assert right.reaches_person
-    assert left.can_reach(things["bottle_1"]) and not right.can_reach(things["bottle_1"])
-    assert right.can_reach(things["remote"]) and not left.can_reach(things["remote"])
-    # And an overlap in the middle, so "which arm" is sometimes a real choice.
-    assert left.can_reach(things["bracket"]) and right.can_reach(things["bracket"])
+# ---------------------------------------------------------------- the arms
 
 
 def test_every_thing_is_reachable_by_someone():
+    """E7's gate. Computed from the measured ring, so it cannot drift."""
     all_arms = arms()
     for t in shelf():
-        assert any(a.can_reach(t) for a in all_arms), t.id
+        assert any(a.can_reach(t) for a in all_arms), f"{t.id} at {t.where}"
+
+
+def test_only_one_arm_can_reach_the_person():
+    """The two-arm story depends on this. If both could hand over, the second arm would be
+    scenery."""
+    reach_them = [a.id for a in arms() if a.reaches_person]
+    assert reach_them == ["left_arm"]
+
+
+def test_the_hand_that_works_is_the_left_one():
+    """A left-hemisphere stroke takes language and the right side of the body together, so
+    the person who cannot say "mug" is frequently the same person whose right arm does not
+    work. The thing is handed to their left."""
+    assert GIVE_MM[0] < 250.0
+
+
+def test_some_things_need_the_arm_that_cannot_hand_over():
+    """So they have to be passed across. Without this the pass is never exercised, and
+    "you, that one" has nothing to be about."""
+    things, all_arms = shelf(), arms()
+    givers = [a for a in all_arms if a.reaches_person]
+    needs_a_pass = [t.id for t in wanted(things) if not any(a.can_reach(t) for a in givers)]
+    assert needs_a_pass  # there is at least one
+    assert len(needs_a_pass) >= 3  # and enough that it is not a fluke of one object
+
+
+def test_each_arm_owns_part_of_the_shelf_and_shares_part():
+    left, right = arms()
+    things = shelf()
+    only_left = [t.id for t in things if left.can_reach(t) and not right.can_reach(t)]
+    only_right = [t.id for t in things if right.can_reach(t) and not left.can_reach(t)]
+    both = [t.id for t in things if left.can_reach(t) and right.can_reach(t)]
+    assert only_left and only_right and both
+
+
+def test_reach_is_the_measured_ring_and_nothing_else():
+    """Not a hand-written list of columns. Move a base and the answers change, rather than
+    silently contradicting what the arm can really do."""
+    left = arms()[0]
+    x, y = left.base_mm
+    assert not left.reaches(x, y)  # too close in: the gripper would hit its own shoulder
+    assert left.reaches(x, y + REACH_MIN_MM + 1)
+    assert left.reaches(x, y + REACH_MAX_MM - 1)
+    assert not left.reaches(x, y + REACH_MAX_MM + 1)
+
+
+def test_an_arms_columns_agree_with_its_reach():
+    for arm in arms():
+        for row in (0, 1):
+            for col in arm.columns(row):
+                assert arm.reaches(column_x(col), [400.0, 300.0][row])
+
+
+# ---------------------------------------------------------------- shuffling
 
 
 def test_reshuffle_keeps_the_same_twelve_things_in_new_places():
@@ -113,3 +201,10 @@ def test_reshuffle_keeps_the_same_twelve_things_in_new_places():
     assert layout(after) != layout(before)
     # Nothing but the position changes - a shuffled bottle is still that bottle.
     assert {(t.id, t.kind, t.seen) for t in after} == {(t.id, t.kind, t.seen) for t in before}
+
+
+def test_a_shuffled_shelf_is_still_all_reachable():
+    all_arms = arms()
+    for seed in range(20):
+        for t in reshuffle(shelf(), random.Random(seed)):
+            assert any(a.can_reach(t) for a in all_arms), (seed, t.id)
