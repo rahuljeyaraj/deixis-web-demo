@@ -56,11 +56,17 @@
          collide with, somewhere for the arm to aim. -->
     <site name="give" pos="-0.0400 0.1300 0.060" size="0.012" rgba="0.2 0.6 0.3 0.35"/>
 
-    <!-- The arms. Their forward (shoulder_pan = 0) is +X, which is the shelf. -->
-    <body name="left_stand" pos="0.1500 0.1400 0">
+    <!-- The arms. Unturned, forward (shoulder_pan = 0) is +X, which is the shelf.
+         The left arm is turned towards the person, because the shoulder swings only
+         110 degrees either side of forward and from anywhere that reaches the back
+         of the shelf the person's hand is about 180 degrees away. One arm picks and
+         the other gives; see `arms()` in end_demo/scene.py. The turn is written as a
+         quaternion because this file has no <compiler>, so `euler` would be degrees
+         here and radians inside so101.xml. -->
+    <body name="left_stand" pos="0.1500 0.1400 0" quat="0.737277 0 0 0.675590">
       <attach model="so101" prefix="left_"/>
     </body>
-    <body name="right_stand" pos="0.1500 -0.1400 0">
+    <body name="right_stand" pos="0.1500 -0.1400 0" quat="1.000000 0 0 0.000000">
       <attach model="so101" prefix="right_"/>
     </body>
 
@@ -136,7 +142,7 @@
        row. Order: the two arms' joints as attached, then every thing's freejoint
        (7 numbers each: position then quaternion), left as the bodies were placed. -->
   <keyframe>
-    <key name="home" qpos="-1.6 -1 1.69 1 0 0.2 1.6 -1 1.69 1 0 0.2 0.1500 0.1400 0.3000 1 0 0 0 0.1500 -0.1400 0.3000 1 0 0 0 0.4000 0.1750 0.1160 1 0 0 0 0.4000 0.1050 0.1160 1 0 0 0 0.4000 0.0350 0.1160 1 0 0 0 0.4000 -0.0350 0.1160 1 0 0 0 0.4000 -0.1050 0.0860 1 0 0 0 0.4000 -0.1750 0.0890 1 0 0 0 0.3000 0.1750 0.0410 1 0 0 0 0.3000 0.1050 0.0410 1 0 0 0 0.3000 0.0350 0.0190 1 0 0 0 0.3000 -0.0350 0.0070 1 0 0 0 0.3000 -0.1050 0.0110 1 0 0 0 0.3000 -0.1750 0.0090 1 0 0 0"/>
+    <key name="home" qpos="-0.4 -1 1.69 1 0 0.2 1.6 -1 1.69 1 0 0.2 0.1500 0.1400 0.3000 1 0 0 0 0.1500 -0.1400 0.3000 1 0 0 0 0.4000 0.1750 0.1160 1 0 0 0 0.4000 0.1050 0.1160 1 0 0 0 0.4000 0.0350 0.1160 1 0 0 0 0.4000 -0.0350 0.1160 1 0 0 0 0.4000 -0.1050 0.0860 1 0 0 0 0.4000 -0.1750 0.0890 1 0 0 0 0.3000 0.1750 0.0410 1 0 0 0 0.3000 0.1050 0.0410 1 0 0 0 0.3000 0.0350 0.0190 1 0 0 0 0.3000 -0.0350 0.0070 1 0 0 0 0.3000 -0.1050 0.0110 1 0 0 0 0.3000 -0.1750 0.0090 1 0 0 0"/>
   </keyframe>
 
   <!-- One weld per gripper, both always active. Each starts on its own parking

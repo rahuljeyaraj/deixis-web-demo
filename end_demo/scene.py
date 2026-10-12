@@ -80,11 +80,40 @@ import math
 import random
 from dataclasses import dataclass, replace
 
-#: The arm's working ring, millimetres from its base axis. Measured on the real model, not
-#: chosen: `web/tests/probes/reach2.probe.test.ts`, 5-6 Oct. Everything else here is laid
-#: out to fit inside it, which is why the shelf is on the table.
-REACH_MIN_MM = 140.0
-REACH_MAX_MM = 280.0
+#: The arm's working ring at each row's height: how close in it can work, and how far out it
+#: reaches straight ahead, millimetres from its base axis, by row.
+#:
+#: Measured for this scene, not chosen and not inherited. The old pair of numbers (140-280)
+#: came from the cubes-on-a-table demo, where everything lay flat on the table and was
+#: gripped straight down; here the back row stands 80 mm up on a riser and the two rows have
+#: noticeably different rings. `out/ring-sweep` drives the real inverse kinematics round the
+#: ring at the height each row is gripped at, and `web/tests/probes/shelf.probe.test.ts`
+#: checks the answers still hold.
+REACH_RING_MM = {
+    0: (177.0, 348.0),  # the raised row, on the riser
+    1: (137.0, 386.0),  # the front row, on the table
+}
+
+#: How much of that outward reach is lost per degree the shoulder turns off forward.
+#:
+#: Reach is not a circle. Straight ahead the arm gets 348 mm out at the back row's height; at
+#: 100 degrees round it manages 300. The fall is close enough to straight, and the same for
+#: both rows, that one number covers it - and it is what tells the difference between a
+#: bottle the arm can pick up and one it misses by 14 mm.
+REACH_FALL_MM_PER_DEG = 0.48
+
+#: How far either side of its facing an arm can actually work, degrees.
+#:
+#: The SO-101's `shoulder_pan` is limited to +/-1.91986 radians - 110 degrees - in
+#: `web/model/so101/so101.xml`, so a thing behind the arm cannot be reached at any distance.
+#: This is the limit the ring did not know about: see `Arm.reaches`.
+#:
+#: 110 is the joint's limit, not the arm's. Driving the real inverse kinematics round the
+#: ring at the shelf's height, the widest bearing it can still get down onto a thing at is
+#: 102.5 degrees, and the same at every radius from 180 to 280 mm. 100 is that measurement
+#: with a little room, and the difference matters: at 110 the arithmetic promised a bottle
+#: the arm then missed by 14 mm.
+PAN_LIMIT_DEG = 100.0
 
 #: The person's eye, in the table frame: sitting at the near edge, 300 mm back and 350 mm up.
 EYE_MM = (250.0, -300.0, 350.0)
@@ -241,6 +270,10 @@ class Arm:
     says: tuple[str, ...]
     #: Where its base stands, in the table frame, millimetres.
     base_mm: tuple[float, float]
+    #: Which way it faces, degrees, 0 being straight at the shelf and + towards the person's
+    #: left. The shoulder turns `PAN_LIMIT_DEG` either side of this, so where an arm faces
+    #: decides what it can reach as much as where it stands.
+    facing_deg: float = 0.0
 
     @property
     def pos(self) -> tuple[float, float, float]:
@@ -250,22 +283,58 @@ class Arm:
     def radius_to(self, x: float, y: float) -> float:
         return math.hypot(x - self.base_mm[0], y - self.base_mm[1])
 
-    def reaches(self, x: float, y: float) -> bool:
-        """Is this spot inside the measured working ring?"""
-        return REACH_MIN_MM <= self.radius_to(x, y) <= REACH_MAX_MM
+    def bearing_to(self, x: float, y: float) -> float:
+        """How far this spot lies off the arm's forward, degrees, -180 to 180.
+
+        Forward is +y, away from the person towards the shelf, before the arm is turned.
+        The sign follows the scene's world frame, where a positive turn swings forward
+        towards the person's left: that is a step of -x here, which is why the x term is
+        negated. Only the direction matters, so the origin drops out and this needs no part
+        of the table-to-world conversion but its handedness.
+        """
+        world = math.degrees(math.atan2(-(x - self.base_mm[0]), y - self.base_mm[1]))
+        return (world - self.facing_deg + 180.0) % 360.0 - 180.0
+
+    def reaches(self, x: float, y: float, row: int = 1) -> bool:
+        """Can the arm get to this spot, working at `row`'s height?
+
+        Three things have to hold: the spot is far enough out that the arm is not folded
+        into itself, it is in front of the arm rather than behind it, and it is inside the
+        reach left at that bearing.
+
+        A plain ring used to answer this, and it was wrong in the one place it mattered
+        most. The person's hand is 190 mm from the left arm - comfortably inside the ring -
+        but 177 degrees *behind* where the arm faced, and the shoulder turns 110 degrees
+        either side and no further. The arithmetic said the robot could hand a thing over;
+        driving the real inverse kinematics at the spot said it could not, by 200 mm. A
+        reach test that ignores which way the arm faces is not a reach test.
+
+        As written this agrees with the solver on every arm and every thing on the shelf,
+        and on which arm can reach the person. `web/tests/probes/shelf.probe.test.ts` is
+        what says so, and it is the gate: this is a cheap stand-in for it, so that the brain
+        can answer "can you reach that?" without running the physics.
+        """
+        bearing = abs(self.bearing_to(x, y))
+        if bearing > PAN_LIMIT_DEG:
+            return False
+        near, far = REACH_RING_MM[row]
+        return near <= self.radius_to(x, y) <= far - REACH_FALL_MM_PER_DEG * bearing
 
     def can_reach(self, thing: Thing) -> bool:
         x, y, _ = thing.place_mm
-        return self.reaches(x, y)
+        return self.reaches(x, y, thing.row)
 
     @property
     def reaches_person(self) -> bool:
-        """Can it put a thing into their hand? Only the arm standing beside them can."""
-        return self.reaches(*GIVE_MM)
+        """Can it put a thing into their hand? Only the arm turned towards them can.
+
+        Their hand is held about 60 mm above the table, nearest the front row's height.
+        """
+        return self.reaches(*GIVE_MM, row=1)
 
     def columns(self, row: int) -> list[int]:
         """Which columns of a row it can pick up from."""
-        return [c for c in range(COLS) if self.reaches(column_x(c), ROW_Y_MM[row])]
+        return [c for c in range(COLS) if self.reaches(column_x(c), ROW_Y_MM[row], row)]
 
 
 def shelf() -> list[Thing]:
@@ -338,14 +407,29 @@ def shelf() -> list[Thing]:
 
 
 def arms() -> list[Arm]:
-    """The two arms, standing on the table either side of the person's seat.
+    """The two arms: one that reaches the shelf, one that reaches the person.
 
-    Bases at x = 110 and x = 390, 150 mm forward. That placement is what makes the two arms
-    need each other: the left arm owns the left half and the person's hand, the right arm
-    owns the right half and cannot reach them at all, and two columns in the front row are
-    shared. Every one of those facts is **computed** from the measured ring by
-    `Arm.reaches`, so moving a base by a centimetre changes the answers rather than quietly
-    contradicting them.
+    They do different jobs, and that is forced by the hardware rather than chosen. An arm
+    can only work `PAN_LIMIT_DEG` either side of the way it faces, and from anywhere that
+    reaches the back of the shelf the person's hand is about 180 degrees away. No single arm
+    can face both. So the two stand in the same place and face differently:
+
+    - **right_arm** stands square to the shelf and picks. It reaches ten of the twelve
+      things and cannot reach the person at all.
+    - **left_arm** is turned 85 degrees towards the person. It reaches their hand, the two
+      things the right arm cannot, and the two mugs.
+
+    Between them every thing is reachable, and both can hold either mug, so the right arm
+    can pass a thing to the left arm to be handed over. That pass is not decoration: it is
+    the only way most of the shelf reaches the person.
+
+    The 85 degrees was measured, not guessed, by driving the real inverse kinematics at
+    every thing over a grid of turns; `web/tests/probes/shelf.probe.test.ts` checks the
+    answer still holds. Turning further reaches the hand just as well but stops it covering
+    the two things only it can reach. Moving it nearer the person gives the arms more places
+    to meet, but carries the back of the shelf outside the ring - the solver still gets
+    there by tilting the hand, which is not the same as being able to pick a thing up - so
+    it stays where it is and only turns.
 
     Left and right are the person's, as they see the table.
     """
@@ -355,6 +439,7 @@ def arms() -> list[Arm]:
             "the arm on the left, beside the person's working hand",
             ("you", "that arm", "this one"),
             base_mm=(110.0, 150.0),
+            facing_deg=85.0,
         ),
         Arm(
             "right_arm",

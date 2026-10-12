@@ -18,8 +18,10 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { expect, test } from 'vitest';
 
+import { ArmKinematics, type IkTarget } from '../../src/sim/ik';
 import { loadScene, mujoco, unpack } from '../../src/sim/mujoco';
 import type { MjData, MjModel, Mujoco, PackFile } from '../../src/sim/mujoco';
+import type { Vec3 } from '../../src/sim/table';
 
 const WEB = path.join(import.meta.dirname, '..', '..');
 const PACK = path.join(WEB, 'public', 'so101.pack');
@@ -164,6 +166,80 @@ test('loading the resting pose leaves every thing exactly where the scene put it
   }
   say(wrong.length ? `keyframe: ${wrong.join('; ')}` : 'keyframe: every thing is where it is declared');
   expect(wrong).toEqual([]);
+  model.delete();
+  data.delete();
+});
+
+// ------------------------------------------------------- E7's last gate: the real reach
+
+/** What the arithmetic claims, written out by the generator beside the scene. */
+interface ReachMap {
+  ringMm: [number, number];
+  arms: { id: string; prefix: string; base: [number, number]; handsOver: boolean }[];
+  give: [number, number];
+  things: { id: string; where: string; row: number; pos: Vec3; reachedBy: string[] }[];
+}
+const REACH: ReachMap = JSON.parse(
+  fs.readFileSync(path.join(WEB, 'model', 'shelf_reach.json'), 'utf8'),
+);
+
+/**
+ * Where the gripper has to be to take hold of a thing: over its centre, with the site a
+ * little above it, because the site sits about 3 mm above the fingertips and the jaws close
+ * around what is under them. Not the top of the thing - a bottle gripped at the rim tips.
+ */
+const GRASP_RISE = 0.012;
+
+/** Close enough to count as reached: the jaws are 60 mm apart open. */
+const CLOSE_MM = 8;
+
+test('each arm really reaches every thing the arithmetic gives it', async () => {
+  // The reach map comes from a ring measured on the table top. The back row stands 80 mm
+  // above it on a riser, and horizontal reach shrinks with height, so this drives the solver
+  // at each thing and reports what it actually finds.
+  const { mj, model, data } = await compile();
+  const lines: string[] = [];
+  const missed: string[] = [];
+
+  for (const arm of REACH.arms) {
+    const ik = new ArmKinematics(mj, model, arm.prefix);
+    for (const thing of REACH.things) {
+      const claimed = thing.reachedBy.includes(arm.id);
+      const target: IkTarget = {
+        pos: [thing.pos[0], thing.pos[1], thing.pos[2] + GRASP_RISE],
+        yaw: null, // any way round: this asks whether the arm can get there at all
+        maxTiltDeg: 25,
+      };
+      const got = ik.solve(target, ik.guess(target));
+      const reached = got.ok && got.posErrMm <= CLOSE_MM && !ik.selfHits(got.q, 0.6);
+      if (claimed && !reached) {
+        missed.push(`${arm.id} cannot reach ${thing.id} (${got.posErrMm.toFixed(0)} mm out)`);
+      }
+      if (claimed || reached) {
+        lines.push(
+          `  ${arm.id} ${reached ? 'reaches' : 'MISSES '} ${thing.id.padEnd(9)} ` +
+            `${got.posErrMm.toFixed(1).padStart(5)} mm${claimed ? '' : '  (a bonus: the ring did not promise it)'}`,
+        );
+      }
+    }
+    // Handing over is the other half: the arm that is supposed to pass a thing to the person
+    // has to be able to get to the spot where it goes into their hand.
+    const give: IkTarget = {
+      pos: [REACH.give[0], REACH.give[1], 0.06],
+      yaw: null,
+      maxTiltDeg: 45,
+    };
+    const atGive = ik.solve(give, ik.guess(give));
+    const canGive = atGive.ok && atGive.posErrMm <= CLOSE_MM;
+    lines.push(
+      `  ${arm.id} ${canGive ? 'reaches' : 'MISSES '} the person's hand ${atGive.posErrMm.toFixed(1)} mm`,
+    );
+    if (arm.handsOver && !canGive) missed.push(`${arm.id} cannot reach the person's hand`);
+    ik.delete();
+  }
+
+  say(['reach, driven at every thing:', ...lines].join('\n'));
+  expect(missed).toEqual([]);
   model.delete();
   data.delete();
 });

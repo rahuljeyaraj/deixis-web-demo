@@ -32,6 +32,8 @@ arms that flag would release both grips at once, so the page needs per-equality 
 from __future__ import annotations
 
 import argparse
+import json
+import math
 import sys
 from pathlib import Path
 
@@ -40,7 +42,7 @@ sys.path.insert(0, str(ROOT))
 
 from end_demo.scene import (  # noqa: E402
     GIVE_MM,
-    REACH_MAX_MM,
+    REACH_RING_MM,
     ROW_SURFACE_Z_MM,
     Thing,
     arms,
@@ -48,6 +50,15 @@ from end_demo.scene import (  # noqa: E402
 )
 
 OUT = ROOT / "web" / "model" / "shelf_scene.xml"
+#: What the arithmetic says each arm can reach, written out beside the scene.
+#:
+#: `scene.py` answers the reach question from a ring measured on the table top, and the back
+#: row stands on a riser 80 mm above it. Horizontal reach shrinks with height, so the ring is
+#: a claim, not a measurement, and the plan's gate for this item is "the arm reaches every
+#: thing" rather than "the arithmetic says so". Writing the claim out in a form the browser
+#: can read lets `tests/probes/shelf.probe.test.ts` drive the real inverse kinematics at every
+#: thing and say where the two disagree.
+REACH_OUT = ROOT / "web" / "model" / "shelf_reach.json"
 
 #: The arm's resting pose, from `web/src/sim/arm.ts` (HOME). Tucked up and out of the way.
 #:
@@ -58,19 +69,18 @@ OUT = ROOT / "web" / "model" / "shelf_scene.xml"
 #: about is not a scene, however carefully the page poses it afterwards.
 HOME = (0.0, -1.0, 1.69, 1.0, 0.0, 0.2)
 
-#: How far each arm turns outwards at rest, radians (shoulder_pan, limit 1.92).
+#: Each arm's shoulder at rest, radians, by arm id (the limit is 1.92).
 #:
-#: With both arms facing the shelf they stand between the person and the things. The demo's
-#: whole question is which thing on the shelf they mean, so the shelf has to be in plain view
-#: before anything is asked. At rest each arm folds down and turns away from the middle; it
-#: turns back when it reaches for something.
+#: At rest the arms must not stand between the person and the shelf: the demo's whole
+#: question is which thing on it they mean, so it has to be in plain view before anything is
+#: asked. Each arm folds down and turns to where it blocks least.
 #:
-#: Chosen by measuring, not by eye: for a grid of poses, where the gripper ends up after the
-#: physics settles, and how close the line from the person's eye to the nearest thing passes
-#: it. This pose puts each gripper 230 mm out - clear of the things, which span 175 mm either
-#: side - and leaves 85 mm between the arm and the nearest sight line. Facing forward leaves
-#: 5 mm, which is to say the arm is in the way.
-REST_PAN_RAD = 1.6
+#: Measured rather than eyed: for a grid of poses, where the gripper ends up once the physics
+#: has settled, and how close the line from the person's eye to the nearest thing passes it.
+#: The two are not mirror images because the arms do not face the same way - the left one is
+#: turned towards the person - so each is measured on its own. These leave 140 mm and 85 mm
+#: of clearance; facing straight forward leaves 5 mm, which is to say in the way.
+REST_PAN_RAD = {"left_arm": -0.4, "right_arm": 1.6}
 
 #: The table top, metres. Wide enough for both arms and the shelf, with room to spare.
 TABLE = {"half_x": 0.34, "half_y": 0.42, "thick": 0.015}
@@ -148,6 +158,16 @@ def body(thing: Thing) -> list[str]:
     ]
 
 
+def _yaw_quat(facing_deg: float) -> str:
+    """A turn about z as a quaternion (w x y z), the way MuJoCo wants it.
+
+    `scene.py` measures an arm's facing in the table frame, where + is towards the person's
+    left; the scene's +Y is the person's left too, so the angle carries over unchanged.
+    """
+    half = math.radians(facing_deg) / 2.0
+    return f"{math.cos(half):.6f} 0 0 {math.sin(half):.6f}"
+
+
 def _home_qpos(things: list[Thing]) -> str:
     """The whole qpos vector for the resting pose.
 
@@ -157,13 +177,7 @@ def _home_qpos(things: list[Thing]) -> str:
     """
     out: list[str] = []
     for arm in arms():
-        # Which way is outwards: with this pose a *negative* pan swings the arm standing on
-        # the +Y side further out to +Y, so each arm takes the opposite sign to the side it
-        # stands on. Measured, because the gripper's final place depends on the whole pose
-        # and not on the pan alone.
-        _, base_y = table_to_world(*arm.base_mm)
-        pan = -REST_PAN_RAD if base_y > 0 else REST_PAN_RAD
-        out += [f"{q:g}" for q in (pan, *HOME[1:])]
+        out += [f"{q:g}" for q in (REST_PAN_RAD[arm.id], *HOME[1:])]
     # The free joints, in the order the bodies are declared: the two parking bodies come
     # before the shelf, because that is where they are in the worldbody.
     for arm in arms():
@@ -250,11 +264,19 @@ def xml() -> str:
         f'    <site name="give" pos="{give_x:.4f} {give_y:.4f} 0.060" size="0.012"'
         ' rgba="0.2 0.6 0.3 0.35"/>',
         "",
-        "    <!-- The arms. Their forward (shoulder_pan = 0) is +X, which is the shelf. -->",
-        f'    <body name="left_stand" pos="{lx:.4f} {ly:.4f} 0">',
+        "    <!-- The arms. Unturned, forward (shoulder_pan = 0) is +X, which is the shelf.",
+        "         The left arm is turned towards the person, because the shoulder swings only",
+        "         110 degrees either side of forward and from anywhere that reaches the back",
+        "         of the shelf the person's hand is about 180 degrees away. One arm picks and",
+        "         the other gives; see `arms()` in end_demo/scene.py. The turn is written as a",
+        "         quaternion because this file has no <compiler>, so `euler` would be degrees",
+        "         here and radians inside so101.xml. -->",
+        f'    <body name="left_stand" pos="{lx:.4f} {ly:.4f} 0"'
+        f' quat="{_yaw_quat(left.facing_deg)}">',
         '      <attach model="so101" prefix="left_"/>',
         "    </body>",
-        f'    <body name="right_stand" pos="{rx:.4f} {ry:.4f} 0">',
+        f'    <body name="right_stand" pos="{rx:.4f} {ry:.4f} 0"'
+        f' quat="{_yaw_quat(right.facing_deg)}">',
         '      <attach model="so101" prefix="right_"/>',
         "    </body>",
         "",
@@ -304,15 +326,50 @@ def xml() -> str:
 
 def reach_report() -> list[str]:
     """Which arm can reach what, for the person running this by hand."""
-    out = ["", "reach, from the measured ring (140-280 mm):"]
+    out = ["", "reach, from the measured rings and the fan:"]
     all_arms = arms()
     for t in shelf():
         who = [a.id for a in all_arms if a.can_reach(t)] or ["NOBODY"]
         out.append(f"  {t.id:<10} {t.where:<46} {', '.join(who)}")
-    out.append(f"  (the ring's outer edge is {REACH_MAX_MM:.0f} mm)")
+    for row, (near, far) in sorted(REACH_RING_MM.items()):
+        out.append(f"  row {row}: {near:.0f} to {far:.0f} mm straight ahead, less off to a side")
     for a in all_arms:
         out.append(f"  {a.id}: can hand over = {a.reaches_person}")
     return out
+
+
+def reach_json() -> str:
+    """The reach claim and every thing's place, for the probe that checks them."""
+    all_arms = arms()
+    things = []
+    for t in shelf():
+        x_mm, y_mm, z_mm = t.place_mm
+        X, Y = table_to_world(x_mm, y_mm)
+        things.append(
+            {
+                "id": t.id,
+                "where": t.where,
+                "row": t.row,
+                "pos": [round(X, 4), round(Y, 4), round(z_mm / 1000.0, 4)],
+                "reachedBy": [a.id for a in all_arms if a.can_reach(t)],
+            }
+        )
+    out = {
+        "_": "GENERATED by scripts/make_shelf_scene.py - do not edit by hand.",
+        "ringMm": {str(row): list(v) for row, v in sorted(REACH_RING_MM.items())},
+        "arms": [
+            {
+                "id": a.id,
+                "prefix": f"{a.id.split('_')[0]}_",
+                "base": [round(v, 4) for v in table_to_world(*a.base_mm)],
+                "handsOver": a.reaches_person,
+            }
+            for a in all_arms
+        ],
+        "give": [round(v, 4) for v in table_to_world(*GIVE_MM)],
+        "things": things,
+    }
+    return json.dumps(out, indent=2) + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -320,24 +377,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--check", action="store_true", help="fail if the committed file is stale")
     p.add_argument("--quiet", action="store_true")
     a = p.parse_args(argv)
-    want = xml()
+    wanted = {OUT: xml(), REACH_OUT: reach_json()}
     if a.check:
-        if not OUT.exists():
-            print(f"{OUT} is missing; run scripts/make_shelf_scene.py", file=sys.stderr)
-            return 1
-        if OUT.read_text(encoding="utf-8") != want:
-            print(
-                f"{OUT} is out of date with end_demo/scene.py; run scripts/make_shelf_scene.py",
-                file=sys.stderr,
-            )
-            return 1
+        for path, want in wanted.items():
+            if not path.exists():
+                print(f"{path} is missing; run scripts/make_shelf_scene.py", file=sys.stderr)
+                return 1
+            if path.read_text(encoding="utf-8") != want:
+                print(
+                    f"{path} is out of date with end_demo/scene.py;"
+                    " run scripts/make_shelf_scene.py",
+                    file=sys.stderr,
+                )
+                return 1
         if not a.quiet:
-            print(f"{OUT.name} matches end_demo/scene.py")
+            print(f"{OUT.name} and {REACH_OUT.name} match end_demo/scene.py")
         return 0
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(want, encoding="utf-8")
+    for path, want in wanted.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(want, encoding="utf-8")
     if not a.quiet:
         print(f"wrote {OUT}")
+        print(f"wrote {REACH_OUT}")
         print("\n".join(reach_report()))
     return 0
 

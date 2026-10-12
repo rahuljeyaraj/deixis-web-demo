@@ -106,14 +106,32 @@ export class ArmKinematics {
   private readonly jacp: InstanceType<Mujoco['DoubleBuffer']>;
   private readonly jacr: InstanceType<Mujoco['DoubleBuffer']>;
 
+  /**
+   * Where this arm stands, world metres. The one-arm scene puts its arm at the origin; the
+   * end demo's shelf scene has two, each inside a `<body name="left_stand"/>` of its own, so
+   * nothing may assume the base is at 0.
+   */
+  readonly base: Vec3;
+  /**
+   * Which way it faces, radians about z, 0 being +x. The shoulder turns 110 degrees either
+   * side of this and no further, which is what decides whether a thing can be reached at all
+   * - the end demo's arms are turned so that one fan covers both the shelf and the person.
+   */
+  readonly baseYaw: number;
+
+  /**
+   * @param prefix What `<attach model="so101" prefix="left_"/>` put in front of every name.
+   *   Empty for the one-arm scene, whose names are bare.
+   */
   constructor(
     private readonly mj: Mujoco,
     private readonly model: MjModel,
+    private readonly prefix = '',
   ) {
     const J = mj.mjtObj.mjOBJ_JOINT.value;
     const ids = ARM_JOINTS.map((n) => {
-      const id = mj.mj_name2id(model, J, n);
-      if (id < 0) throw new Error(`no joint ${n}`);
+      const id = mj.mj_name2id(model, J, `${prefix}${n}`);
+      if (id < 0) throw new Error(`no joint ${prefix}${n}`);
       return id;
     });
     const qa = model.jnt_qposadr as Int32Array;
@@ -123,12 +141,22 @@ export class ArmKinematics {
     this.dofAdr = ids.map((i) => da[i]);
     this.lo = ids.map((i) => range[2 * i]);
     this.hi = ids.map((i) => range[2 * i + 1]);
-    this.siteId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE.value, 'gripperframe');
-    if (this.siteId < 0) throw new Error('no gripperframe site');
-    this.gripperAdr = qa[mj.mj_name2id(model, J, 'gripper')];
+    this.siteId = mj.mj_name2id(model, mj.mjtObj.mjOBJ_SITE.value, `${prefix}gripperframe`);
+    if (this.siteId < 0) throw new Error(`no ${prefix}gripperframe site`);
+    this.gripperAdr = qa[mj.mj_name2id(model, J, `${prefix}gripper`)];
     const root = model.body_rootid as Int32Array;
     const armRoot = root[(model.jnt_bodyid as Int32Array)[ids[0]]];
+    // Each arm's own bodies. With two arms this is what keeps the self-collision check from
+    // calling one arm touching the other a fold in the first arm: they are separate trees,
+    // rooted at their own stand.
     this.armBodies = new Set([...root.keys()].filter((b) => b > 0 && root[b] === armRoot));
+    const bp = model.body_pos as Float64Array;
+    this.base = [bp[armRoot * 3], bp[armRoot * 3 + 1], bp[armRoot * 3 + 2]];
+    // The stand's yaw out of its quaternion (w, x, y, z). Only the turn about z matters: a
+    // stand that leaned would break more than the first guess.
+    const q = model.body_quat as Float64Array;
+    const [w, qx, qy, qz] = [q[armRoot * 4], q[armRoot * 4 + 1], q[armRoot * 4 + 2], q[armRoot * 4 + 3]];
+    this.baseYaw = Math.atan2(2 * (w * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
     this.scratch = new mj.MjData(model);
     this.jacp = new mj.DoubleBuffer(3 * model.nv);
     this.jacr = new mj.DoubleBuffer(3 * model.nv);
@@ -188,7 +216,14 @@ export class ArmKinematics {
   /** A first guess that faces the target. Positive pan turns the arm toward -y. */
   guess(target: IkTarget): number[] {
     const [x, y] = target.pos;
-    return [-Math.atan2(y, x), -0.3, 0.6, 1.2, 0];
+    // From where this arm stands and which way it faces, not from the world origin.
+    const bearing = Math.atan2(y - this.base[1], x - this.base[0]) - this.baseYaw;
+    return [-Math.atan2(Math.sin(bearing), Math.cos(bearing)), -0.3, 0.6, 1.2, 0];
+  }
+
+  /** Which arm this is, for an error message: `left_` or `right_`, empty in the one-arm scene. */
+  get name(): string {
+    return this.prefix;
   }
 
   /**

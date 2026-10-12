@@ -11,12 +11,14 @@ from __future__ import annotations
 import math
 import random
 
+import pytest
+
 from end_demo.point import SIGMA_DEG
 from end_demo.scene import (
     COLS,
     GIVE_MM,
-    REACH_MAX_MM,
-    REACH_MIN_MM,
+    PAN_LIMIT_DEG,
+    REACH_RING_MM,
     ROWS,
     arms,
     by_id,
@@ -175,19 +177,46 @@ def test_each_arm_owns_part_of_the_shelf_and_shares_part():
 def test_reach_is_the_measured_ring_and_nothing_else():
     """Not a hand-written list of columns. Move a base and the answers change, rather than
     silently contradicting what the arm can really do."""
-    left = arms()[0]
-    x, y = left.base_mm
-    assert not left.reaches(x, y)  # too close in: the gripper would hit its own shoulder
-    assert left.reaches(x, y + REACH_MIN_MM + 1)
-    assert left.reaches(x, y + REACH_MAX_MM - 1)
-    assert not left.reaches(x, y + REACH_MAX_MM + 1)
+    right = next(a for a in arms() if a.facing_deg == 0)
+    x, y = right.base_mm
+    near, far = REACH_RING_MM[1]
+    # Straight ahead is +y, away from the person, which is where this arm faces.
+    assert not right.reaches(x, y)  # too close in: the gripper would hit its own shoulder
+    assert right.reaches(x, y + near + 1)
+    assert right.reaches(x, y + far - 1)
+    assert not right.reaches(x, y + far + 1)
+
+
+def test_reach_runs_out_as_the_arm_turns_away_from_forward():
+    """Reach is not a circle: the further round the shoulder goes, the less of it is left.
+    A spot the arm can just manage straight ahead is out of reach off to one side."""
+    right = next(a for a in arms() if a.facing_deg == 0)
+    x, y = right.base_mm
+    _, far = REACH_RING_MM[1]
+    assert right.reaches(x, y + far - 2)  # straight ahead, almost at the edge
+    # The same distance away, a quarter turn round: nearer than the edge, still out of reach.
+    assert not right.reaches(x + far - 2, y)
+
+
+def test_nothing_behind_an_arm_is_reachable_however_close():
+    """The shoulder stops at PAN_LIMIT_DEG. This is what the plain ring got wrong: it put
+    the person's hand well inside the reach and the arm could not turn far enough to touch
+    it."""
+    right = next(a for a in arms() if a.facing_deg == 0)
+    x, y = right.base_mm
+    near, far = REACH_RING_MM[1]
+    middle = (near + far) / 3
+    assert not right.reaches(x, y - middle)  # directly behind
+    # Straight behind wraps to -180, not +180; it is the size of the turn that matters.
+    assert abs(right.bearing_to(x, y - middle)) == pytest.approx(180.0, abs=1e-6)
+    assert PAN_LIMIT_DEG < 180.0
 
 
 def test_an_arms_columns_agree_with_its_reach():
     for arm in arms():
         for row in (0, 1):
             for col in arm.columns(row):
-                assert arm.reaches(column_x(col), [400.0, 300.0][row])
+                assert arm.reaches(column_x(col), [400.0, 300.0][row], row)
 
 
 # ---------------------------------------------------------------- shuffling
