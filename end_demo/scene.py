@@ -112,10 +112,44 @@ CENTRE_X_MM = 250.0
 
 #: Row 0 is the raised row at the back; row 1 is the front row, on the table.
 ROW_Y_MM = (400.0, 300.0)
-ROW_Z_MM = (95.0, 15.0)
+#: What each row stands on: the top of the step at the back, the bare table at the front.
+ROW_SURFACE_Z_MM = (80.0, 0.0)
 ROW_NAMES = ("the raised row at the back", "the front row")
 
 ORDINALS = ("1st", "2nd", "3rd", "4th", "5th", "6th")
+
+#: How big each kind of thing is, in millimetres, in **table axes**: half across, half deep,
+#: half tall for a box; radius and half height for a cylinder.
+#:
+#: Written in table axes rather than in the object's own frame so there is no orientation to
+#: get wrong. That matters more than it sounds: at 70 mm between neighbours, a remote lying
+#: across the shelf would overlap the thing beside it, and the first run of the physics scene
+#: had the remote, the scissors and the tray shoving each other apart as soon as it started.
+#: Long things lie front to back, which is also how you put them on a narrow shelf.
+SIZE_MM: dict[str, tuple[float, ...]] = {
+    "bottle": (16.0, 35.0),  # cylinder: a pill bottle, 32 mm across
+    "mug": (32.0, 40.0),  # cylinder: 64 mm across, 6 mm clear of its neighbour
+    "scissors": (12.0, 55.0, 5.0),  # lying front to back
+    "pen": (8.0, 55.0, 8.0),  # a box, not a capsule: a capsule rolls off the shelf
+    "bracket": (20.0, 12.0, 18.0),
+    "phone": (18.0, 35.0, 6.0),
+    "remote": (20.0, 60.0, 10.0),
+    "tray": (25.0, 40.0, 8.0),
+}
+
+
+#: A hair of clearance under every thing. Starting a body exactly flush on a surface lets
+#: the contact solver find a small penetration and turn it into a torque: in the first
+#: physics run the remote tipped onto its side and slid 22 mm before the scene had settled,
+#: which would have left the robot being told a layout that was no longer true.
+SETTLE_GAP_MM = 1.0
+
+
+def rest_z_mm(kind: str, shape: str) -> float:
+    """How high a thing's centre sits above whatever it is standing on."""
+    size = SIZE_MM[kind]
+    half = size[1] if shape == "cylinder" else size[2]
+    return half + SETTLE_GAP_MM
 
 
 def column_x(col: int) -> float:
@@ -145,8 +179,33 @@ class Thing:
 
     @property
     def place_mm(self) -> tuple[float, float, float]:
-        """Where it is in the table frame, millimetres. What the physics scene needs."""
-        return (column_x(self.col), ROW_Y_MM[self.row], ROW_Z_MM[self.row])
+        """Its **centre**, in the table frame, millimetres.
+
+        The centre, not the surface it stands on, because that is both what the physics
+        scene wants for a body and what the person's eye is looking at. Computed from the
+        row's surface plus the thing's own height, so a taller thing sits higher rather than
+        sinking into the shelf - the first physics run had everything drop 15 mm because
+        this returned the surface and the generator added the height again.
+        """
+        return (
+            column_x(self.col),
+            ROW_Y_MM[self.row],
+            ROW_SURFACE_Z_MM[self.row] + self.rest_z_mm,
+        )
+
+    @property
+    def rest_z_mm(self) -> float:
+        return rest_z_mm(self.kind, self.shape)
+
+    @property
+    def size_mm(self) -> tuple[float, ...]:
+        return SIZE_MM[self.kind]
+
+    @property
+    def half_across_mm(self) -> float:
+        """Half its width across the shelf. Must stay under half the column spacing, or it
+        overlaps the thing beside it."""
+        return self.size_mm[0]
 
     @property
     def pos(self) -> tuple[float, float, float]:
@@ -244,7 +303,10 @@ def shelf() -> list[Thing]:
             ("writing", "for writing", "to write with"),
             5,
             0,
-            "capsule",
+            # A box, not a capsule. The spike proved a weld holds a capsule, but a capsule
+            # lying on a shelf rolls: in the first physics run the pen travelled 164 mm
+            # before the judge would have arrived.
+            "box",
             "blue",
         ),
         Thing("mug_1", "mug", "a blue mug", mug, 0, 1, "cylinder", "blue"),

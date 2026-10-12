@@ -73,9 +73,7 @@ def main() -> None:
     ]:
         cases.append(case(name, make_hand(flex)))
 
-    recorded = json.loads(
-        (DOODLE / "tests" / "runtime" / "data" / "hands_1oct.json").read_text()
-    )
+    recorded = json.loads((DOODLE / "tests" / "runtime" / "data" / "hands_1oct.json").read_text())
     for kind in ("point", "size"):
         for i, h in enumerate(recorded[kind]):
             cases.append(case(f"rahul's hand, 1 Oct, {kind} frame {i}", h["world"]))
