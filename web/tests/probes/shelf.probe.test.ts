@@ -36,7 +36,9 @@ function files(): PackFile[] {
   if (!fs.existsSync(PACK)) throw new Error('run `node scripts/pack-model.mjs` first');
   const packed = unpack(new Uint8Array(zlib.gunzipSync(fs.readFileSync(PACK))));
   return [
-    ...packed.filter((f) => f.path !== 'table_scene.xml'),
+    // The pack holds a copy of the shelf scene as well; this probe tests the file on disk,
+    // so both the other scene and the packed copy are left out.
+    ...packed.filter((f) => f.path !== 'table_scene.xml' && f.path !== 'shelf_scene.xml'),
     { path: 'shelf_scene.xml', bytes: new Uint8Array(fs.readFileSync(SCENE)) },
   ];
 }

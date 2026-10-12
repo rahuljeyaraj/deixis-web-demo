@@ -16,6 +16,10 @@ const out = path.join(web, 'public', 'so101.pack');
 
 const entries = [
   ['table_scene.xml', path.join(model, 'table_scene.xml')],
+  // The end demo's scene: the tiered shelf and two arms, generated from end_demo/scene.py
+  // by `scripts/make_shelf_scene.py`. Both scenes ride in one pack so the page can show
+  // either without a second download.
+  ['shelf_scene.xml', path.join(model, 'shelf_scene.xml')],
   ['so101.xml', path.join(model, 'so101', 'so101.xml')],
   ...fs
     .readdirSync(path.join(model, 'so101', 'assets'))

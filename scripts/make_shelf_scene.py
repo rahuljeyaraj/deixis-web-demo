@@ -56,7 +56,21 @@ OUT = ROOT / "web" / "model" / "shelf_scene.xml"
 #: The first physics run had the right arm lying on the remote, which then tipped over and
 #: slid 49 mm while the scene settled. A scene whose own resting state knocks the shelf
 #: about is not a scene, however carefully the page poses it afterwards.
-HOME = (0.0, -1.45, 0.75, 1.45, 0.0, 0.2)
+HOME = (0.0, -1.0, 1.69, 1.0, 0.0, 0.2)
+
+#: How far each arm turns outwards at rest, radians (shoulder_pan, limit 1.92).
+#:
+#: With both arms facing the shelf they stand between the person and the things. The demo's
+#: whole question is which thing on the shelf they mean, so the shelf has to be in plain view
+#: before anything is asked. At rest each arm folds down and turns away from the middle; it
+#: turns back when it reaches for something.
+#:
+#: Chosen by measuring, not by eye: for a grid of poses, where the gripper ends up after the
+#: physics settles, and how close the line from the person's eye to the nearest thing passes
+#: it. This pose puts each gripper 230 mm out - clear of the things, which span 175 mm either
+#: side - and leaves 85 mm between the arm and the nearest sight line. Facing forward leaves
+#: 5 mm, which is to say the arm is in the way.
+REST_PAN_RAD = 1.6
 
 #: The table top, metres. Wide enough for both arms and the shelf, with room to spare.
 TABLE = {"half_x": 0.34, "half_y": 0.42, "thick": 0.015}
@@ -142,8 +156,14 @@ def _home_qpos(things: list[Thing]) -> str:
     placed, so loading the keyframe does not move the shelf.
     """
     out: list[str] = []
-    for _ in range(2):
-        out += [f"{q:g}" for q in HOME]
+    for arm in arms():
+        # Which way is outwards: with this pose a *negative* pan swings the arm standing on
+        # the +Y side further out to +Y, so each arm takes the opposite sign to the side it
+        # stands on. Measured, because the gripper's final place depends on the whole pose
+        # and not on the pan alone.
+        _, base_y = table_to_world(*arm.base_mm)
+        pan = -REST_PAN_RAD if base_y > 0 else REST_PAN_RAD
+        out += [f"{q:g}" for q in (pan, *HOME[1:])]
     # The free joints, in the order the bodies are declared: the two parking bodies come
     # before the shelf, because that is where they are in the worldbody.
     for arm in arms():

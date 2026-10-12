@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deixis: the shelf</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23ffb000'/%3E%3C/svg%3E" />
+    <style>
+      :root { --ink: #1a1a1a; --paper: #f5f2ec; --dim: #5a5a5a; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--ink);
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      p.lead { margin: 0 0 16px; color: var(--dim); }
+      canvas { width: 100%; display: block; border-radius: 8px; background: #dfe5ee;
+        touch-action: none; cursor: grab; }
+      canvas:active { cursor: grabbing; }
+      .views { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+      button { font: inherit; padding: 6px 14px; border: 1px solid #c9c2b4; border-radius: 6px;
+        background: #fff; cursor: pointer; }
+      button:hover { background: #efe9dd; }
+      #status { color: var(--dim); font-size: 0.9rem; margin-top: 8px; }
+      .note { margin-top: 24px; font-size: 0.95rem; color: var(--dim); max-width: 62ch; }
+      .note b { color: var(--ink); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The shelf</h1>
+      <p class="lead">
+        Twelve things, two rows, an arm on each side. This is the scene the end demo happens
+        in — a look at it, nothing more.
+      </p>
+      <canvas id="scene"></canvas>
+      <div class="views">
+        <button type="button" data-view="eye">From the person’s eyes</button>
+        <button type="button" data-view="over">From above</button>
+        <button type="button" data-view="side">From the side</button>
+      </div>
+      <p id="status">Loading…</p>
+      <p class="note">
+        Four of the things are <b>identical bottles</b> and two are <b>identical mugs</b>: no
+        word tells them apart, which is the whole point. From where the person sits, two things
+        side by side are <b>5.2°</b> apart — about the width of three fingers held out at arm’s
+        length — so pointing alone cannot settle which one they mean. The green spot on the near
+        edge is where a thing is put into their hand, on their <b>left</b>.
+      </p>
+    </main>
+    <script type="module" src="/src/shelf.ts"></script>
+  </body>
+</html>

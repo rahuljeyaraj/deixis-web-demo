@@ -46,7 +46,7 @@ function filesFor(sceneName: string, xml?: string) {
     ? new TextEncoder().encode(xml)
     : new Uint8Array(fs.readFileSync(path.join(WEB, 'model', sceneName)));
   return [
-    ...packed.filter((f) => f.path !== 'table_scene.xml'),
+    ...packed.filter((f) => f.path !== 'table_scene.xml' && f.path !== sceneName),
     { path: sceneName, bytes },
   ];
 }

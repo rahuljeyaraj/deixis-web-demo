@@ -49,6 +49,12 @@ export function ringShapes(inner: number, outer: number, dashed: boolean, grow: 
 export interface ViewOptions {
   /** Draw over a transparent background (the webcam shows through). */
   transparent?: boolean;
+  /**
+   * Leave off the reach mat and the painted squares. Both are the cubes-on-a-table demo's
+   * furniture, drawn from `table.ts` for one arm at one base; the end demo's shelf has two
+   * arms and no squares, so it draws the scene bare.
+   */
+  bare?: boolean;
 }
 
 export class TableView {
@@ -80,8 +86,10 @@ export class TableView {
     this.tableGeom = mj.mj_name2id(model, mj.mjtObj.mjOBJ_GEOM.value, 'table');
     this.addLights();
     this.addGeoms(mj);
-    this.addMat();
-    this.addSquares();
+    if (!opts.bare) {
+      this.addMat();
+      this.addSquares();
+    }
   }
 
   private static makeRenderer(canvas: HTMLCanvasElement, transparent: boolean): THREE.WebGLRenderer {
