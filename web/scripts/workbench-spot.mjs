@@ -17,25 +17,25 @@ const url = process.argv[2] ?? 'http://localhost:5173/workbench.html';
 const out = path.resolve(process.argv[3] ?? path.join(import.meta.dirname, '..', '..', 'out', 'stage1-spot'));
 fs.mkdirSync(out, { recursive: true });
 
-// Each target names a geom in the scene and what the page ought to call it. The three the
-// checklist asks for by name are first: a flat board, a curved jar, a hook.
+// Each target names a geom in the scene and what the page ought to call it. The ones the
+// checklist asks for by name are first: a flat board and a curved jar.
 const TARGETS = [
   ['shelf_board0', 'the board over the bottom bay', 'a flat board'],
   ['jar2', 'a jar of screws', 'a curved jar'],
-  ['mug1_5', 'a mug', "a bead of the handle - part of the mug"],
+  ['mug_6', 'a mug', 'a bead of the handle - part of the mug'],
   ['shelf_board2', 'the top of the shelf unit', 'the lid of the unit'],
-  ['bench', 'the bench top', 'the bench itself'],
+  ['bench_near', 'the bench top', 'the bench itself'],
   ['offcut1', 'an offcut of wood', 'a flat top, straight on'],
   ['oil', 'a bottle of oil', 'a tall curved bottle'],
   ['pot', 'a pot of loose screws', 'the rim of the pot'],
   ['odds', 'a box of odds and ends', 'inside the top bay'],
   ['hammer_2', 'a hammer', "a part, not the thing's own geom"],
   ['glue1_3', 'a tube of glue, capped', 'the cap, which is part of the tube'],
-  ['tape', 'a roll of masking tape', 'a roll lying flat'],
+  ['offcut2', 'an offcut of wood', 'standing on its edge in the top bay'],
   ['shelf_left', 'the side of the shelf unit', 'an upright'],
-  ['tin2', 'a tin of varnish', 'one of three that are the same'],
-  ['clamp_1', 'a G clamp', 'the jaw of the clamp'],
-  ['pliers', 'a pair of pliers', 'a tool with legs'],
+  ['tin2', 'a tin of varnish', 'one of two that are the same'],
+  ['rail', 'the rail the arm runs on', 'the floor of the trough'],
+  ['pliers_1', 'a pair of pliers', 'one of its two legs'],
   ['knife', 'a craft knife', 'a small sharp thing'],
   ['screwdriver1_2', 'a screwdriver', 'the shaft'],
 ];

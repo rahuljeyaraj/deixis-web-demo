@@ -32,6 +32,13 @@ The carriage carries a **slide joint** along the bench's x. The rail is sunk int
 the carriage's top is flush with it: every ring in `RING_MM` was measured with the arm's base at
 z = 0, and a rail standing proud of the bench would put all of them out by its own height.
 
+**The bench top is three slabs, not one** - the near half, the far half, and the floor of the
+trough between them. Sunk in one solid slab, the rail was a box buried inside the bench with
+only its top face showing, and that face lay in exactly the same plane as the bench's own: two
+coplanar faces, so which one a graphics card draws is anyone's guess, and what rahul saw was no
+rail at all. Cutting the trough out of the bench top instead gives the rail real sides, a floor
+16 mm down, and two bright guide rails lying in it with the carriage riding between them.
+
 **One weld and one parking body.** `data.eq_active` cannot be touched in this build (a
 `memory_view<bool>`; emscripten throws on any access), so the weld stays active and an arm
 holding nothing has it pointed at an invisible parking body. See
@@ -57,13 +64,13 @@ from workbench.scene import (  # noqa: E402
     BENCH_THICK_MM,
     BENCH_TO_MM,
     BOARD_Z_MM,
-    BOTTOM_BAY_USABLE_X_MM,
     CENTRE_X_MM,
     EYE_MM,
     FRONT_ROW_Y_MM,
     GIVE_MM,
     LOOK_AT_MM,
-    RAIL_FROM_MM,
+    RAIL_GUIDE_MM,
+    RAIL_GUIDE_Y_MM,
     RAIL_SUNK_MM,
     RAIL_TO_MM,
     RAIL_WIDE_MM,
@@ -97,31 +104,41 @@ REACH_OUT = ROOT / "web" / "model" / "workbench_reach.json"
 #: the arm stretched out flat along +X - straight through the shelf. The end demo learned this
 #: the hard way: its first physics run had the right arm lying on the remote, which then tipped
 #: over and slid 49 mm while the scene settled.
-REST_ARM = (-1.0, 1.69, 1.0, 0.0, 0.2)
+REST_ARM = (-0.6, 1.3, 0.9, 0.0, 0.2)
 
 #: Each arm's shoulder at rest, radians (the joint's limit is 1.92).
 #:
-#: Both arms face the shelf, and at rest they must be out of the way of it: the demo's whole
-#: question is which thing the person means, so the bench and both bays have to be in plain view
-#: before anything is asked.
+#: The arm faces the shelf, and at rest it must be out of the way of it: the demo's whole
+#: question is which thing the person means, so the bench and all three bays have to be in plain
+#: view before anything is asked.
 #:
 #: **Measured.** `web/tests/probes/visible.probe.test.ts` casts rays at every thing from the
 #: default view, for a grid of nine turns and seven ways of folding, and asks how much of the
-#: world each pose leaves visible. Turned nearly all the way out - away from the middle of the
-#: bench and along its edge - is the best of them, and it is also what a parked arm looks like.
+#: world each pose leaves visible. Parked at the right-hand end, the turn that pays is the one
+#: that swings the arm **off** the bench, which is a positive pan, not the negative one that had
+#: been here: 88 per cent of the world visible against 85, and the only thing left mostly hidden
+#: is jar4, which is meant to be.
 #:
-#: With the arms at the sides the pose hardly matters: the sweep runs from 69 to 86 per cent,
-#: and most of it is at 86. That is the measurement agreeing with the reason they were moved
-#: there. Standing at the front facing the shelf, the same sweep ran from 48 to 71.
-REST_PAN_RAD = -1.8
+#: That sweep was worth nothing until 24 Oct. It looked up joints called `left_shoulder_pan` and
+#: `right_shoulder_pan`, which stopped existing when one arm on a rail replaced two standing
+#: still and the prefix became `arm_`; `mj_name2id` answered -1, `qpos[undefined] = x` threw
+#: nothing and did nothing, and all sixty-three poses were reported as equally good because not
+#: one of them had been tried.
+REST_PAN_RAD = 1.4
 #: Where the carriage parks, in the bench frame.
 #:
-#: At the right-hand end, which is measured rather than chosen. Wherever the arm parks it hides
-#: a band of the bench behind it, and the question is only what is in that band. Parked in the
-#: middle it stood in front of the hammer, which is 292 mm long and cannot be moved far enough
-#: either way to clear the band - 21 per cent of it could be seen. At the left end it hid a pot
-#: of screws. At the right end the band falls on the bench's far corner, where nothing needs to
-#: stand, and every thing in the world is at least 45 per cent visible with the arm at rest.
+#: At the right-hand end, which is measured rather than chosen, and measured again after the
+#: layout changed rather than quoted from the world before this one. Wherever the arm parks it
+#: hides a band of the bench behind it, and the only question is what is in that band
+#: (`out/stage1-visible.txt`):
+#:
+#: | parked at | the world visible | the least seen thing |
+#: |---|---|---|
+#: | x = 70, the left end | 84% | the chisel, at 20% |
+#: | x = 350, the middle | 76% | **jar2, at 5%** - one of the three the demo turns on |
+#: | x = 630, the right end | **88%** | the offcut, at 67% |
+#:
+#: At the right-hand end the band falls on the bench's far corner, where nothing needs to stand.
 REST_SLIDE_X_MM = RAIL_TO_MM
 
 #: Rough masses, kilograms. Nothing here is heavy; the gripper's weld does the carrying.
@@ -132,7 +149,6 @@ MASSES: dict[str, float] = {
     "blades": 0.040,
     "chisel": 0.120,
     "rule": 0.045,
-    "tape": 0.060,
     "hammer": 0.450,
     "pot": 0.200,
     "oil": 0.250,
@@ -142,7 +158,6 @@ MASSES: dict[str, float] = {
     "odds": 0.150,
     "tin": 0.420,
     "mug": 0.320,
-    "clamp": 0.260,
 }
 
 #: Every colour in the world, and nothing else. NFR1 asks that every difference that matters be
@@ -150,7 +165,11 @@ MASSES: dict[str, float] = {
 #: separate at that size and to stay apart in a photograph of a screen.
 COLOURS: dict[str, str] = {
     "bench": "0.68 0.52 0.36 1",
-    "rail": "0.22 0.23 0.26 1",
+    # The trough the carriage runs in: dark, so that the two bright guide rails in it and the
+    # carriage between them read as machinery against a pale wooden bench.
+    "rail": "0.17 0.18 0.21 1",
+    "rail guide": "0.80 0.82 0.86 1",
+    "carriage": "0.42 0.45 0.50 1",
     "shelf": "0.86 0.81 0.72 1",
     # Darker than the boards on purpose: with the back the same shade as everything else, a bay
     # read as a flat panel rather than as a space with things standing in it.
@@ -342,6 +361,23 @@ def slab(name, x0, x1, y0, y1, z0, z1, colour) -> str:
     )
 
 
+def rod(name, x0, x1, y_mm, colour) -> str:
+    """One guide rail: a cylinder lying along the bench's x, in the trough, below the top.
+
+    It sits low enough that the arm's own base, which is bolted to the carriage at z = 0, cannot
+    pass through it, and far enough off the middle that the carriage runs between the two rather
+    than over them.
+    """
+    X, Y = bench_to_world((x0 + x1) / 2, y_mm)
+    z = -(RAIL_SUNK_MM + BENCH_THICK_MM) / 2
+    return (
+        f'    <geom name="{name}" type="cylinder" size="{mm(RAIL_GUIDE_MM / 2)}'
+        f' {mm((x1 - x0) / 2)}" pos="{X:.4f} {Y:.4f} {z / 1000:.4f}"\n'
+        f'      quat="{quat_str(quat_about("x", 90.0))}" rgba="{COLOURS[colour]}"'
+        ' contype="0" conaffinity="0"/>'
+    )
+
+
 def shelf_unit() -> list[str]:
     """The three-bay unit: two uprights, a back panel, and three boards.
 
@@ -353,9 +389,11 @@ def shelf_unit() -> list[str]:
     x1, y1 = SHELF_TO_MM
     top = BOARD_Z_MM[-1][0] + BOARD_Z_MM[-1][1]
     out = [
-        "    <!-- The shelf unit: three bays, 440 mm across. The bottom bay is the hard one -",
-        "         reaching level into it stops at 280 mm from an arm, so only its middle 320 mm",
-        "         is usable; the two above it reach in much closer. -->",
+        "    <!-- The shelf unit: three bays across the whole back edge of the bench, 676 mm of",
+        "         clear width in each. It used to be 440 mm in the middle, which left a strip of",
+        "         bare bench at each end that nothing could use - further from the person than",
+        "         the shelf, and reached over nothing. The rail puts every part of every bay in",
+        "         reach, so there is no reason to stop short of the ends. -->",
         slab("shelf_left", x0, x0 + SHELF_SIDE_MM, y0, y1, 0.0, top, "shelf"),
         slab("shelf_right", x1 - SHELF_SIDE_MM, x1, y0, y1, 0.0, top, "shelf"),
         slab("shelf_back", x0, x1, y1 - SHELF_BACK_MM, y1, 0.0, top, "shelf back"),
@@ -423,13 +461,16 @@ def xml() -> str:
     eye_x, eye_y = bench_to_world(ROBOT_EYE_MM[0], ROBOT_EYE_MM[1])
     bx0, by0 = BENCH_FROM_MM
     bx1, by1 = BENCH_TO_MM
+    trough0 = RAIL_Y_MM - RAIL_WIDE_MM / 2
+    trough1 = RAIL_Y_MM + RAIL_WIDE_MM / 2
 
     lines = [
         "<!--",
         "  GENERATED by scripts/make_workbench_scene.py - do not edit by hand.",
         "",
-        "  The workbench demo's scene: a bench, a three-bay shelf unit, two SO-101 arms facing",
-        "  each other across it, and twenty-six things. The geometry comes from",
+        "  The workbench demo's scene: a bench with a rail sunk across the front of it, one",
+        "  SO-101 on a carriage that slides along it, a three-bay shelf unit on the whole of",
+        "  the back edge, and twenty-one things. The geometry comes from",
         "  workbench/scene.py, which is also what the core, the robot code and the page work",
         "  from, so the shelf the arm reaches into and the shelf the page draws a spot on are",
         "  the same shelf.",
@@ -437,14 +478,14 @@ def xml() -> str:
         "  World: metres, z up, origin on the bench top in the middle of the person's edge.",
         "  +X away from the person towards the shelf, +Y to the person's left.",
         "",
-        "  Two arms by <attach prefix>: <replicate> is not in this MuJoCo build",
+        "  The arm by <attach prefix>: <replicate> is not in this MuJoCo build",
         "  (web/tests/probes/twoarms.probe.test.ts). so101.xml is unchanged.",
         "",
-        "  Two welds and two parking bodies, both welds always active: data.eq_active cannot be",
-        "  written in this build, and the global equality-disable flag would let go of both",
-        "  grips at once. See web/tests/probes/eqactive.probe.test.ts.",
+        "  One weld and one parking body, the weld always active: data.eq_active cannot be",
+        "  written in this build, and the global equality-disable flag would let go of every",
+        "  grip at once. See web/tests/probes/eqactive.probe.test.ts.",
         "-->",
-        '<mujoco model="the workbench: a bench, a shelf and two arms">',
+        '<mujoco model="the workbench: a bench, a shelf and an arm on a rail">',
         '  <asset><model name="so101" file="so101.xml"/></asset>',
         "",
         f'  <statistic center="{0.30:.2f} 0 0.12" extent="0.9"/>',
@@ -467,8 +508,12 @@ def xml() -> str:
         '    <light name="key" pos="-0.2 -0.3 1.1" dir="0.3 0.3 -1" directional="true"/>',
         '    <light name="fill" pos="0.6 0.4 0.9" dir="-0.2 -0.3 -1" directional="true"/>',
         "",
-        "    <!-- The bench top is z = 0. -->",
-        slab("bench", bx0, bx1, by0, by1, -BENCH_THICK_MM, 0.0, "bench"),
+        "    <!-- The bench top is z = 0, in two halves with the rail's trough between them.",
+        "         One slab with the rail buried in it left the rail's top face in the same plane",
+        "         as the bench's, which draws as whichever the card happens to pick - and what",
+        "         you saw was no rail. -->",
+        slab("bench_near", bx0, bx1, by0, trough0, -BENCH_THICK_MM, 0.0, "bench"),
+        slab("bench_far", bx0, bx1, trough1, by1, -BENCH_THICK_MM, 0.0, "bench"),
         "",
     ]
     lines += shelf_unit()
@@ -481,19 +526,24 @@ def xml() -> str:
         f'    <site name="robot_eye" pos="{eye_x:.4f} {eye_y:.4f} {mm(ROBOT_EYE_MM[2])}"'
         ' size="0.010" rgba="0.12 0.52 0.90 0.30"/>',
         "",
-        "    <!-- The rail, sunk into the bench so that the carriage's top is flush with it.",
-        "         That is not decoration: every ring in RING_MM was measured with the arm's base",
-        "         at z = 0, and a rail standing proud would put all of them out by its height. -->",
+        "    <!-- The rail: the floor of the trough, and the two guide rails lying in it. The",
+        "         carriage's top comes flush with the bench, which is not decoration - every",
+        "         ring in RING_MM was measured with the arm's base at z = 0, and a rail standing",
+        "         proud would put every one of them out by its own height. The trough runs the",
+        "         whole width of the bench, because a rail that stops where the travel stops",
+        "         looks like a slot cut for one arm rather than a bench with a rail on it. -->",
         slab(
             "rail",
-            RAIL_FROM_MM - 40.0,
-            RAIL_TO_MM + 40.0,
-            RAIL_Y_MM - RAIL_WIDE_MM / 2,
-            RAIL_Y_MM + RAIL_WIDE_MM / 2,
+            bx0,
+            bx1,
+            trough0,
+            trough1,
+            -BENCH_THICK_MM,
             -RAIL_SUNK_MM,
-            0.0,
             "rail",
         ),
+        rod("rail_guide_near", bx0, bx1, RAIL_Y_MM - RAIL_GUIDE_Y_MM, "rail guide"),
+        rod("rail_guide_far", bx0, bx1, RAIL_Y_MM + RAIL_GUIDE_Y_MM, "rail guide"),
         "",
         "    <!-- The arm, on a carriage that slides along the rail. Forward (shoulder_pan = 0)",
         "         is +X, which is the shelf, so the stand is not turned: the arm can always",
@@ -503,8 +553,9 @@ def xml() -> str:
         '      <joint name="slide" type="slide" axis="0 -1 0"',
         f'        range="{slide_lo:.4f} {slide_hi:.4f}" damping="60" armature="0.4"/>',
         f'      <geom name="carriage" type="box" pos="0 0 {-RAIL_SUNK_MM / 2000:.4f}"',
-        f'        size="{mm(RAIL_WIDE_MM / 2 - 4)} 0.045 {mm(RAIL_SUNK_MM / 2 - 1)}"',
-        '        rgba="0.36 0.38 0.42 1" contype="0" conaffinity="0"/>',
+        f'        size="{mm(RAIL_GUIDE_Y_MM - RAIL_GUIDE_MM / 2 - 2)} 0.045'
+        f' {mm(RAIL_SUNK_MM / 2 - 1)}"',
+        f'        rgba="{COLOURS["carriage"]}" contype="0" conaffinity="0"/>',
         '      <attach model="so101" prefix="arm_"/>',
         "    </body>",
         "",
@@ -530,10 +581,11 @@ def xml() -> str:
     lines += [
         "  </worldbody>",
         "",
-        "  <!-- The arms' resting pose, folded down and turned outwards. MuJoCo's default pose",
-        "       lies flat along +X, straight through the shelf. Order: the two arms' joints as",
-        "       attached, then every freejoint (7 numbers each: a place and a turn), exactly",
-        "       where `declared()` put the bodies, and in that same order. -->",
+        "  <!-- The arm's resting pose, folded down and turned outwards. MuJoCo's default",
+        "       pose lies flat along +X, straight through the shelf. Order: the carriage's",
+        "       slide, then the arm's joints as attached, then every freejoint (7 numbers",
+        "       each: a place and a turn), exactly where `declared()` put the bodies, and in",
+        "       that same order. -->",
         "  <keyframe>",
         f'    <key name="home" qpos="{_home_qpos(items)}"/>',
         "  </keyframe>",
@@ -586,7 +638,6 @@ def reach_json() -> str:
             "to": list(SHELF_TO_MM),
             "bays": [list(b) for b in BAYS],
             "rows": [FRONT_ROW_Y_MM, BACK_ROW_Y_MM],
-            "bottomBayUsableX": list(BOTTOM_BAY_USABLE_X_MM),
         },
         "things": [
             {

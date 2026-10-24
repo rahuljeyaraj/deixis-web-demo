@@ -6,7 +6,7 @@
  *
  * - the back row is invisible from the default view, and findable by orbiting;
  * - the three jars are indistinguishable from each other from the default view;
- * - both arms rest somewhere that leaves the middle of the frame clear.
+ * - the arm rests somewhere that leaves the middle of the frame clear.
  *
  * All three are the same measurement. For each thing, rays are cast from the eye at a grid of
  * points over that thing's own bounding box, and the share of them that reach **it** rather
@@ -39,6 +39,7 @@ const REPORT = path.join(WEB, '..', 'out', 'stage1-visible.txt');
 
 interface Reach {
   bench: { centreX: number };
+  rail: { y: number; from: number; to: number };
   eye: [number, number, number];
   things: { id: string; what: string; at: [number, number, number]; bay: number | null }[];
 }
@@ -83,6 +84,9 @@ const FOLDS: { name: string; q: [number, number, number, number] }[] = [
 /** How many rays per thing: a 4 x 4 x 4 grid over its own box, less the middle of each face. */
 const GRID = 4;
 
+/** Where the scene parks the carriage, in bench millimetres: the right-hand end of the rail. */
+const REST_SLIDE_MM = REACH.rail.to;
+
 function say(line: string) {
   fs.mkdirSync(path.dirname(REPORT), { recursive: true });
   fs.appendFileSync(REPORT, `${line}\n`, 'utf8');
@@ -105,8 +109,9 @@ interface Rig {
   model: MjModel;
   data: MjData;
   view: TableView;
-  /** The qpos addresses of each arm's five joints. */
-  arms: number[][];
+  /** The qpos addresses of the arm's five driven joints, and of the carriage's slide. */
+  arm: number[];
+  slide: number;
   /** Which thing each geom belongs to, by geom id. */
   ownerOf: Map<number, string>;
   /** Every geom of a thing, so its own box can be worked out. */
@@ -117,10 +122,19 @@ function rig(mj: Mujoco, model: MjModel, data: MjData, view: TableView): Rig {
   const J = mj.mjtObj.mjOBJ_JOINT.value;
   const G = mj.mjtObj.mjOBJ_GEOM.value;
   const qa = model.jnt_qposadr as Int32Array;
+  // The prefix is `arm_`, from `<attach model="so101" prefix="arm_"/>`. It was `left_` and
+  // `right_` while there were two arms standing still, and when the rail replaced them this
+  // was left behind: `mj_name2id` returned -1 for every joint, `qa[-1]` is undefined, and
+  // writing `qpos[undefined]` throws nothing and does nothing. So the pose sweep below moved
+  // no arm at all and reported every pose as equally good, which is how a broken measurement
+  // looks when it is reported in full: 85%/1 for all sixty-three of them.
   const joints = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll'];
-  const arms = ['left_', 'right_'].map((p) =>
-    joints.map((n) => qa[mj.mj_name2id(model, J, `${p}${n}`)]),
-  );
+  const arm = joints.map((n) => {
+    const id = mj.mj_name2id(model, J, `arm_${n}`);
+    if (id < 0) throw new Error(`no joint called arm_${n} - has the prefix changed?`);
+    return qa[id];
+  });
+  const slide = qa[mj.mj_name2id(model, J, 'slide')];
   const ids = new Set(REACH.things.map((t) => t.id));
   const ownerOf = new Map<number, string>();
   for (let g = 0; g < model.ngeom; g++) {
@@ -129,7 +143,7 @@ function rig(mj: Mujoco, model: MjModel, data: MjData, view: TableView): Rig {
     const base = name.replace(/_\d+$/, '');
     if (ids.has(base)) ownerOf.set(g, base);
   }
-  return { mj, model, data, view, arms, ownerOf, boxOf: new Map() };
+  return { mj, model, data, view, arm, slide, ownerOf, boxOf: new Map() };
 }
 
 /** Each thing's box in the world, from the meshes that draw it. */
@@ -189,12 +203,11 @@ function visible(r: Rig, id: string, eye: THREE.Vector3): number {
   return could ? seen / could : 0;
 }
 
-/** Set both arms to a pose (the left one mirrored) and bring the drawing up to date. */
-function pose(r: Rig, pan: number, fold: number[]): void {
-  for (const [arm, adr] of r.arms.entries()) {
-    const q = [arm === 0 ? pan : -pan, ...fold];
-    for (let j = 0; j < 5; j++) r.data.qpos[adr[j]] = q[j];
-  }
+/** Set the arm to a pose, leaving the carriage where it parks, and bring the drawing up to date. */
+function pose(r: Rig, pan: number, fold: number[], slideMm?: number): void {
+  const q = [pan, ...fold];
+  for (let j = 0; j < 5; j++) r.data.qpos[r.arm[j]] = q[j];
+  if (slideMm !== undefined) r.data.qpos[r.slide] = (slideMm - REACH.bench.centreX) / 1000;
   r.mj.mj_forward(r.model, r.data);
   r.view.sync(r.data);
   // `sync` writes each mesh's own matrix and marks it stale; nothing turns that into a world
@@ -262,13 +275,17 @@ test('what can be seen from the default view', async () => {
   // The sweep suggests; the scene decides. Several poses sit within a point of each other and
   // a number cannot say which of them reads as an arm at rest rather than an arm about to do
   // something, so the choice stays in the generator - and this is the gate on it.
+  // The keyframe's qpos starts with the carriage's slide, so the arm's own joints start one
+  // along from where they used to. Reading from nought reported the slide as the shoulder's
+  // turn and shifted every other number, which is how "pan 0.28" appeared in a report for a
+  // joint whose limit is 1.92 radians.
   const key = model.key_qpos as Float64Array;
   const used: [number, number, number, number, number] = [
-    key[0],
     key[1],
     key[2],
     key[3],
     key[4],
+    key[5],
   ];
   pose(r, used[0], used.slice(1));
   const mine = score();
@@ -281,6 +298,28 @@ test('what can be seen from the default view', async () => {
     `  ${(mine.mean * 100).toFixed(0)}% of the world visible, ${mine.lost} things mostly ` +
       `hidden - ${((mine.mean - b.mean) * 100).toFixed(1)} points off the best found.`,
   );
+
+  // ------------------------------------------- and where it should park
+  //
+  // Wherever the arm stands it hides a band of bench behind it, and the only question is what
+  // is in that band. This was measured once in the world before this one, where the answer was
+  // the right-hand end; the layout has changed since, so it is asked again here rather than
+  // quoted.
+  say('');
+  say('where the carriage parks, at the pose in use:');
+  for (const at of [REACH.rail.from, REACH.bench.centreX, REACH.rail.to]) {
+    pose(r, used[0], used.slice(1), at);
+    const got = score();
+    const worst = REACH.things
+      .map((t) => [t.id, visible(r, t.id, eye)] as const)
+      .filter(([id]) => id !== 'jar4')
+      .sort((a, c) => a[1] - c[1])[0];
+    say(
+      `  x = ${String(at).padStart(3)} mm: ${(got.mean * 100).toFixed(0)}% of the world visible,` +
+        ` least seen is ${worst[0]} at ${(worst[1] * 100).toFixed(0)}%.`,
+    );
+  }
+  pose(r, used[0], used.slice(1), REST_SLIDE_MM);
 
   // ----------------------------------------- every thing, at the pose in use
   say('');
@@ -317,7 +356,7 @@ test('what can be seen from the default view', async () => {
       .join(', ')} - nothing about the view tells them apart.`,
   );
   const lost = REACH.things.filter((t) => share.get(t.id)! < 0.2).map((t) => t.id);
-  say(`  the arms leave the frame clear: ${lost.length ? lost.join(', ') : 'nothing'} mostly hidden.`);
+  say(`  the arm leaves the frame clear: ${lost.length ? lost.join(', ') : 'nothing'} mostly hidden.`);
   const worst = [...share.entries()].sort((a, c) => a[1] - c[1])[0];
   say(`  the least visible thing is ${worst[0]}, at ${(worst[1] * 100).toFixed(0)}%.`);
 

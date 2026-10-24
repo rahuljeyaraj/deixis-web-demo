@@ -92,16 +92,22 @@ const AT: [number, number, number] = [
  * At that size a flat circle cannot lie on a curved thing without its rim going inside: the rim
  * sinks by about r squared over twice the radius of the curve, which on the tightest curve here
  * - a glue tube at 13 mm - is 3.1 mm. Floating the whole spot 3 mm off would make it hover on a
- * flat board. So it is lifted a little and drawn with a depth offset instead, which lets the
- * rim be inside the jar and still be drawn: the circle reads as painted on the surface, which
- * is what a laser spot does.
+ * flat board.
+ *
+ * So the spot is lifted a hair and **drawn without asking the depth buffer** (`depthTest`), on
+ * top of everything. A polygon offset was tried first and is not enough: it shifts a fixed
+ * amount, and on a jar seen at a glancing angle - or on a steep part of a tilted hammer head -
+ * the rim still sank inside the thing and the circle vanished, which is what rahul saw. Not
+ * asking is also honest here rather than a cheat: the spot is put where a ray from the camera
+ * first meets the world, so by construction there is nothing in front of it to hide it.
  */
 const SPOT_R_M = 0.009;
 const SPOT_LIFT_M = 0.0008;
 
 /** The fixed parts of the world, named as a person would name them (FR9). */
 const FURNITURE: Record<string, string> = {
-  bench: 'the bench top',
+  bench_near: 'the bench top',
+  bench_far: 'the bench top',
   shelf_left: 'the side of the shelf unit',
   shelf_right: 'the side of the shelf unit',
   shelf_back: 'the back of the shelf unit',
@@ -109,6 +115,8 @@ const FURNITURE: Record<string, string> = {
   shelf_board1: 'the board over the middle bay',
   shelf_board2: 'the top of the shelf unit',
   rail: 'the rail the arm runs on',
+  rail_guide_near: 'the rail the arm runs on',
+  rail_guide_far: 'the rail the arm runs on',
   carriage: 'the arm',
 };
 
@@ -157,9 +165,10 @@ function makeSpot(): THREE.Group {
         color: colour,
         transparent: true,
         depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -4,
-        polygonOffsetUnits: -8,
+        depthTest: false,
+        // Belt and braces: a circle lying on a surface should be drawn whichever way round its
+        // normal came out, and a back face that is culled is a spot that is not there.
+        side: THREE.DoubleSide,
       }),
     );
     m.position.z = lift;
@@ -202,8 +211,8 @@ async function main(): Promise<void> {
   const keyQpos = model.key_qpos as Float64Array;
   for (let i = 0; i < model.nu; i++) ctrl[i] = keyQpos[i];
   mj.mj_forward(model, data);
-  // Stage 1 draws the pose the numbers describe and does not step the physics: two of the
-  // nineteen things hang on hooks, and nothing holds them there yet (hanging is stage 2).
+  // Stage 1 draws the pose the numbers describe and does not step the physics at all; what
+  // happens when it is stepped is stage 2's business.
   if (settle) for (let i = 0; i < 200; i++) mj.mj_step(model, data);
 
   const view = new TableView(canvas, mj, model, { bare: true });
@@ -261,12 +270,19 @@ async function main(): Promise<void> {
       under.textContent = '';
       return;
     }
-    // The surface's own direction, in the world. `face.normal` is in the mesh's frame, and the
-    // meshes here are posed by a matrix copied straight out of the simulation, so it has to be
-    // turned by that matrix - not by the mesh's (unused) rotation.
+    // The surface's own direction, **in the world**. Both `normal` and `face.normal` come back
+    // in the mesh's own frame, and the meshes here are posed by a matrix copied straight out of
+    // the simulation, so either has to be turned by that matrix - not by the mesh's (unused)
+    // rotation.
+    //
+    // Turning only one of the two is what made the spot disappear into things (rahul, 24 Oct).
+    // `hit.normal` is the one three.js fills in and so the one that was used, and it was the
+    // one left untouched: on anything whose body carries a turn - a tin, a mug, a hammer - the
+    // circle was laid at the wrong angle, and where that angle pointed away from the camera it
+    // was culled as a back face and vanished. It read as the spot sinking into the thing.
     normal.set(0, 0, 1);
-    if (hit.normal) normal.copy(hit.normal);
-    else if (hit.face) normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+    const raw = hit.normal ?? hit.face?.normal;
+    if (raw) normal.copy(raw).transformDirection(hit.object.matrixWorld);
     spot.visible = true;
     spot.position.copy(hit.point).addScaledVector(normal, SPOT_LIFT_M);
     spot.quaternion.copy(quat.setFromUnitVectors(UP, normal));
