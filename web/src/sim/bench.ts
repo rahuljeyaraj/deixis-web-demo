@@ -126,3 +126,42 @@ export function ringFor(how: string, z: number): [number, number] {
   if (!got) throw new Error(`no ring was swept for ${how} at ${z} mm`);
   return got;
 }
+
+/** How much of the outward reach is lost per degree the shoulder turns off forward, mm. */
+const FALL_MM_PER_DEG = 0.48;
+/** How far either side of forward the shoulder can work, degrees. */
+const PAN_LIMIT_DEG = 100;
+
+/** How much room to spare a carriage position has for working at a spot, mm; negative: none. */
+export function marginFrom(slideX: number, xMm: number, yMm: number, how: string, z: number): number {
+  const bearing = Math.abs((Math.atan2(-(xMm - slideX), yMm - RAIL.y) * 180) / Math.PI);
+  if (bearing > PAN_LIMIT_DEG) return -(bearing - PAN_LIMIT_DEG) * 10;
+  const [near, far] = ringFor(how, z);
+  const r = Math.hypot(xMm - slideX, yMm - RAIL.y);
+  return Math.min(r - near, far - FALL_MM_PER_DEG * bearing - r);
+}
+
+/**
+ * Where to slide to, to work at a spot with the most room to spare - or null for nowhere.
+ *
+ * **Not simply "straight in front of it".** The arm drags a dead circle about with it: reaching
+ * down it cannot work closer in than 135 mm, and the place a thing is handed over at is 130 mm
+ * from the rail. Parked square in front of that, the arm is standing on top of it. Standing off
+ * to one side puts it at arm's length, which is what `workbench/scene.py` does for every thing
+ * in the world and what this is the other half of.
+ *
+ * Searched rather than solved, in 5 mm steps: the ring's outer edge falls with the bearing, so
+ * the best place on the rail is not always the nearest one.
+ */
+export function slideFor(xMm: number, yMm: number, how: string, z: number): number | null {
+  let best: number | null = null;
+  let most = 0;
+  for (let here = RAIL.from; here <= RAIL.to; here += 5) {
+    const margin = marginFrom(here, xMm, yMm, how, z);
+    if (margin > most) {
+      best = here;
+      most = margin;
+    }
+  }
+  return best;
+}

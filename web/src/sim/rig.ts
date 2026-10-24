@@ -39,6 +39,7 @@ import {
   benchToWorld,
   onRail,
   ringFor,
+  slideFor,
   slideOf,
   thing,
   worldToBench,
@@ -631,7 +632,15 @@ export class Rig {
     if (bay !== null && t.rises[1] - t.rises[0] > bayOf(bay)[1] - bayOf(bay)[0] - 4) {
       return 'it is too tall for that bay';
     }
-    const park = onRail(place.xMm);
+    // Where to stand to put it there: searched along the rail against the measured ring, not
+    // straight in front of the place. The spot a thing is handed over at is 130 mm from the
+    // rail and the arm cannot work closer in than 135, so square in front of it is the one
+    // place the arm certainly cannot do it from.
+    const how = level ? 'level' : 'down';
+    const z = level ? t.gripZ : 35;
+    const found = slideFor(place.xMm, place.yMm, how, z);
+    if (found === null) return 'there is no way to put it there';
+    const park = onRail(found);
     this.ik.rideTo(slideOf(park));
     const slide = slideOf(park);
     // Where the thing's **centre** should end up, and so where the hand has to be: worked out

@@ -365,43 +365,78 @@ async function main(): Promise<void> {
     tell(d.ok ? `${what}.` : `It will not: ${d.why}.`, !d.ok);
     showButtons();
   };
-  buttons.take.addEventListener('click', () => {
-    const id = pointed.at;
-    if (!id) return;
-    const name = reach.things.find((t) => t.id === id)?.what ?? id;
-    tell(`Picking up ${name}…`);
-    showButtons();
-    void rig.take(id).then(after(`Holding ${name}`));
-  });
-  buttons.put.addEventListener('click', () => {
-    const place = pointed.place;
-    if (!place) return;
-    tell('Putting it down…');
-    showButtons();
-    void rig.putOn(place).then(after('Put down'));
-  });
-  buttons.pot.addEventListener('click', () => {
-    tell('Dropping it in the pot…');
-    showButtons();
-    void rig.dropInto('pot').then(after('Dropped in the pot'));
-  });
-  buttons.park.addEventListener('click', () => {
-    tell('Parking…');
-    showButtons();
-    void rig.park().then(after('Parked'));
-  });
+  // The buttons do the same as the keys. They are there to say what the keys are, and because
+  // a judge who has not read anything will click something.
+  buttons.take.addEventListener('click', () => KEYS.p.go());
+  buttons.put.addEventListener('click', () => KEYS.d.go());
+  buttons.pot.addEventListener('click', () => KEYS.o.go());
+  buttons.park.addEventListener('click', () => KEYS.k.go());
   buttons.stop.addEventListener('click', () => {
     rig.stop();
     tell('Stopped.', true);
     showButtons();
   });
-  // Stop is a key as well as a button, and it never waits for anything (FR27).
+  /**
+   * The keys, which are the real way to drive this and the buttons are the labels for them.
+   *
+   * **A hand cannot point and click a button at the same time** (rahul, 24 Oct). Pointing is the
+   * whole demo: the mouse stays on the thing being talked about and the other hand says what to
+   * do with it. In stage 4 that is the space bar and a sentence; until the microphone is in, it
+   * is one key per sentence, pressed while the pointer stays where it is.
+   */
+  const KEYS: Record<string, { say: string; go: () => void }> = {
+    p: {
+      say: 'pick that up',
+      go: () => {
+        const id = pointed.at;
+        if (!id || rig.holding || rig.busy) return;
+        const name = reach.things.find((t) => t.id === id)?.what ?? id;
+        tell(`Picking up ${name}…`);
+        showButtons();
+        void rig.take(id).then(after(`Holding ${name}`));
+      },
+    },
+    d: {
+      say: 'put it down there',
+      go: () => {
+        if (!pointed.place || !rig.holding || rig.busy) return;
+        tell('Putting it down…');
+        showButtons();
+        void rig.putOn(pointed.place).then(after('Put down'));
+      },
+    },
+    o: {
+      say: 'drop it in the pot',
+      go: () => {
+        if (!rig.holding || rig.busy) return;
+        tell('Dropping it in the pot…');
+        showButtons();
+        void rig.dropInto('pot').then(after('Dropped in the pot'));
+      },
+    },
+    k: {
+      say: 'park',
+      go: () => {
+        if (rig.busy) return;
+        tell('Parking…');
+        showButtons();
+        void rig.park().then(after('Parked'));
+      },
+    },
+  };
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' && e.key !== ' ') return;
+    // Stop is a key of its own and it never waits for anything (FR27).
+    if (e.key === 'Escape' || e.key === ' ') {
+      e.preventDefault();
+      rig.stop();
+      tell('Stopped.', true);
+      showButtons();
+      return;
+    }
+    const key = KEYS[e.key.toLowerCase()];
+    if (!key) return;
     e.preventDefault();
-    rig.stop();
-    tell('Stopped.', true);
-    showButtons();
+    key.go();
   });
   showButtons();
 

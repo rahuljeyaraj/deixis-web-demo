@@ -25,6 +25,8 @@
          about to refer to before they speak, without it shouting over the scene (FR9). */
       #under { margin-left: auto; color: var(--dim); font-size: 0.95rem; min-height: 1.5em; }
       button.stop { border-color: #c62828; background: #fde8e8; color: #8e1b1b; }
+      kbd { font: inherit; font-size: 0.8em; border: 1px solid #c9c2b4; border-radius: 4px;
+        padding: 0 5px; margin-right: 5px; background: #f6f2ea; color: var(--dim); }
       button:disabled { opacity: 0.45; cursor: default; }
       /* What the arm is doing, or why it will not: the robot's own words (FR15). */
       #doing { color: var(--ink); font-size: 0.95rem; min-height: 1.5em; }
@@ -65,11 +67,11 @@
         <span id="under"></span>
       </div>
       <div class="bar">
-        <button type="button" id="take">Pick that up</button>
-        <button type="button" id="put">Put it down there</button>
-        <button type="button" id="pot">Drop it in the pot</button>
-        <button type="button" id="park">Park</button>
-        <button type="button" id="stop" class="stop">Stop</button>
+        <button type="button" id="take"><kbd>P</kbd> Pick that up</button>
+        <button type="button" id="put"><kbd>D</kbd> Put it down there</button>
+        <button type="button" id="pot"><kbd>O</kbd> Drop it in the pot</button>
+        <button type="button" id="park"><kbd>K</kbd> Park</button>
+        <button type="button" id="stop" class="stop"><kbd>Esc</kbd> Stop</button>
         <span id="doing"></span>
       </div>
       <p id="status">Loading…</p>
@@ -113,10 +115,12 @@
         </dd>
         <dt>Picking things up</dt>
         <dd>
-          Point at something and press <b>Pick that up</b>. The arm slides along its rail until
-          it is standing where it can work, comes at the thing from above if it is on the bench
-          or straight in from the front if it is under a board, and closes the jaws on it. Then
-          point somewhere and press <b>Put it down there</b>. When it cannot, it says why.
+          Keep the pointer <em>on</em> the thing and press <kbd>P</kbd>. The arm slides along
+          its rail until it is standing where it can work, comes at the thing from above if it
+          is on the bench or straight in from the front if it is under a board, and closes the
+          jaws on it. Then point somewhere and press <kbd>D</kbd>. When it cannot, it says why.
+          The keys are the point: a hand cannot keep pointing at something and click a button at
+          the same time, and in the finished demo this is the space bar and a sentence.
         </dd>
         <dt>A bottle of oil</dt>
         <dd>
