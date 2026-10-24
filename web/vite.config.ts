@@ -10,8 +10,11 @@ export default defineConfig({
   build: {
     target: 'es2022',
     chunkSizeWarningLimit: 2000,
-    // Two pages: the demo itself, and a look at the end demo's shelf with nothing driving it.
-    rollupOptions: { input: { main: 'index.html', shelf: 'shelf.html' } },
+    // Three pages: the demo itself, a look at the end demo's shelf, and a look at the
+    // workbench, each with nothing driving it.
+    rollupOptions: {
+      input: { main: 'index.html', shelf: 'shelf.html', workbench: 'workbench.html' },
+    },
   },
   // PROBES=1 runs the measuring scripts in tests/probes instead of the tests.
   test: {

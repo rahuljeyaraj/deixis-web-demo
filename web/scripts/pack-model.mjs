@@ -2,8 +2,8 @@
 //
 // Format, before gzip: a 4-byte little-endian header length, a JSON header
 // {"files": [{"path", "offset", "size"}]}, then the files' bytes back to back.
-// Paths are where each file goes in MuJoCo's virtual file system: our table_scene.xml,
-// Menagerie's so101.xml and assets/*.stl, all at the root (so101.xml's meshdir is "assets").
+// Paths are where each file goes in MuJoCo's virtual file system: our own scenes, Menagerie's
+// so101.xml and assets/*.stl, all at the root (so101.xml's meshdir is "assets").
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,6 +20,9 @@ const entries = [
   // by `scripts/make_shelf_scene.py`. Both scenes ride in one pack so the page can show
   // either without a second download.
   ['shelf_scene.xml', path.join(model, 'shelf_scene.xml')],
+  // The workbench demo's scene: a bench, a two-bay shelf unit with a hook rail, two arms and
+  // nineteen things, generated from workbench/scene.py by scripts/make_workbench_scene.py.
+  ['workbench_scene.xml', path.join(model, 'workbench_scene.xml')],
   ['so101.xml', path.join(model, 'so101', 'so101.xml')],
   ...fs
     .readdirSync(path.join(model, 'so101', 'assets'))

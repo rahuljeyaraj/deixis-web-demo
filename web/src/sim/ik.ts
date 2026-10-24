@@ -1,8 +1,8 @@
 /**
  * Inverse kinematics for the SO-101 (plan 6.2): damped least squares on MuJoCo's site
- * Jacobian (`mj_jacSite` on `gripperframe`), with the fingers pointing straight down and the
- * jaws turned to a chosen yaw. Solved in a scratch `MjData`, so the live simulation is never
- * disturbed.
+ * Jacobian (`mj_jacSite` on `gripperframe`), with the fingers pointing a chosen way - straight
+ * down unless asked otherwise - and the jaws turned to a chosen yaw. Solved in a scratch
+ * `MjData`, so the live simulation is never disturbed.
  *
  * The `gripperframe` site: its x axis is the way the fingers point, its z axis is the way the
  * jaws open (the moving jaw swings along it), its y axis is the jaw hinge.
@@ -30,16 +30,25 @@ export interface IkTarget {
   /** The jaws open exactly along `yaw`, not the nearest of its four quarter turns. */
   yawExact?: boolean;
   /**
-   * How far the fingers may tilt from straight down, degrees (0: straight down). Close to the
+   * How far the fingers may tilt from `point`, degrees (0: exactly along it). Close to the
    * base the wrist can't point straight down at height, so carry poses allow some tilt.
    */
   maxTiltDeg?: number;
+  /**
+   * Which way the fingers should point, world metres, any length. Default: straight down,
+   * which is how a thing lying on a table or standing on an open shelf is picked up.
+   *
+   * A thing inside a shelf bay cannot be: there is a board over it, so the hand has to come
+   * in from the front, level. That is what the workbench's bays need, and it is what
+   * `tests/probes/bay-ring.probe.test.ts` measures the reach at bay height with.
+   */
+  point?: Vec3;
 }
 
 export interface IkResult {
   q: number[]; // the 5 arm joints, radians
   posErrMm: number;
-  angErrDeg: number; // between the fingers and straight down
+  angErrDeg: number; // between the fingers and `point` (straight down unless it was given)
   yawErrDeg: number;
   ok: boolean;
   iterations: number;
@@ -60,6 +69,11 @@ function cross(a: Vec3, b: Vec3): Vec3 {
 }
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+/** A direction, made unit length. */
+function unit(v: Vec3): Vec3 {
+  const n = Math.hypot(...v) || 1;
+  return [v[0] / n, v[1] / n, v[2] / n];
 }
 /** The horizontal part of a direction, made unit length. */
 function flat(v: Vec3): Vec3 {
@@ -227,8 +241,8 @@ export class ArmKinematics {
   }
 
   /**
-   * Solve with a steady pull toward straight down (the straightest grip); if that fails and
-   * some tilt is allowed, solve again with the tilt free inside the allowed cone.
+   * Solve with a steady pull toward `point` (straight down by default: the straightest grip);
+   * if that fails and some tilt is allowed, solve again with the tilt free inside the cone.
    */
   solve(target: IkTarget, q0?: number[], maxIter = 300): IkResult {
     const steady = this.solveIn(target, q0, maxIter, false);
@@ -248,6 +262,7 @@ export class ArmKinematics {
     const d = this.scratch;
     const m = this.model;
     const q = q0.map((v, j) => Math.min(this.hi[j], Math.max(this.lo[j], v)));
+    const want = unit(target.point ?? DOWN);
     const nv = m.nv;
     const maxTilt = ((target.maxTiltDeg ?? 0) * Math.PI) / 180;
     // 1 rad of tilt weighs like 10 cm of position; steady: much less when some tilt is
@@ -281,13 +296,13 @@ export class ArmKinematics {
         target.pos[1] - pose.pos[1],
         target.pos[2] - pose.pos[2],
       ];
-      const ea = cross(pose.point, DOWN);
+      const ea = cross(pose.point, want);
       // The yaw is the jaws' heading only (their direction seen from above), so the hand may
       // still tip forward with the jaws facing the same way.
       const heading = flat(pose.open);
       const ec = wantOpen ? cross(heading, wantOpen) : ([0, 0, 0] as Vec3);
       const posErr = Math.hypot(...ep);
-      const angErr = angle(pose.point, DOWN);
+      const angErr = angle(pose.point, want);
       const yawErr = wantOpen ? angle(heading, wantOpen) : 0;
       if (posErr < POS_TOL_M && angErr < Math.max(ANG_TOL, maxTilt) && yawErr < ANG_TOL) break;
 
@@ -343,7 +358,7 @@ export class ArmKinematics {
       target.pos[1] - pose.pos[1],
       target.pos[2] - pose.pos[2],
     );
-    const angErrDeg = (angle(pose.point, DOWN) * 180) / Math.PI;
+    const angErrDeg = (angle(pose.point, want) * 180) / Math.PI;
     const yawErrDeg = wantOpen ? (angle(flat(pose.open), wantOpen) * 180) / Math.PI : 0;
     return {
       q,

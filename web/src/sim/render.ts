@@ -288,7 +288,10 @@ export class TableView {
       } else if (t === T.mjGEOM_CAPSULE.value) {
         geo = new THREE.CapsuleGeometry(sz[0], 2 * sz[1], 6, 12).rotateX(Math.PI / 2);
       } else if (t === T.mjGEOM_CYLINDER.value) {
-        geo = new THREE.CylinderGeometry(sz[0], sz[0], 2 * sz[1], 20).rotateX(Math.PI / 2);
+        // 32 sides, not 20: the workbench's jars, tubes and bottles are most of what a person
+        // points at there, and the laser spot takes its angle from whichever facet it lands on.
+        // At 20 sides a facet is 18 degrees wide and the spot visibly tilts as it crosses one.
+        geo = new THREE.CylinderGeometry(sz[0], sz[0], 2 * sz[1], 32).rotateX(Math.PI / 2);
       }
       if (!geo) continue;
 

@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>deixis: the workbench</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%23ffb000'/%3E%3C/svg%3E" />
+    <style>
+      :root { --ink: #1a1a1a; --paper: #f5f2ec; --dim: #5a5a5a; --amber: #ffb000; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--paper); color: var(--ink);
+        font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 1.5rem; margin: 0 0 4px; }
+      h2 { font-size: 1.05rem; margin: 28px 0 6px; }
+      p.lead { margin: 0 0 16px; color: var(--dim); }
+      canvas { width: 100%; display: block; border-radius: 8px; background: #dfe5ee;
+        touch-action: none; cursor: crosshair; }
+      .bar { display: flex; gap: 8px; margin: 12px 0 4px; flex-wrap: wrap; align-items: baseline; }
+      button { font: inherit; padding: 6px 14px; border: 1px solid #c9c2b4; border-radius: 6px;
+        background: #fff; cursor: pointer; }
+      button:hover { background: #efe9dd; }
+      button[aria-pressed="true"] { background: #efe9dd; border-color: #8c8577; }
+      /* The name of whatever is under the spot: quiet, so the person knows what they are
+         about to refer to before they speak, without it shouting over the scene (FR9). */
+      #under { margin-left: auto; color: var(--dim); font-size: 0.95rem; min-height: 1.5em; }
+      #under b { color: var(--ink); font-weight: 600; }
+      #under b::before { content: ""; display: inline-block; width: 9px; height: 9px;
+        margin-right: 6px; border-radius: 50%; background: var(--amber);
+        border: 1px solid #1a1a1a; vertical-align: 1px; }
+      #status { color: var(--dim); font-size: 0.9rem; margin: 4px 0 0; }
+      .note { margin-top: 10px; font-size: 0.95rem; color: var(--dim); max-width: 68ch; }
+      .note b { color: var(--ink); font-weight: 600; }
+      blockquote.scope { margin: 20px 0 0; padding: 14px 18px; max-width: 72ch;
+        background: #fffdf7; border-left: 4px solid var(--amber); border-radius: 0 6px 6px 0; }
+      blockquote.scope p { margin: 0 0 8px; }
+      blockquote.scope p:last-child { margin: 0; }
+      blockquote.scope b { font-weight: 600; }
+      dl { margin: 6px 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px;
+        font-size: 0.95rem; color: var(--dim); max-width: 72ch; }
+      dt { color: var(--ink); font-weight: 600; }
+      dd { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>The workbench</h1>
+      <p class="lead">
+        A bench, a shelf unit of two bays with a hook rail, two arms, and nineteen things. This
+        is the world the demo happens in — a look at it, nothing more. Drag to turn the view,
+        scroll to move in and out, and move the pointer over anything to put the spot on it.
+      </p>
+      <canvas id="scene"></canvas>
+      <div class="bar">
+        <button type="button" data-view="default" aria-pressed="true">Standing at the bench</button>
+        <button type="button" data-view="over">From above</button>
+        <button type="button" data-view="side">Round to one side</button>
+        <button type="button" data-view="bays">Into the bays</button>
+        <span id="under"></span>
+      </div>
+      <p id="status">Loading…</p>
+
+      <blockquote class="scope">
+        <p>
+          In this virtual world every object and every position is already known.
+          <b>No AI model works out what is on the bench or where it is.</b> In a real room that
+          half is genuinely hard, and that is what a vision-language model such as NVIDIA Cosmos
+          is for.
+        </p>
+        <p>
+          We are building the other half: once the world is known, how does a person tell a
+          robot which thing and which place?
+        </p>
+      </blockquote>
+
+      <h2>What to look for</h2>
+      <dl>
+        <dt>Three jars</dt>
+        <dd>
+          In the bottom bay, left of centre. They are the same jar three times over: no word
+          tells them apart, so only pointing can.
+        </dd>
+        <dt>A fourth jar</dt>
+        <dd>
+          Behind the middle one, in the back row. From this view you cannot see it, and neither
+          can the robot. Orbit the camera up and it appears.
+        </dd>
+        <dt>Two tubes of glue</dt>
+        <dd>To the right of the jars: one capped, one open. They differ by a state, not a word.</dd>
+        <dt>A bottle of oil</dt>
+        <dd>
+          At the back right of the bench, 150&nbsp;mm tall. It is taller than either bay is
+          high, so asking for it to be put away has an honest answer: it cannot be.
+        </dd>
+        <dt>The top board</dt>
+        <dd>
+          Empty, and it stays empty. Reaching down onto anything much above 100&nbsp;mm is not a
+          pose this arm has, so the unit's lid is not a place it can use.
+        </dd>
+      </dl>
+
+      <h2>Every size here was measured</h2>
+      <p class="note">
+        The geometry has one source, <b>workbench/scene.py</b>, and the physics scene is
+        generated from it, so the shelf the arm reaches into and the shelf this page draws a
+        spot on are the same shelf. The sizes rest on two measurements run against the real
+        inverse kinematics: the widest thing the gripper holds through a lift and a move
+        (<b>76&nbsp;mm</b> on the jaws alone, 96 with the grip assist), and the reach ring at
+        each height something here is gripped at. Reaching level into the bottom bay the arm
+        cannot work closer in than <b>280&nbsp;mm</b>, which is why the shelf unit stands 50 mm
+        further back than it was first drawn.
+      </p>
+      <p class="note">
+        Nothing drives anything yet: no physics, no voice, no model. The arms are in their
+        resting pose, and everything is exactly where the numbers put it.
+      </p>
+    </main>
+    <script type="module" src="/src/workbench.ts"></script>
+  </body>
+</html>
