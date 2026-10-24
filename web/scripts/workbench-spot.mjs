@@ -20,20 +20,24 @@ fs.mkdirSync(out, { recursive: true });
 // Each target names a geom in the scene and what the page ought to call it. The three the
 // checklist asks for by name are first: a flat board, a curved jar, a hook.
 const TARGETS = [
-  ['shelf_board0', 'the middle board', 'a flat board'],
+  ['shelf_board0', 'the board over the bottom bay', 'a flat board'],
   ['jar2', 'a jar of screws', 'a curved jar'],
-  ['hook2', 'the empty hook', 'a hook'],
-  ['shelf_board1', 'the top board', 'the lid of the unit'],
+  ['mug1_5', 'a mug', "a bead of the handle - part of the mug"],
+  ['shelf_board2', 'the top of the shelf unit', 'the lid of the unit'],
   ['bench', 'the bench top', 'the bench itself'],
-  ['job', 'the offcut being worked on', 'a flat top, straight on'],
+  ['offcut1', 'an offcut of wood', 'a flat top, straight on'],
   ['oil', 'a bottle of oil', 'a tall curved bottle'],
   ['pot', 'a pot of loose screws', 'the rim of the pot'],
   ['odds', 'a box of odds and ends', 'inside the top bay'],
-  ['hammer_1', 'a hammer', "a part, not the thing's own geom"],
-  ['glue1_1', 'a tube of glue, capped', 'the cap, which is part of the tube'],
+  ['hammer_2', 'a hammer', "a part, not the thing's own geom"],
+  ['glue1_3', 'a tube of glue, capped', 'the cap, which is part of the tube'],
   ['tape', 'a roll of masking tape', 'a roll lying flat'],
   ['shelf_left', 'the side of the shelf unit', 'an upright'],
-  ['hook_rail_left', null, 'the rail the hooks are on'],
+  ['tin2', 'a tin of varnish', 'one of three that are the same'],
+  ['clamp_1', 'a G clamp', 'the jaw of the clamp'],
+  ['pliers_3', 'a pair of pliers', 'the pivot'],
+  ['knife_3', 'a craft knife', 'the blade'],
+  ['screwdriver1_2', 'a screwdriver', 'the shaft'],
 ];
 
 const browser = await chromium.launch({

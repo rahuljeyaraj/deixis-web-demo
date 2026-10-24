@@ -9,6 +9,7 @@ honest, and keep the world inside what stage 0 measured.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -19,14 +20,15 @@ from workbench.scene import (
     BAY_CLEAR_X_MM,
     BAY_TALLEST_FLAT_MM,
     BAYS,
+    BOTTOM_BAY_USABLE_X_MM,
     EYE_MM,
     GRIP_WIDEST_MM,
-    HOOKS,
     RING_MM,
     SHELF_FROM_MM,
     arms,
     behind_from_the_eye,
     by_id,
+    clashes,
     kind_counts,
     things,
 )
@@ -87,8 +89,36 @@ def test_there_is_one_weld_per_gripper():
 # ------------------------------------------------- the world against what stage 0 measured
 
 
-def test_nineteen_things():
-    assert len(things()) == 19
+def test_twenty_six_things():
+    assert len(things()) == 26
+
+
+def test_six_sets_of_things_no_word_separates():
+    """The heart of the demo. One set would be a trick; six is what a bench looks like, and it
+    means a judge meets the same difficulty at several sizes and on several boards."""
+    sets = {k: n for k, n in kind_counts(things()).items() if n > 1}
+    assert sets == {
+        "jar": 4,
+        "tin": 3,
+        "mug": 2,
+        "glue": 2,
+        "screwdriver": 2,
+        "offcut": 2,
+    }
+
+
+def test_nothing_stands_where_something_else_stands():
+    """A bench is crowded and this is easy to get wrong by hand: the first full layout had
+    nineteen pairs of things inside one another. The places were solved against this test."""
+    assert clashes() == []
+
+
+def test_nothing_in_the_bottom_bay_is_outside_what_an_arm_can_work_in():
+    """Its ring is 280 to 470 mm, the narrowest in the world, so two arms at the sides cover
+    only its middle. The two bays above reach in much closer and are usable right across."""
+    for t in things():
+        if t.in_bay == 0:
+            assert BOTTOM_BAY_USABLE_X_MM[0] <= t.at_mm[0] <= BOTTOM_BAY_USABLE_X_MM[1], t.id
 
 
 def test_nothing_is_wider_than_the_gripper_can_hold():
@@ -148,9 +178,9 @@ def test_every_ring_a_thing_uses_was_actually_swept():
 
 
 def test_nothing_stands_on_the_top_board():
-    """It is a lid, not a place: reaching down onto 244 mm is not a pose this arm has, with or
+    """It is a lid, not a place: reaching down onto 366 mm is not a pose this arm has, with or
     without tilt (`out/stage0-bay-ring.txt`)."""
-    lid = BAYS[-1][1] + 12.0
+    lid = BAYS[-1][1]
     for t in things():
         assert t.at_mm[2] < lid - 1.0, f"{t.id} stands on the top board"
 
@@ -186,6 +216,29 @@ def test_the_four_jars_are_the_same_jar_four_times_over():
         )
 
 
+def test_the_keyframe_puts_every_thing_where_its_body_is_declared():
+    """The other half of the keyframe trap, and the half that does not fail loudly.
+
+    The qpos list is read in **declaration order**. Get the order wrong and nothing errors: each
+    thing simply wears the next thing's position and the whole bench comes out somewhere else.
+    That has happened twice here - once from a short vector, once from a different order - so
+    both halves are tested.
+    """
+    text = SCENE.read_text(encoding="utf-8")
+    qpos = text.split('<key name="home" qpos="')[1].split('"')[0].split()
+    declared = re.findall(r'<body name="([a-z0-9_]+)" pos="([^"]+)"', text)
+    # Past the two arms' joints and the two parking bodies.
+    at = 6 * len(arms())
+    for name, pos in declared:
+        if name.endswith("_stand"):
+            continue
+        want = [float(v) for v in pos.split()]
+        got = [float(v) for v in qpos[at : at + 3]]
+        assert got == pytest.approx(want, abs=1e-4), f"{name} is not where the keyframe puts it"
+        at += 7
+    assert at == len(qpos)
+
+
 def test_the_two_tubes_of_glue_differ_by_a_state_and_not_by_a_word():
     index = by_id(things())
     one, two = index["glue1"], index["glue2"]
@@ -197,14 +250,25 @@ def test_the_two_tubes_of_glue_differ_by_a_state_and_not_by_a_word():
 # -------------------------------------------------------------------- where things stand
 
 
-def test_the_hooks_are_on_the_ends_of_the_unit_and_not_across_its_front():
-    """A rail across the front hangs a pair of pliers straight down over the bottom bay, in
-    front of the three jars."""
-    for side, _ in HOOKS:
-        assert side in ("left", "right")
-    for t in things():
-        if t.grip_z_mm == 190:
-            assert not (BAY_CLEAR_X_MM[0] <= t.at_mm[0] <= BAY_CLEAR_X_MM[1]), t.id
+def test_there_are_no_hooks():
+    """Scrapped (rahul, 24 Oct): a thing is put on the bench or on a shelf, and nothing else."""
+    text = SCENE.read_text(encoding="utf-8")
+    assert "hook" not in text.lower()
+
+
+def test_three_bays():
+    assert len(BAYS) == 3
+    assert [round(f) for f, _ in BAYS] == [0, 122, 244]
+
+
+def test_the_arms_stand_at_the_sides_facing_each_other():
+    """Facing the shelf from the front put both arms' dead zones on the bench, in front of the
+    person. At the edges, facing inward, half of each dead disc and the whole of each dead
+    sector fall off it."""
+    left, right = arms()
+    assert left.facing_deg == -90.0 and right.facing_deg == 90.0
+    assert left.base_mm[1] == right.base_mm[1]
+    assert left.base_mm[0] < 150 and right.base_mm[0] > 550
 
 
 def test_everything_stands_on_the_bench_or_in_the_unit():
@@ -218,17 +282,17 @@ def test_everything_stands_on_the_bench_or_in_the_unit():
 
 def test_nothing_on_the_bench_stands_inside_the_shelf_unit():
     for t in things():
-        if t.in_bay is not None or t.grip_z_mm == 190:
+        if t.in_bay is not None:
             continue
         x, y, _ = t.place_mm
         inside_x = SHELF_FROM_MM[0] < x < BAY_CLEAR_X_MM[1] + 12.0
-        assert not (inside_x and y > SHELF_FROM_MM[1]), f"{t.id} stands inside the unit"
+        assert not (inside_x and y + t.room_mm[1] / 2 > SHELF_FROM_MM[1]), f"{t.id} is in the unit"
 
 
 def test_the_reach_json_is_written_for_the_page_and_the_probes():
     import json
 
     out = json.loads(REACH.read_text(encoding="utf-8"))
-    assert len(out["things"]) == 19
+    assert len(out["things"]) == 26
     assert out["eye"] == list(EYE_MM)
     assert {a["id"] for a in out["arms"]} == {a.id for a in arms()}

@@ -1,4 +1,4 @@
-"""The workbench: a bench, a two-bay shelf unit, a hook rail, two arms, and nineteen things.
+"""The workbench: a bench, a three-bay shelf unit, two arms facing each other, and the things.
 
 One source of truth for the geometry (`workbench-requirements.md` FR5). The physics scene
 (`web/model/workbench_scene.xml`) is generated from this by `scripts/make_workbench_scene.py`,
@@ -8,50 +8,53 @@ to drift.
 ## The frame
 
 Millimetres. **x across, to the person's right; y away from the person; z up from the bench
-top.** The centre line is x = 350. The world the physics runs in is metres with +X away from
-the person, and `scripts/make_workbench_scene.py` holds the only copy of that conversion.
+top.** The centre line is x = 350. A thing's own frame is the same three axes before it is
+turned: **across, deep, up**. The world the physics runs in is metres with +X away from the
+person, and `scripts/make_workbench_scene.py` holds the only copy of that conversion.
 
-## What stage 0 measured, and what it changed
+## What stage 0 measured
 
-Everything below rests on two measurements, both run on 24 Oct and both reported in full:
+Everything here rests on two measurements made on 24 Oct, both reported in full:
 
 - `out/stage0-grip-width.txt` - the widest thing the gripper holds through a lift and a move.
-- `out/stage0-bay-ring.txt` - the reach ring at bay height, reaching in horizontally, and at
-  the other heights this world turns out to need.
+- `out/stage0-bay-ring.txt` - the reach ring at every height something here is gripped at.
 
-They changed four things in the plan, and each one is marked where it bites:
+The short version: the gripper holds far more than the plan feared, reaching **level** into the
+bottom bay stops at 280 mm from the arm, and reaching **down** onto a thing dies above 100 mm.
 
-1. **The arm row has to stand at least about 215 mm in front of the bay.** Reaching level into
-   the bottom bay, the arm cannot work closer in than **280 mm**; the plan had the shelf 180 mm
-   behind the arms, which left the middle of the bottom bay's front row - where two of the three
-   identical jars stand - out of reach of both arms. The shelf unit is therefore 50 mm further
-   back than the plan's 4.1, at y 350 to 500 rather than 300 to 450, and the arms stay where
-   the plan put them. See `SHELF_FROM_MM`.
-2. **Nothing much above 100 mm can be gripped from above**, and nothing at all above about 130.
-   So the unit's top board, a quarter of a metre up, is not a place this robot can put anything
-   or take anything from: it holds nothing. The oil bottle the plan stood there is on the bench
-   instead, where it can be taken round the middle, level - and it is still too tall for any
-   bay, which is the job it came to do. See `oil`.
-3. **A thing inside a bay has to be tall enough to grip.** The hand comes in level, and the
-   jaws stand about 20 mm above and below the fingers, so a flat thing lying on a board cannot
-   be taken hold of at all: there is a board over it, so there is no way in from above, and no
-   room beside it for the jaws. Everything in a bay is therefore at least `BAY_TALLEST_FLAT_MM`
-   tall. That moved the tin of blades and the chisel out of the top bay and onto the bench,
-   where they are gripped from above - which costs Act 2 nothing, because what makes them
-   borderline is being sharp-but-a-tin and sharp-but-not-pointed-at, not where they live.
-4. **The gripper is not the limit the plan feared.** It holds 96 mm with the grip assist and
-   76 mm on the jaws and friction alone, against the plan's assumed 32. No size here is
-   constrained by it; `GRIP_WIDEST_MM` is the ceiling and every grip is checked against it.
+## Where the arms stand, and why it matters so much
+
+**One at each side of the bench, at the middle of its edge, facing each other** (rahul,
+24 Oct). The first build stood them at the front corners facing the shelf, and that wastes the
+bench: an arm cannot work closer in than 135 mm from itself, nor more than 100 degrees off the
+way it faces, so each one drags a dead disc and a dead sector about with it. Facing the shelf
+from the front puts both of those **on** the bench, right in front of the person. Facing inward
+from the edge puts half of each disc, and the whole of each sector, **off** it.
+
+Measured over the whole bench top: 62 per cent of it reachable from above, against 40.
+
+It costs something, and the cost is written down rather than hidden. Two arms facing each other
+from the sides cannot cover as wide a shelf as two standing closer together, because standing
+closer lets each one reach *across* to the far side and the two rings add up. The bottom bay is
+where this bites, its ring being the narrowest - so the **bottom bay is usable from x 200 to
+520** while the two bays above it are usable across the unit's whole width.
+
+## The shelf
+
+**Three bays** (rahul, 24 Oct). The sweep found a third reachable after all: level reach at
+299 mm is 90 to 430 mm, because an arm reaching up can fold in far closer than one reaching
+down low. 55, 177 and 299 are the three heights, and each was swept.
+
+**Wider than it was**: 440 mm across rather than 300, which is what two arms are for.
+
+**No hook rail** (rahul, 24 Oct): a thing is put on the bench or on a shelf, and nothing else.
 
 ## The one asymmetry
 
 The shelf is two rows deep and the back row is real. `jar4` stands behind `jar2`, both the same
-jar, and from the default view it cannot be seen - the jar in front of it hides it, and the
-board above cuts off any look over the top. Orbit the camera up and it appears. That is the
+jar, and from the default view it cannot be seen - the jar in front hides it, and the board
+above cuts off any look over the top. Orbit the camera round and it appears. That is the
 missing information Act 4 is built on, and it is honest: a real robot has exactly this problem.
-
-What the robot's own camera can see is computed, not stored, from `ROBOT_EYE_MM`; it is not
-used to hide anything yet (FR4, stage 2).
 """
 
 from __future__ import annotations
@@ -72,25 +75,18 @@ from dataclasses import dataclass
 #: bay, so the hand cannot come down on what is inside it. **down** is the hand pointing
 #: straight at the bench, which is how a thing with nothing above it is picked up.
 #:
-#: Each height here is a height something in this world is actually gripped at, and was swept
-#: at that height - nothing is interpolated:
+#: Every height here is one something in this world is really gripped at, and was swept at that
+#: height - nothing is interpolated. Two are **absent on purpose**, because the sweep found
+#: nothing at them: reaching down at 130 mm, and anything higher. Asking this table for a
+#: downward grip up there raises a `KeyError`, which is the answer.
 #:
-#: - level 55: the middle of a thing standing in the bottom bay (clear opening 0 to 110).
-#: - level 130: a tall bottle standing on the bench, taken round the middle.
-#: - level 177: the middle of the top bay (clear opening 122 to 232).
-#: - level 190: the hook rail.
-#: - down 35: a thing standing on the bench.
-#: - down 70: letting go over the rim of the pot.
-#:
-#: Two heights are **absent on purpose**, because the sweep found nothing at them: down at 130
-#: and anything higher. Reaching down dies between 100 mm (where the ring has narrowed to
-#: 210-240) and 130 mm (where there is no pose at all), even with 25 degrees of tilt allowed.
-#: Asking this table for a downward grip above 100 mm raises a `KeyError`, which is the answer.
+#: Note how the inner edge collapses with height - 280, 230, 90 - while the outer edge shrinks.
+#: Reaching up, an arm folds in close; reaching down and low, it has to stretch out flat.
 RING_MM: dict[tuple[str, int], tuple[float, float]] = {
     ("level", 55): (280.0, 470.0),
     ("level", 130): (260.0, 480.0),
     ("level", 177): (230.0, 475.0),
-    ("level", 190): (220.0, 470.0),
+    ("level", 299): (90.0, 430.0),
     ("down", 35): (135.0, 325.0),
     ("down", 70): (130.0, 300.0),
 }
@@ -99,39 +95,34 @@ RING_MM: dict[tuple[str, int], tuple[float, float]] = {
 #:
 #: Reach is not a circle. The fall is close enough to straight, and close enough to the same at
 #: every height swept (0.48 to 0.51 mm per degree), that one number covers all of them - and it
-#: is the same 0.48 that `end_demo` measured for the fingers-down ring by a different route,
-#: which is some comfort that it is a property of the arm and not of a sweep.
+#: is the same 0.48 that `end_demo` measured for the fingers-down ring by a different route.
 REACH_FALL_MM_PER_DEG = 0.48
 
 #: How far either side of its facing an arm can work, degrees. The SO-101's `shoulder_pan`
-#: stops at +/-110 (`web/model/so101/so101.xml`); 100 is `end_demo`'s measured working limit,
-#: where the solver could still get down onto a thing, with a little room.
+#: stops at +/-110 (`web/model/so101/so101.xml`); 100 is `end_demo`'s measured working limit.
 PAN_LIMIT_DEG = 100.0
 
 #: The widest thing the gripper holds through a lift and a move, millimetres.
 #:
 #: Measured on 24 Oct by `web/tests/probes/grip-width.probe.test.ts`: boxes of increasing width
 #: picked up off the bench, carried 220 mm, put down and let go, each at nine aims so no width
-#: fails for being badly aimed. The jaws open to 107 mm tip to tip at the gripper's own limit,
-#: which puts the ceiling near 99; **96 mm** is the widest that came through the whole move with
-#: the grip assist the demo uses, and **76 mm** the widest held by the closed jaws and friction
-#: with the weld switched off.
+#: fails for a badly aimed grip. The jaws open to 107 mm tip to tip at the gripper's own limit,
+#: which puts the ceiling near 99; **96 mm** came through the whole move with the grip assist
+#: the demo uses, and **76 mm** with the weld switched off, on the jaws and friction alone.
 #:
 #: 76 is the number used here, because it is the one that does not depend on the weld. The plan
 #: assumed 32 mm, from the 30 mm blocks of the cubes demo - the only width that demo was ever
-#: asked for. Nothing in this world is near either figure, so the measurement constrains
-#: nothing; it is here so that a size can be checked rather than argued about.
+#: asked for. Knowing the real figure is what lets a jar be a jar and a mug be a mug.
 GRIP_WIDEST_MM = 76.0
 GRIP_WIDEST_WELDED_MM = 96.0
 
 #: How tall a thing must be before it can be gripped inside a bay, millimetres.
 #:
-#: Not swept - reasoned from the jaw geometry and then checked by eye against the sweep. The
-#: hand comes in level, the pads stand about 20 mm above and below the fingers, so the jaws need
-#: that much of the thing's side to close on clear of the board it stands on. A flat thing in a
-#: bay has no way in at all: a board above it rules out coming down, and the board below it
-#: rules out coming in level. Stage 2 drives the real jaws at every thing and is the gate on
-#: this number; until then it is why nothing short stands in a bay.
+#: Not swept - reasoned from the jaw geometry and then checked against the sweep. The hand comes
+#: in level and the pads stand about 20 mm above and below the fingers, so the jaws need that
+#: much of a thing's side to close on, clear of the board it stands on. A flat thing in a bay
+#: has no way in at all: a board above rules out coming down, the board below rules out coming
+#: in level. Stage 2 drives the real jaws at every thing and is the gate on this number.
 BAY_TALLEST_FLAT_MM = 50.0
 
 # ------------------------------------------------------------------- the bench
@@ -142,88 +133,76 @@ BENCH_TO_MM = (700.0, 500.0)
 BENCH_THICK_MM = 18.0
 CENTRE_X_MM = 350.0
 
-#: The shelf unit's footprint. **50 mm further back than the plan's 4.1** - see the module
-#: docstring, point 1: at the plan's 300 the middle of the bottom bay's front row was 255 mm
-#: from either arm and the arm cannot work closer in than 280.
-SHELF_FROM_MM = (200.0, 350.0)
-SHELF_TO_MM = (500.0, 500.0)
-#: The uprights and the back panel, thickness.
+#: The shelf unit's footprint. 440 mm across, against the 300 it was first drawn at.
+SHELF_FROM_MM = (130.0, 350.0)
+SHELF_TO_MM = (570.0, 500.0)
 SHELF_SIDE_MM = 12.0
 SHELF_BACK_MM = 10.0
-#: Each board: the height of its underside and its thickness.
-BOARD_Z_MM = ((110.0, 12.0), (232.0, 12.0))
+#: Each board over a bay: the height of its underside, and its thickness. Three bays, so three
+#: boards - the last is the unit's lid, and nothing stands on it, because reaching down onto
+#: anything above about 100 mm is not a pose this arm has.
+BOARD_Z_MM = ((110.0, 12.0), (232.0, 12.0), (354.0, 12.0))
 #: A bay's clear opening across and in depth: inside the uprights, in front of the back panel.
 BAY_CLEAR_X_MM = (SHELF_FROM_MM[0] + SHELF_SIDE_MM, SHELF_TO_MM[0] - SHELF_SIDE_MM)
 BAY_CLEAR_Y_MM = (SHELF_FROM_MM[1], SHELF_TO_MM[1] - SHELF_BACK_MM)
 
-#: Where a row of things stands in a bay, away from the person. The rows are 85 mm apart, and
-#: the front row is 30 mm inside the opening.
-FRONT_ROW_Y_MM = 380.0
-BACK_ROW_Y_MM = 465.0
+#: How much of the bottom bay two arms at the sides can really work in. The two bays above are
+#: usable across the unit's whole width; this one is not, and nothing is put outside it.
+BOTTOM_BAY_USABLE_X_MM = (200.0, 520.0)
 
-#: The hooks: how high they are, how far they stick out of the unit's side, and where along it.
-#:
-#: **On the unit's two end faces, not across its front.** The plan put a rail on the front face
-#: (4.1), and built that way the first time it hung a pair of pliers and a spanner straight down
-#: across the bottom bay's opening - over the three identical jars, which are the one thing in
-#: this world that has to be seen. A hook high enough to clear them has nothing to hang from:
-#: the unit's lid is at 244. The ends are solid, clear of both openings, and in reach: a thing
-#: on a hook there is 250 mm from the arm on its own side, inside the level ring at 190.
-HOOK_Z_MM = 190.0
-HOOK_OUT_MM = 25.0
-#: Which side, and how far along the unit: pliers, an empty one, and the spanner.
-HOOKS = (("left", 400.0), ("left", 465.0), ("right", 400.0))
+#: Where a row of things stands in a bay, away from the person. 50 mm apart: close enough that
+#: the row in front hides the row behind, far enough that nothing touches.
+FRONT_ROW_Y_MM = 385.0
+BACK_ROW_Y_MM = 455.0
 
 #: Where a thing is held out to the person: the middle of the bench, as near them as an arm can
-#: work, 60 mm up. Not on the bench - nothing on the person's own side of the bench can be
-#: reached at all (the sweep's near edge is 135 mm and the arms stand at y = 150), so passing a
-#: thing over means holding it out rather than putting it down.
-GIVE_MM = (350.0, 120.0, 60.0)
+#: work, 60 mm up.
+GIVE_MM = (350.0, 40.0, 60.0)
 
 #: The robot's own camera: a point above and between the arms. What it can see is computed from
 #: here rather than stored, so the list the model is given cannot quietly disagree with the
 #: scene (FR4, stage 2).
-ROBOT_EYE_MM = (350.0, 60.0, 420.0)
+ROBOT_EYE_MM = (350.0, 60.0, 460.0)
 
 #: Where the person's eye is for the page's default view, and what it looks at.
 #:
 #: Not a camera preference: the whole of Act 4 is that the robot has not been told about the jar
-#: in the back row, and the judge finds it by moving the camera. So the default view has to hide
+#: in the back row and the judge finds it by moving the camera. So the default view has to hide
 #: it and a small orbit has to reveal it, and `behind_from_the_eye` puts the jar on this eye's
 #: own line. `web/tests/probes/visible.probe.test.ts` casts rays at every thing from here and
-#: says what is really visible; it is the gate on both.
-EYE_MM = (350.0, -450.0, 400.0)
-LOOK_AT_MM = (350.0, 320.0, 110.0)
+#: is the gate on both.
+#:
+#: It stands well back. At 450 mm the bench's near edge was only 400 mm from the eye and
+#: everything on it loomed - a mug in the front corner filled a quarter of the frame while the
+#: shelf sat small in the middle. Standing off 700 mm costs nothing and lets the whole bench be
+#: one scene rather than a foreground and a background.
+EYE_MM = (350.0, -700.0, 480.0)
+LOOK_AT_MM = (350.0, 270.0, 180.0)
 
 
 def behind_from_the_eye(x_mm: float, from_y: float, to_y: float) -> float:
     """Where a thing has to stand at `to_y` to be exactly behind one at (`x_mm`, `from_y`).
 
-    Straight behind is not the same across as straight behind as seen from a particular place.
+    Straight behind across is not the same as straight behind as seen from a particular place.
     The jars stand left of centre and the eye is on the centre line, so a jar put at the same x
     in the back row leans out from behind the one in front of it and can be seen past its edge -
-    44 per cent of it, when this was measured. One line of similar triangles fixes that, and
-    ties the fourth jar's place to the eye it is hidden from, which is the honest way round.
+    39 per cent of it, when that was measured. One line of similar triangles fixes it, and ties
+    the fourth jar's place to the eye it is hidden from, which is the honest way round.
     """
     return x_mm + (x_mm - EYE_MM[0]) * (to_y - from_y) / (from_y - EYE_MM[1])
 
 
 def bay_z_mm(bay: int) -> tuple[float, float]:
-    """A bay's clear opening: the height of its floor and of the board over it."""
+    """A bay's clear opening: the height of its floor, and of the board over it."""
     floor = 0.0 if bay == 0 else BOARD_Z_MM[bay - 1][0] + BOARD_Z_MM[bay - 1][1]
     return (floor, BOARD_Z_MM[bay][0])
 
 
-#: The two bays, bottom first, as (floor, ceiling). Two and not three: the sweep was run at the
-#: two heights the plan proposed and found both reachable, and a third was never measured, so
-#: the plan's own rule - "two bays, not three, until stage 0 says a third is reachable" - leaves
-#: it at two. A third bay would also have to be gripped above 244 mm, and the fingers-down
-#: sweep says nothing is reachable up there from over the top.
-BAYS = (bay_z_mm(0), bay_z_mm(1))
-
-#: The height the hand works at inside each bay: the middle of the clear opening, rounded to the
-#: height the ring was swept at.
-BAY_GRIP_Z_MM = (55, 177)
+#: The three bays, bottom first, as (floor, ceiling).
+BAYS = tuple(bay_z_mm(n) for n in range(len(BOARD_Z_MM)))
+#: The height the hand works at inside each bay: the middle of its clear opening, rounded to a
+#: height the ring was really swept at.
+BAY_GRIP_Z_MM = (55, 177, 299)
 
 
 # -------------------------------------------------------------------- the arms
@@ -258,8 +237,7 @@ class Arm:
 
         Three things have to hold: the spot is far enough out that the arm is not folded into
         itself, it is in front of the arm rather than behind it, and it is inside the reach left
-        at that bearing. `how` and `z` must name a ring that was actually measured - asking for
-        a downward grip above 100 mm raises, because the sweep found nothing there.
+        at that bearing. `how` and `z` must name a ring that was really measured.
         """
         bearing = abs(self.bearing_to(x, y))
         if bearing > PAN_LIMIT_DEG:
@@ -278,26 +256,28 @@ class Arm:
 
 
 def arms() -> list[Arm]:
-    """The two arms, one at each side, both facing the shelf.
+    """The two arms, one at each side of the bench, **facing each other**.
 
-    Two is not decoration, it is forced by the ring. Reaching level into the bottom bay the arm
-    cannot work closer in than 280 mm, so each arm has a dead circle in front of it, and the
-    far corners of the unit are past the outer edge. Between them:
+    Two is not decoration, it is forced by the rings. Each arm drags a dead disc about with it -
+    135 mm reaching down, 280 reaching level into the bottom bay - and can work only 100 degrees
+    either side of the way it faces. Standing them at the sides and turning them inward throws
+    half of each disc, and the whole of each dead sector, off the bench.
 
-    - the **right** arm covers the left of the bottom bay's front row, and the **left** arm
-      covers the right of it - each arm reaches *across*, because the near half is inside its
-      own dead circle. "It is on my side, so you take it" comes out the other way round here,
-      which is worth knowing before anyone writes the words.
-    - the middle of that row, where the third jar stands, is in **both** arms' reach, and so is
-      the whole of the back row. That overlap is where "either of us could do this one" lives.
-    - in the top bay, where the ring comes 50 mm further in, both arms reach almost everything.
+    What they can do between them, written out by `scripts/make_workbench_scene.py`:
 
-    Left and right are **the person's**, as they look at the bench. They stay where the plan
-    put them (4.2); it is the shelf that moved, see the module docstring.
+    - each covers its own half of the bench top and reaches a little past the middle, so the
+      middle strip is where "either of us could do this one" lives;
+    - in the **bottom** bay the ring is narrowest, so each arm covers the half of it **away**
+      from itself: the left arm works the right of that bay and the right arm works the left.
+      "It is on my side, so you take it" comes out backwards here, which is worth knowing before
+      anybody writes the words;
+    - in the two bays above, where the ring reaches in much closer, both cover nearly all of it.
+
+    Left and right are **the person's**, as they look at the bench.
     """
     return [
-        Arm("left_arm", base_mm=(170.0, 150.0)),
-        Arm("right_arm", base_mm=(530.0, 150.0)),
+        Arm("left_arm", base_mm=(90.0, 210.0), facing_deg=-90.0),
+        Arm("right_arm", base_mm=(610.0, 210.0), facing_deg=90.0),
     ]
 
 
@@ -306,37 +286,47 @@ def arms() -> list[Arm]:
 
 @dataclass(frozen=True)
 class Part:
-    """A shape bolted to a thing, so its silhouette reads without a label.
+    """A shape bolted to a thing, so that its silhouette reads without a label.
 
-    `at_mm` is from the thing's own centre, in bench axes. A part has no joint of its own: it
-    moves with the thing, which is what makes a hammer a hammer rather than a stick beside a
-    block.
+    `at_mm` is measured from the thing's own centre, in the thing's own frame - across, deep,
+    up - and turns with it. A part has no joint of its own: it moves with the thing, which is
+    what makes a hammer a hammer rather than a stick lying beside a block.
+
+    `tilt_deg` turns it in the across-up plane (a hammer's claw, a knife's blade); `turn_deg`
+    about its own up (a pair of pliers' splayed legs). For a cylinder or a capsule, `axis` says
+    which way its length runs before either angle is applied.
     """
 
-    shape: str
+    shape: str  #: box, cylinder, capsule, sphere or ellipsoid
     size_mm: tuple[float, float, float]  #: across, deep, up
     at_mm: tuple[float, float, float]
     colour: str
     axis: str = "up"
+    tilt_deg: float = 0.0
+    turn_deg: float = 0.0
 
 
 @dataclass(frozen=True)
 class Thing:
     """One thing in the world.
 
-    `size_mm` is always the thing's **bounding box in bench axes** - across, deep, up - whatever
-    shape it is, and `axis` says which way a cylinder lies. Writing it that way rather than in
-    the thing's own frame means there is no orientation to keep in step between this file and
-    the scene file, and that the page can lay a name under the cursor without knowing shapes.
+    `size_mm` is the bounding box of its **first** shape in its own frame - across, deep, up -
+    whatever shape that is, and `axis` says which way a cylinder lies. Writing it that way
+    rather than in the shape's own frame means there is no orientation to get wrong, and that
+    the page can put a name under the cursor without knowing anything about shapes.
+
+    `yaw_deg` turns the whole thing on the bench. Nothing on a real bench is square to its edge,
+    and the first build of this world had every tool lying parallel to one, which read as a shop
+    display rather than as a bench somebody works at.
     """
 
     id: str
     what: str  #: what it is, in the fewest words that name it on the page
     #: Things of the same kind cannot be told apart by any word. This is the heart of the demo:
-    #: `jar` has four, and no sentence separates them.
+    #: four jars, three tins, two mugs, two screwdrivers, two offcuts, two tubes of glue.
     kind: str
-    shape: str  #: box or cylinder
-    size_mm: tuple[float, float, float]  #: across, deep, up
+    shape: str
+    size_mm: tuple[float, float, float]
     colour: str
     #: Where it stands: across, away, and the height its bottom rests at.
     at_mm: tuple[float, float, float]
@@ -345,16 +335,16 @@ class Thing:
     #: How the hand comes at it, and the height the ring for that was swept at.
     grip_how: str = "down"
     grip_z_mm: int = 35
-    #: False for a thing nobody would ask for but anybody might point at - the pot is somewhere
-    #: to put things, not something to want.
-    wanted: bool = True
-    #: False for a thing that is never picked up at all, only put into.
-    graspable: bool = True
-    #: Which way a cylinder lies: up, across the bench, or front to back. Ignored for a box.
+    yaw_deg: float = 0.0
     axis: str = "up"
-    #: The shapes a silhouette needs beyond the first, so a thing reads without a label: a
-    #: hammer's head, a jar's lid, a screwdriver's shaft. Each is its own little `Part`.
+    #: False for a thing nobody would ask for but anybody might point at.
+    wanted: bool = True
+    #: False for a thing never picked up at all, only put into.
+    graspable: bool = True
     parts: tuple[Part, ...] = ()
+    #: How much room it takes on the bench, across and deep, where that is more than its first
+    #: shape - a hammer's head, a mug's handle. Used by the test that nothing overlaps.
+    footprint_mm: tuple[float, float] | None = None
 
     @property
     def across_mm(self) -> float:
@@ -369,22 +359,50 @@ class Thing:
         return self.size_mm[2]
 
     @property
+    def is_round(self) -> bool:
+        """Does it look the same from every side? A jar, a tin, a pot - not a mug, which has a
+        handle, nor anything given a `footprint_mm` of its own."""
+        return (
+            self.shape in ("cylinder", "sphere") and self.axis == "up" and self.footprint_mm is None
+        )
+
+    @property
+    def room_mm(self) -> tuple[float, float]:
+        """Across and deep, in its own frame, counting every part."""
+        if self.footprint_mm:
+            return self.footprint_mm
+        across, deep = self.size_mm[0], self.size_mm[1]
+        for p in self.parts:
+            across = max(across, 2 * abs(p.at_mm[0]) + p.size_mm[0])
+            deep = max(deep, 2 * abs(p.at_mm[1]) + p.size_mm[1])
+        return (across, deep)
+
+    @property
+    def top_mm(self) -> float:
+        """How high its highest point stands above the bench."""
+        top = self.at_mm[2] + self.tall_mm
+        middle = self.at_mm[2] + self.tall_mm / 2
+        for p in self.parts:
+            top = max(top, middle + p.at_mm[2] + p.size_mm[2] / 2)
+        return top
+
+    @property
     def place_mm(self) -> tuple[float, float, float]:
         """Its **centre**: what the physics wants for a body, and what the eye looks at."""
         return (self.at_mm[0], self.at_mm[1], self.at_mm[2] + self.tall_mm / 2)
 
     @property
     def in_bay(self) -> int | None:
-        """Which bay it stands in, or None for the bench and the hooks.
+        """Which bay it stands in, or None for the bench.
 
-        All three of x, y and z have to say so. The oil bottle stands on the bench at the back
-        right, past the end of the unit: without the x test it looked like a thing in the bottom
-        bay that was 40 mm too tall for it, which is the one thing the oil is not.
+        All three of x, y and z have to say so. The oil bottle stands on the bench past the end
+        of the unit: without the x test it looked like a thing in the bottom bay that was far
+        too tall for it, which is the one thing the oil is not.
         """
         x, y, z = self.at_mm
         if not (BAY_CLEAR_X_MM[0] <= x <= BAY_CLEAR_X_MM[1]):
             return None
-        if not (SHELF_FROM_MM[1] <= y <= SHELF_TO_MM[1]):
+        if not (BAY_CLEAR_Y_MM[0] <= y <= BAY_CLEAR_Y_MM[1]):
             return None
         for bay, (floor, _) in enumerate(BAYS):
             if abs(z - floor) < 1.0:
@@ -392,130 +410,404 @@ class Thing:
         return None
 
 
+def _jar(n: int, x: float, y: float) -> Thing:
+    """One of the four jars of screws.
+
+    The same jar four times over: no word separates them, which is the whole demo. 95 mm to the
+    top of the lid, which is what fills the bay - at 70 there was a slot between the lid and the
+    board above, and the back row could be seen straight over the top of the front one.
+    """
+    return Thing(
+        f"jar{n}",
+        "a jar of screws",
+        "jar",
+        "cylinder",
+        (64.0, 64.0, 78.0),
+        "glass",
+        (x, y, bay_z_mm(0)[0]),
+        grip_mm=64.0,
+        grip_how="level",
+        grip_z_mm=BAY_GRIP_Z_MM[0],
+        parts=(
+            # The screws inside. Glass on its own is a pale cylinder against a pale shelf, and
+            # what makes a jar of screws read as one at a glance is the dark mass in the bottom
+            # of it (NFR1).
+            Part("cylinder", (54.0, 54.0, 46.0), (0.0, 0.0, -14.0), "brass"),
+            Part("cylinder", (56.0, 56.0, 8.0), (0.0, 0.0, 36.0), "glass"),
+            Part("cylinder", (66.0, 66.0, 15.0), (0.0, 0.0, 45.0), "jar lid"),
+        ),
+    )
+
+
+def _mug(n: int, x: float, y: float, yaw: float, z: float, how: str, grip_z: int) -> Thing:
+    """One of the two mugs.
+
+    A body, a dark inside so it reads as open rather than solid, a lip, and a handle built from
+    five beads on an arc - which is all a mug needs to be a mug at a glance, and more honest
+    than a bare cylinder with a mug's name on it.
+    """
+    handle = tuple(
+        Part(
+            "sphere",
+            (18.0, 18.0, 18.0),
+            (
+                36.0 + 23.0 * math.cos(math.radians(deg)),
+                0.0,
+                4.0 + 23.0 * math.sin(math.radians(deg)),
+            ),
+            "mug",
+        )
+        for deg in (115.0, 58.0, 0.0, -58.0, -115.0)
+    )
+    return Thing(
+        f"mug{n}",
+        "a mug",
+        "mug",
+        "cylinder",
+        (76.0, 76.0, 90.0),
+        "mug",
+        (x, y, z),
+        grip_mm=76.0,
+        grip_how=how,
+        grip_z_mm=grip_z,
+        yaw_deg=yaw,
+        parts=(
+            Part("cylinder", (62.0, 62.0, 74.0), (0.0, 0.0, 10.0), "shadow"),
+            Part("cylinder", (80.0, 80.0, 6.0), (0.0, 0.0, 42.0), "mug"),
+            *handle,
+        ),
+        footprint_mm=(122.0, 80.0),
+    )
+
+
+def _tin(n: int, x: float, y: float, yaw: float) -> Thing:
+    """One of the three tins of varnish, in the middle bay.
+
+    A second set of things no word separates, at a different size from the jars and on a
+    different board, so that a judge meets the same difficulty twice without it being the same
+    trick twice.
+    """
+    return Thing(
+        f"tin{n}",
+        "a tin of varnish",
+        "tin",
+        "cylinder",
+        (72.0, 72.0, 76.0),
+        "tin",
+        (x, y, bay_z_mm(1)[0]),
+        grip_mm=72.0,
+        grip_how="level",
+        grip_z_mm=BAY_GRIP_Z_MM[1],
+        yaw_deg=yaw,
+        parts=(
+            Part("cylinder", (74.0, 74.0, 34.0), (0.0, 0.0, -4.0), "tin label"),
+            Part("cylinder", (76.0, 76.0, 8.0), (0.0, 0.0, 34.0), "tin"),
+            Part("cylinder", (58.0, 58.0, 4.0), (0.0, 0.0, 38.0), "shadow"),
+        ),
+    )
+
+
+def _screwdriver(n: int, x: float, y: float, yaw: float) -> Thing:
+    """One of the two screwdrivers: handle, collar, shaft and a flat tip.
+
+    Two of them, so that "the screwdriver" settles nothing on its own.
+    """
+    return Thing(
+        f"screwdriver{n}",
+        "a screwdriver",
+        "screwdriver",
+        "cylinder",
+        (86.0, 32.0, 32.0),
+        "handle blue",
+        (x, y, 16.0),
+        grip_mm=32.0,
+        yaw_deg=yaw,
+        axis="across",
+        parts=(
+            Part("cylinder", (16.0, 37.0, 37.0), (28.0, 0.0, 0.0), "handle blue", "across"),
+            Part("cylinder", (96.0, 9.0, 9.0), (90.0, 0.0, 0.0), "steel", "across"),
+            Part("box", (16.0, 10.0, 3.0), (142.0, 0.0, 0.0), "steel"),
+        ),
+        footprint_mm=(236.0, 37.0),
+    )
+
+
+def _offcut(n: int, x: float, y: float, yaw: float, z: float = 0.0, on_edge: bool = False) -> Thing:
+    """One of the two offcuts: what the bench is about, and a second of the same piece.
+
+    The second stands **on its edge** in the top bay, which is how a spare bit of board is
+    really kept and is also the only way it can live on a shelf at all: lying flat it is 36 mm
+    tall, and the jaws need 50 mm of a thing's side to close on inside a bay.
+    """
+    size = (132.0, 36.0, 76.0) if on_edge else (132.0, 76.0, 36.0)
+    line = (0.0, -17.0, 20.0) if on_edge else (0.0, 12.0, 18.0)
+    kerf = (48.0, 0.0, 35.0) if on_edge else (48.0, -14.0, 15.0)
+    return Thing(
+        f"offcut{n}",
+        "an offcut of wood",
+        "offcut",
+        "box",
+        size,
+        "pale wood",
+        (x, y, z),
+        grip_mm=36.0 if on_edge else 76.0,
+        grip_how="level" if on_edge else "down",
+        grip_z_mm=BAY_GRIP_Z_MM[2] if on_edge else 35,
+        yaw_deg=yaw,
+        parts=(
+            Part("box", (120.0, 2.0, 1.0), line, "pencil"),
+            Part("box", (3.0, 30.0, 7.0), kerf, "shadow"),
+        ),
+    )
+
+
 def things() -> list[Thing]:
-    """The nineteen things: ten on the bench, two on hooks, seven on the shelf.
+    """Everything on the bench and in the unit.
+
+    Six sets of things that **no word separates** - four jars, three tins, two mugs, two
+    screwdrivers, two offcuts, and two tubes of glue that differ only by a cap - and nine that a
+    word does separate, so the words-only baseline has something it can win and the demo is not
+    rigged.
 
     Every one of them is on a real bench, and the properties the demo needs are not added to
-    them - they are what a bench is. Several jars you cannot tell apart without reading a label
+    them: they are what a bench is. Several jars you cannot tell apart without reading a label
     you cannot see. A tube with its cap off beside one with its cap on. Sharp things a person
-    would really make a rule about. A bottle too tall for the shelf it belongs on. Tape that can
-    be hung up or laid down. A back row nobody has looked at for months.
-
-    The crossing that makes Act 2 work is natural too. Point at the craft knife and say "the
-    ones like this": sharp things? small things? red things? The knife is all three. The blade
-    tin is sharp and red, but closed, and a tin. The chisel is sharp but big and wooden.
+    would really make a rule about. A bottle too tall for the shelf it belongs on. A back row
+    nobody has looked at for months.
     """
-    bench = 0.0
-    bay0, bay1 = (bay_z_mm(0)[0], bay_z_mm(1)[0])
+    bay1, bay2 = (bay_z_mm(1)[0], bay_z_mm(2)[0])
+    bay0 = bay_z_mm(0)[0]
     return [
-        # ----------------------------------------------------------- on the bench
+        # --------------------------------------- the bottom bay: the jars and the two tubes
+        _jar(1, 230.0, FRONT_ROW_Y_MM),
+        _jar(2, 310.0, FRONT_ROW_Y_MM),
+        _jar(3, 390.0, FRONT_ROW_Y_MM),
+        # The back row: behind jar2, the same jar, and the one thing the robot has not been
+        # told about. Act 4. Its place across is worked out from the eye it has to hide from.
+        _jar(4, behind_from_the_eye(310.0, FRONT_ROW_Y_MM, BACK_ROW_Y_MM), BACK_ROW_Y_MM),
         Thing(
-            "job",
-            "the offcut being worked on",
-            "offcut",
-            "box",
-            (120.0, 70.0, 35.0),
-            "pale wood",
-            (350.0, 200.0, bench),
-            grip_mm=70.0,
-            parts=(Part("box", (112.0, 3.0, 1.0), (0.0, 8.0, 17.5), "pencil"),),
+            "glue1",
+            "a tube of glue, capped",
+            "glue",
+            "cylinder",
+            (30.0, 30.0, 76.0),
+            "white",
+            (465.0, FRONT_ROW_Y_MM, bay0),
+            grip_mm=30.0,
+            grip_how="level",
+            grip_z_mm=BAY_GRIP_Z_MM[0],
+            parts=(
+                Part("cylinder", (21.0, 21.0, 10.0), (0.0, 0.0, 41.0), "white"),
+                Part("cylinder", (12.0, 12.0, 10.0), (0.0, 0.0, 49.0), "white"),
+                Part("cylinder", (18.0, 18.0, 16.0), (0.0, 0.0, 58.0), "red"),
+            ),
         ),
         Thing(
-            "screwdriver",
-            "a screwdriver",
-            "screwdriver",
+            "glue2",
+            "a tube of glue, open",
+            "glue",
             "cylinder",
-            (90.0, 28.0, 28.0),  # the handle; the shaft is a part, so it reads as one tool
-            "blue",
-            (300.0, 290.0, bench + 14.0),
-            grip_mm=28.0,
+            (30.0, 30.0, 76.0),
+            "white",
+            (505.0, FRONT_ROW_Y_MM, bay0),
+            grip_mm=30.0,
+            grip_how="level",
+            grip_z_mm=BAY_GRIP_Z_MM[0],
+            # No cap, and a dark mouth where one should be: the pair differ by a state, and by
+            # nothing that either of them has a word for.
+            parts=(
+                Part("cylinder", (21.0, 21.0, 10.0), (0.0, 0.0, 41.0), "white"),
+                Part("cylinder", (12.0, 12.0, 14.0), (0.0, 0.0, 51.0), "white"),
+                Part("cylinder", (8.0, 8.0, 4.0), (0.0, 0.0, 58.0), "shadow"),
+            ),
+        ),
+        # ------------------------------------- the middle bay: the three tins and two mugs
+        _tin(1, 205.0, FRONT_ROW_Y_MM, 12.0),
+        _tin(2, 292.0, FRONT_ROW_Y_MM, -31.0),
+        _tin(3, 379.0, FRONT_ROW_Y_MM, 48.0),
+        _mug(1, 478.0, FRONT_ROW_Y_MM, 0.0, bay1, "level", BAY_GRIP_Z_MM[1]),
+        _mug(2, 89.0, 44.0, 138.0, 0.0, "down", 35),
+        # ------------------------------------------------------------------- the top bay
+        Thing(
+            "odds",
+            "a box of odds and ends",
+            "odds",
+            "box",
+            # 70 deep, not 86: the gripper holds 76 mm and the box is taken by its sides.
+            (116.0, 70.0, 74.0),
+            "brown card",
+            (250.0, FRONT_ROW_Y_MM, bay2),
+            grip_mm=70.0,
+            grip_how="level",
+            grip_z_mm=BAY_GRIP_Z_MM[2],
+            yaw_deg=-7.0,
+            parts=(
+                Part("box", (120.0, 74.0, 8.0), (0.0, 0.0, 33.0), "brown card"),
+                Part("box", (62.0, 4.0, 30.0), (0.0, -37.0, 0.0), "shadow"),
+            ),
+        ),
+        Thing(
+            "clamp",
+            "a G clamp",
+            "clamp",
+            "box",
+            (22.0, 20.0, 100.0),
+            "steel",
+            (430.0, FRONT_ROW_Y_MM, bay2),
+            grip_mm=22.0,
+            grip_how="level",
+            grip_z_mm=BAY_GRIP_Z_MM[2],
+            yaw_deg=24.0,
+            parts=(
+                Part("box", (74.0, 20.0, 20.0), (37.0, 0.0, 40.0), "steel"),
+                Part("box", (74.0, 20.0, 18.0), (37.0, 0.0, -41.0), "steel"),
+                Part("cylinder", (14.0, 14.0, 44.0), (68.0, 0.0, -18.0), "steel"),
+                Part("cylinder", (46.0, 11.0, 11.0), (68.0, 0.0, -42.0), "steel", "across"),
+                Part("cylinder", (26.0, 26.0, 8.0), (68.0, 0.0, 6.0), "steel"),
+            ),
+            footprint_mm=(160.0, 46.0),
+        ),
+        _offcut(2, 405.0, BACK_ROW_Y_MM - 5.0, 4.0, bay2, on_edge=True),
+        # ---------------------------------------------------------------- on the bench top
+        _offcut(1, 345.0, 55.0, 7.0),
+        _screwdriver(1, 350.0, 129.0, 8.0),
+        _screwdriver(2, 492.0, 77.0, 50.0),
+        Thing(
+            "hammer",
+            "a hammer",
+            "hammer",
+            "cylinder",
+            (210.0, 22.0, 22.0),
+            "wood",
+            (311.0, 205.0, 11.0),
+            grip_mm=22.0,
+            yaw_deg=9.0,
             axis="across",
-            parts=(Part("cylinder", (100.0, 8.0, 8.0), (95.0, 0.0, 0.0), "steel", "across"),),
+            parts=(
+                Part("cylinder", (70.0, 28.0, 28.0), (-78.0, 0.0, 0.0), "wood", "across"),
+                Part("cylinder", (26.0, 96.0, 26.0), (118.0, 0.0, 3.0), "steel", "deep"),
+                Part("cylinder", (33.0, 22.0, 33.0), (118.0, -50.0, 3.0), "steel", "deep"),
+                Part("box", (26.0, 38.0, 16.0), (118.0, 50.0, 9.0), "steel", tilt_deg=18.0),
+            ),
+            footprint_mm=(292.0, 102.0),
+        ),
+        Thing(
+            "pliers",
+            "a pair of pliers",
+            "pliers",
+            "box",
+            (96.0, 14.0, 18.0),
+            "red",
+            (177.0, 66.0, 9.0),
+            grip_mm=44.0,
+            yaw_deg=-41.0,
+            parts=(
+                Part("box", (96.0, 14.0, 18.0), (-4.0, 16.0, 0.0), "red", turn_deg=-9.0),
+                Part("box", (96.0, 14.0, 18.0), (-4.0, -16.0, 0.0), "red", turn_deg=9.0),
+                Part("cylinder", (24.0, 24.0, 20.0), (50.0, 0.0, 0.0), "steel"),
+                Part("box", (58.0, 11.0, 12.0), (82.0, 6.0, 0.0), "steel", turn_deg=4.0),
+                Part("box", (58.0, 11.0, 12.0), (82.0, -6.0, 0.0), "steel", turn_deg=-4.0),
+            ),
+            footprint_mm=(216.0, 48.0),
+        ),
+        Thing(
+            "chisel",
+            "a chisel",
+            "chisel",
+            "cylinder",
+            (84.0, 28.0, 28.0),
+            "wood",
+            (388.0, 319.0, 14.0),
+            grip_mm=28.0,
+            yaw_deg=-169.0,
+            axis="across",
+            parts=(
+                Part("cylinder", (14.0, 32.0, 32.0), (46.0, 0.0, 0.0), "steel", "across"),
+                Part("box", (86.0, 22.0, 8.0), (96.0, 0.0, -2.0), "steel"),
+                Part("box", (10.0, 24.0, 4.0), (143.0, 0.0, -4.0), "steel"),
+            ),
+            footprint_mm=(252.0, 32.0),
         ),
         Thing(
             "knife",
             "a craft knife",
             "knife",
             "box",
-            (140.0, 14.0, 14.0),
+            (112.0, 16.0, 18.0),
             "grey",
-            (420.0, 290.0, bench),
-            grip_mm=14.0,
+            (565.0, 51.0, 9.0),
+            grip_mm=18.0,
+            yaw_deg=63.0,
             parts=(
-                Part("box", (30.0, 15.0, 15.0), (-40.0, 0.0, 0.0), "red"),
-                Part("box", (34.0, 3.0, 8.0), (82.0, 0.0, 1.0), "steel"),
+                Part("box", (34.0, 18.0, 21.0), (-62.0, 0.0, 0.0), "red"),
+                Part("box", (54.0, 18.0, 4.0), (0.0, 0.0, 10.0), "red"),
+                Part("box", (38.0, 3.0, 15.0), (72.0, 0.0, 1.0), "steel", tilt_deg=-9.0),
             ),
-        ),
-        Thing(
-            "blades",
-            "a tin of spare blades",
-            "blades",
-            "box",
-            (55.0, 30.0, 12.0),
-            "red",
-            (240.0, 300.0, bench),
-            grip_mm=30.0,
-        ),
-        Thing(
-            "chisel",
-            "a chisel",
-            "chisel",
-            "box",
-            (90.0, 22.0, 22.0),  # the handle
-            "wood",
-            (470.0, 300.0, bench),
-            grip_mm=22.0,
-            parts=(Part("box", (70.0, 16.0, 6.0), (78.0, 0.0, -5.0), "steel"),),
+            footprint_mm=(182.0, 18.0),
         ),
         Thing(
             "rule",
             "a steel rule",
             "rule",
             "box",
-            # Lying front to back, not across: across, at the right of the bench, it lay in the
-            # right arm's own shadow from the default view and 19 per cent of it could be seen.
-            (25.0, 150.0, 2.0),
+            (168.0, 26.0, 2.0),
             "steel",
-            (660.0, 300.0, bench),
-            grip_mm=25.0,
+            (484.0, 326.0, 0.0),
+            grip_mm=26.0,
+            yaw_deg=-168.0,
+            parts=tuple(
+                Part("box", (2.0, 14.0, 1.0), (k * 24.0, 6.0, 1.0), "pencil")
+                for k in (-3, -2, -1, 0, 1, 2, 3)
+            ),
         ),
         Thing(
             "tape",
             "a roll of masking tape",
             "tape",
             "cylinder",
-            (60.0, 60.0, 25.0),
+            (68.0, 68.0, 26.0),
             "beige",
-            (60.0, 240.0, bench),
-            grip_mm=60.0,
-            parts=(Part("cylinder", (26.0, 26.0, 27.0), (0.0, 0.0, 0.0), "shadow"),),
+            (620.0, 36.0, 0.0),
+            grip_mm=68.0,
+            yaw_deg=-120.0,
+            parts=(
+                Part("cylinder", (30.0, 30.0, 28.0), (0.0, 0.0, 0.0), "shadow"),
+                Part("cylinder", (70.0, 70.0, 3.0), (0.0, 0.0, 12.0), "beige dark"),
+                Part("box", (34.0, 2.0, 24.0), (42.0, 0.0, 0.0), "beige"),
+            ),
+            footprint_mm=(102.0, 70.0),
         ),
         Thing(
-            "hammer",
-            "a hammer",
-            "hammer",
+            "blades",
+            "a tin of spare blades",
+            "blades",
             "box",
-            (230.0, 24.0, 24.0),  # the handle, lying across the bench
-            "wood",
-            (400.0, 240.0, bench),
-            grip_mm=24.0,
-            parts=(Part("box", (28.0, 90.0, 28.0), (-129.0, 0.0, 2.0), "steel"),),
+            (62.0, 36.0, 16.0),
+            "red",
+            (477.0, -9.0, 0.0),
+            grip_mm=36.0,
+            yaw_deg=49.0,
+            parts=(
+                Part("box", (64.0, 38.0, 4.0), (0.0, 0.0, 7.0), "red dark"),
+                Part("box", (40.0, 22.0, 1.0), (0.0, 0.0, 9.0), "white"),
+            ),
         ),
         Thing(
             "pot",
             "a pot of loose screws",
             "pot",
             "cylinder",
-            (55.0, 55.0, 60.0),
+            (66.0, 66.0, 58.0),
             "grey",
-            (620.0, 250.0, bench),
-            grip_mm=55.0,
+            (191.0, 300.0, 0.0),
+            grip_mm=66.0,
             grip_z_mm=70,  # letting go over its rim, not picking it up
             wanted=False,
             graspable=False,
             parts=(
-                Part("cylinder", (46.0, 46.0, 8.0), (0.0, 0.0, 22.0), "brass"),
-                Part("cylinder", (50.0, 50.0, 6.0), (0.0, 0.0, 28.0), "shadow"),
+                Part("cylinder", (58.0, 58.0, 10.0), (0.0, 0.0, 18.0), "brass"),
+                Part("cylinder", (70.0, 70.0, 7.0), (0.0, 0.0, 26.0), "grey"),
+                Part("cylinder", (54.0, 54.0, 4.0), (0.0, 0.0, 28.0), "shadow"),
             ),
         ),
         Thing(
@@ -523,118 +815,19 @@ def things() -> list[Thing]:
             "a bottle of oil",
             "oil",
             "cylinder",
-            (50.0, 50.0, 120.0),
+            (56.0, 56.0, 96.0),
             "dark green",
-            (650.0, 420.0, bench),
-            grip_mm=22.0,
+            (516.0, 199.0, 0.0),
+            grip_mm=24.0,
             grip_how="level",
-            grip_z_mm=130,  # too tall to grip from above: the module docstring, point 2
-            parts=(Part("cylinder", (22.0, 22.0, 30.0), (0.0, 0.0, 75.0), "dark green"),),
-        ),
-        # ----------------------------------------------------------- on the hooks
-        Thing(
-            "pliers",
-            "a pair of pliers",
-            "pliers",
-            "box",
-            (26.0, 28.0, 140.0),  # hanging, so its length is up
-            "red",
-            (hook_at("left"), HOOKS[0][1], HOOK_Z_MM - 140.0),
-            grip_mm=26.0,
-            grip_how="level",
-            grip_z_mm=190,
-            parts=(Part("box", (16.0, 20.0, 46.0), (0.0, 0.0, -56.0), "steel"),),
-        ),
-        Thing(
-            "spanner",
-            "a spanner",
-            "spanner",
-            "box",
-            (22.0, 11.0, 170.0),
-            "steel",
-            (hook_at("right"), HOOKS[2][1], HOOK_Z_MM - 170.0),
-            grip_mm=22.0,
-            grip_how="level",
-            grip_z_mm=190,
-            parts=(Part("box", (36.0, 13.0, 34.0), (0.0, 0.0, -72.0), "steel"),),
-        ),
-        # -------------------------------------------------------- in the bottom bay
-        *[
-            Thing(
-                f"jar{n}",
-                "a jar of screws",
-                "jar",
-                "cylinder",
-                # 95 mm tall, in a bay 110 mm high. Not a free choice: at 70 mm there was a
-                # 40 mm slot between the top of a jar and the underside of the board, and from
-                # the default view you could see straight through it onto the top of the jar in
-                # the back row - 39 per cent of it, measured. A jar tall enough to close that
-                # slot hides the one behind it, which is what the back row is for. A jam jar is
-                # this tall anyway; 70 was the guess.
-                (32.0, 32.0, 85.0),
-                "glass",
-                (x, y, bay0),
-                grip_mm=32.0,
-                grip_how="level",
-                grip_z_mm=BAY_GRIP_Z_MM[0],
-                parts=(
-                    # The screws inside. Glass on its own is a pale cylinder against a pale
-                    # shelf; what makes a jar of screws read as one at a glance is the dark
-                    # mass filling the bottom two thirds of it (NFR1).
-                    Part("cylinder", (26.0, 26.0, 55.0), (0.0, 0.0, -13.0), "brass"),
-                    Part("cylinder", (34.0, 34.0, 10.0), (0.0, 0.0, 47.5), "grey"),
-                ),
-            )
-            for n, x, y in (
-                (1, 250.0, FRONT_ROW_Y_MM),
-                (2, 300.0, FRONT_ROW_Y_MM),
-                (3, 350.0, FRONT_ROW_Y_MM),
-                # The back row: behind jar2, the same jar, and the one thing the robot has not
-                # been told about. Act 4. Its place across is worked out from the eye it has to
-                # hide from, not copied from the jar in front of it - see `behind_from_the_eye`.
-                (4, behind_from_the_eye(300.0, FRONT_ROW_Y_MM, BACK_ROW_Y_MM), BACK_ROW_Y_MM),
-            )
-        ],
-        Thing(
-            "glue1",
-            "a tube of glue, capped",
-            "glue",
-            "cylinder",
-            (26.0, 26.0, 84.0),
-            "white",
-            (420.0, FRONT_ROW_Y_MM, bay0),
-            grip_mm=26.0,
-            grip_how="level",
-            grip_z_mm=BAY_GRIP_Z_MM[0],
-            parts=(Part("cylinder", (16.0, 16.0, 12.0), (0.0, 0.0, 48.0), "red"),),
-        ),
-        Thing(
-            "glue2",
-            "a tube of glue, open",
-            "glue",
-            "cylinder",
-            (26.0, 26.0, 84.0),
-            "white",
-            (460.0, FRONT_ROW_Y_MM, bay0),
-            grip_mm=26.0,
-            grip_how="level",
-            grip_z_mm=BAY_GRIP_Z_MM[0],
-            # No cap, and a dark mouth where it should be: the pair differ by a state, not by
-            # any word either of them has.
-            parts=(Part("cylinder", (12.0, 12.0, 5.0), (0.0, 0.0, 43.0), "shadow"),),
-        ),
-        # ------------------------------------------------------- in the top bay
-        Thing(
-            "odds",
-            "a box of odds and ends",
-            "odds",
-            "box",
-            (60.0, 50.0, 70.0),
-            "brown card",
-            (350.0, FRONT_ROW_Y_MM, bay1),
-            grip_mm=60.0,
-            grip_how="level",
-            grip_z_mm=BAY_GRIP_Z_MM[1],
+            grip_z_mm=130,  # 150 mm tall: far too tall to be gripped from over the top
+            yaw_deg=-53.0,
+            parts=(
+                Part("cylinder", (44.0, 44.0, 14.0), (0.0, 0.0, 54.0), "dark green"),
+                Part("cylinder", (24.0, 24.0, 28.0), (0.0, 0.0, 74.0), "dark green"),
+                Part("cylinder", (28.0, 28.0, 12.0), (0.0, 0.0, 94.0), "red"),
+                Part("cylinder", (58.0, 58.0, 26.0), (0.0, 0.0, -10.0), "oil label"),
+            ),
         ),
     ]
 
@@ -644,7 +837,7 @@ def by_id(items: list[Thing]) -> dict[str, Thing]:
 
 
 def kind_counts(items: list[Thing]) -> dict[str, int]:
-    """How many of each kind: four jars, two tubes of glue, one of everything else."""
+    """How many of each kind: four jars, three tins, two mugs, two of three other things."""
     out: dict[str, int] = {}
     for t in items:
         out[t.kind] = out.get(t.kind, 0) + 1
@@ -656,14 +849,52 @@ def is_unique(items: list[Thing], thing_id: str) -> bool:
     return kind_counts(items)[by_id(items)[thing_id].kind] == 1
 
 
-def hook_at(side: str) -> float:
-    """Where a thing hanging on a hook on this side of the unit sits, across the bench."""
-    return SHELF_FROM_MM[0] - HOOK_OUT_MM if side == "left" else SHELF_TO_MM[0] + HOOK_OUT_MM
+def corners(thing: Thing) -> list[tuple[float, float]]:
+    """Its footprint on the bench, turned the way it is turned: four corners.
+
+    A round thing's footprint does not turn, whatever its yaw says - a jar looks the same from
+    every side. Turning its bounding square with it made three tins 85 mm apart look as though
+    they were standing in each other, because the corners of a turned square reach further out
+    than the circle inside it ever does.
+    """
+    across, deep = thing.room_mm
+    a = 0.0 if thing.is_round else math.radians(thing.yaw_deg)
+    cos, sin = math.cos(a), math.sin(a)
+    x, y, _ = thing.place_mm
+    return [
+        (x + cos * dx - sin * dy, y + sin * dx + cos * dy)
+        for dx, dy in (
+            (-across / 2, -deep / 2),
+            (across / 2, -deep / 2),
+            (across / 2, deep / 2),
+            (-across / 2, deep / 2),
+        )
+    ]
 
 
-def hooks() -> list[tuple[str, float, float, float]]:
-    """The three hooks: which side, and where each one is. One is left empty, to hang on."""
-    return [(side, hook_at(side), y, HOOK_Z_MM) for side, y in HOOKS]
+def overlaps(a: Thing, b: Thing) -> bool:
+    """Do two things stand in the same place? A separating-axis test on their footprints.
+
+    Heights are compared first: two things on different boards of the unit are one above the
+    other and do not care how their footprints lie.
+    """
+    if a.top_mm <= b.at_mm[2] or b.top_mm <= a.at_mm[2]:
+        return False
+    boxes = (corners(a), corners(b))
+    for box in boxes:
+        for k in range(4):
+            edge = (box[(k + 1) % 4][0] - box[k][0], box[(k + 1) % 4][1] - box[k][1])
+            axis = (-edge[1], edge[0])
+            spans = [[p[0] * axis[0] + p[1] * axis[1] for p in other] for other in boxes]
+            if max(spans[0]) <= min(spans[1]) or max(spans[1]) <= min(spans[0]):
+                return False
+    return True
+
+
+def clashes(items: list[Thing] | None = None) -> list[tuple[str, str]]:
+    """Every pair of things standing in the same place. Should be empty."""
+    items = things() if items is None else items
+    return [(a.id, b.id) for i, a in enumerate(items) for b in items[i + 1 :] if overlaps(a, b)]
 
 
 def reach_report() -> list[str]:
@@ -679,9 +910,11 @@ def reach_report() -> list[str]:
             f"{a.id[0]}:r{a.radius_to(*t.place_mm[:2]):.0f}/b{abs(a.bearing_to(*t.place_mm[:2])):.0f}"
             for a in all_arms
         )
-        out.append(f"  {t.id:<12} {t.grip_how:<5} z{t.grip_z_mm:<4} {', '.join(who):<24} {r}")
+        out.append(f"  {t.id:<13} {t.grip_how:<5} z{t.grip_z_mm:<4} {', '.join(who):<24} {r}")
     for (how, z), (near, far) in sorted(RING_MM.items()):
         out.append(f"  ring {how:<5} z{z:<4} {near:.0f} to {far:.0f} mm ahead, less off to a side")
-    for a in all_arms:
-        out.append(f"  {a.id}: can hold a thing out to the person = {a.reaches_person}")
+    for kind, n in sorted(kind_counts(things()).items()):
+        if n > 1:
+            out.append(f"  {n} x {kind}: no word separates them")
+    out.append(f"  things standing in the same place: {clashes() or 'none'}")
     return out

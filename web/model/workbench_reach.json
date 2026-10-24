@@ -21,9 +21,9 @@
       230.0,
       475.0
     ],
-    "level 190": [
-      220.0,
-      470.0
+    "level 299": [
+      90.0,
+      430.0
     ]
   },
   "arms": [
@@ -31,34 +31,34 @@
       "id": "left_arm",
       "prefix": "left_",
       "base": [
-        0.15,
-        0.18
+        0.21,
+        0.26
       ],
-      "holdsOut": true
+      "holdsOut": false
     },
     {
       "id": "right_arm",
       "prefix": "right_",
       "base": [
-        0.15,
-        -0.18
+        0.21,
+        -0.26
       ],
-      "holdsOut": true
+      "holdsOut": false
     }
   ],
   "give": [
-    0.12,
+    0.04,
     -0.0
   ],
   "eye": [
     350.0,
-    -450.0,
-    400.0
+    -700.0,
+    480.0
   ],
   "lookAt": [
     350.0,
-    320.0,
-    110.0
+    270.0,
+    180.0
   ],
   "bench": {
     "from": [
@@ -73,11 +73,11 @@
   },
   "shelf": {
     "from": [
-      200.0,
+      130.0,
       350.0
     ],
     "to": [
-      500.0,
+      570.0,
       500.0
     ],
     "bays": [
@@ -88,280 +88,33 @@
       [
         122.0,
         232.0
+      ],
+      [
+        244.0,
+        354.0
       ]
     ],
-    "hookZ": 190.0,
-    "hooks": [
-      {
-        "side": "left",
-        "at": [
-          175.0,
-          400.0,
-          190.0
-        ]
-      },
-      {
-        "side": "left",
-        "at": [
-          175.0,
-          465.0,
-          190.0
-        ]
-      },
-      {
-        "side": "right",
-        "at": [
-          525.0,
-          400.0,
-          190.0
-        ]
-      }
+    "rows": [
+      385.0,
+      455.0
+    ],
+    "bottomBayUsableX": [
+      200.0,
+      520.0
     ]
   },
   "things": [
-    {
-      "id": "job",
-      "what": "the offcut being worked on",
-      "kind": "offcut",
-      "bay": null,
-      "at": [
-        350.0,
-        200.0,
-        17.5
-      ],
-      "gripMm": 70.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
-    {
-      "id": "screwdriver",
-      "what": "a screwdriver",
-      "kind": "screwdriver",
-      "bay": null,
-      "at": [
-        300.0,
-        290.0,
-        28.0
-      ],
-      "gripMm": 28.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
-    {
-      "id": "knife",
-      "what": "a craft knife",
-      "kind": "knife",
-      "bay": null,
-      "at": [
-        420.0,
-        290.0,
-        7.0
-      ],
-      "gripMm": 14.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
-    {
-      "id": "blades",
-      "what": "a tin of spare blades",
-      "kind": "blades",
-      "bay": null,
-      "at": [
-        240.0,
-        300.0,
-        6.0
-      ],
-      "gripMm": 30.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
-    },
-    {
-      "id": "chisel",
-      "what": "a chisel",
-      "kind": "chisel",
-      "bay": null,
-      "at": [
-        470.0,
-        300.0,
-        11.0
-      ],
-      "gripMm": 22.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
-    },
-    {
-      "id": "rule",
-      "what": "a steel rule",
-      "kind": "rule",
-      "bay": null,
-      "at": [
-        660.0,
-        300.0,
-        1.0
-      ],
-      "gripMm": 25.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
-    },
-    {
-      "id": "tape",
-      "what": "a roll of masking tape",
-      "kind": "tape",
-      "bay": null,
-      "at": [
-        60.0,
-        240.0,
-        12.5
-      ],
-      "gripMm": 60.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
-    },
-    {
-      "id": "hammer",
-      "what": "a hammer",
-      "kind": "hammer",
-      "bay": null,
-      "at": [
-        400.0,
-        240.0,
-        12.0
-      ],
-      "gripMm": 24.0,
-      "gripHow": "down",
-      "gripZ": 35,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
-    {
-      "id": "pot",
-      "what": "a pot of loose screws",
-      "kind": "pot",
-      "bay": null,
-      "at": [
-        620.0,
-        250.0,
-        30.0
-      ],
-      "gripMm": 55.0,
-      "gripHow": "down",
-      "gripZ": 70,
-      "wanted": false,
-      "graspable": false,
-      "reachedBy": []
-    },
-    {
-      "id": "oil",
-      "what": "a bottle of oil",
-      "kind": "oil",
-      "bay": null,
-      "at": [
-        650.0,
-        420.0,
-        60.0
-      ],
-      "gripMm": 22.0,
-      "gripHow": "level",
-      "gripZ": 130,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
-    },
-    {
-      "id": "pliers",
-      "what": "a pair of pliers",
-      "kind": "pliers",
-      "bay": null,
-      "at": [
-        175.0,
-        400.0,
-        120.0
-      ],
-      "gripMm": 26.0,
-      "gripHow": "level",
-      "gripZ": 190,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
-    {
-      "id": "spanner",
-      "what": "a spanner",
-      "kind": "spanner",
-      "bay": null,
-      "at": [
-        525.0,
-        400.0,
-        105.0
-      ],
-      "gripMm": 22.0,
-      "gripHow": "level",
-      "gripZ": 190,
-      "wanted": true,
-      "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
-    },
     {
       "id": "jar1",
       "what": "a jar of screws",
       "kind": "jar",
       "bay": 0,
       "at": [
-        250.0,
-        380.0,
-        42.5
+        230.0,
+        385.0,
+        39.0
       ],
-      "gripMm": 32.0,
+      "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
       "wanted": true,
@@ -376,16 +129,17 @@
       "kind": "jar",
       "bay": 0,
       "at": [
-        300.0,
-        380.0,
-        42.5
+        310.0,
+        385.0,
+        39.0
       ],
-      "gripMm": 32.0,
+      "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
       "reachedBy": [
+        "left_arm",
         "right_arm"
       ]
     },
@@ -395,11 +149,11 @@
       "kind": "jar",
       "bay": 0,
       "at": [
-        350.0,
-        380.0,
-        42.5
+        390.0,
+        385.0,
+        39.0
       ],
-      "gripMm": 32.0,
+      "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
       "wanted": true,
@@ -415,11 +169,11 @@
       "kind": "jar",
       "bay": 0,
       "at": [
-        294.9,
-        465.0,
-        42.5
+        307.4,
+        455.0,
+        39.0
       ],
-      "gripMm": 32.0,
+      "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
       "wanted": true,
@@ -435,11 +189,11 @@
       "kind": "glue",
       "bay": 0,
       "at": [
-        420.0,
-        380.0,
-        42.0
+        465.0,
+        385.0,
+        38.0
       ],
-      "gripMm": 26.0,
+      "gripMm": 30.0,
       "gripHow": "level",
       "gripZ": 55,
       "wanted": true,
@@ -454,13 +208,110 @@
       "kind": "glue",
       "bay": 0,
       "at": [
-        460.0,
-        380.0,
-        42.0
+        505.0,
+        385.0,
+        38.0
       ],
-      "gripMm": 26.0,
+      "gripMm": 30.0,
       "gripHow": "level",
       "gripZ": 55,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm"
+      ]
+    },
+    {
+      "id": "tin1",
+      "what": "a tin of varnish",
+      "kind": "tin",
+      "bay": 1,
+      "at": [
+        205.0,
+        385.0,
+        160.0
+      ],
+      "gripMm": 72.0,
+      "gripHow": "level",
+      "gripZ": 177,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "tin2",
+      "what": "a tin of varnish",
+      "kind": "tin",
+      "bay": 1,
+      "at": [
+        292.0,
+        385.0,
+        160.0
+      ],
+      "gripMm": 72.0,
+      "gripHow": "level",
+      "gripZ": 177,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "tin3",
+      "what": "a tin of varnish",
+      "kind": "tin",
+      "bay": 1,
+      "at": [
+        379.0,
+        385.0,
+        160.0
+      ],
+      "gripMm": 72.0,
+      "gripHow": "level",
+      "gripZ": 177,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "mug1",
+      "what": "a mug",
+      "kind": "mug",
+      "bay": 1,
+      "at": [
+        478.0,
+        385.0,
+        167.0
+      ],
+      "gripMm": 76.0,
+      "gripHow": "level",
+      "gripZ": 177,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm"
+      ]
+    },
+    {
+      "id": "mug2",
+      "what": "a mug",
+      "kind": "mug",
+      "bay": null,
+      "at": [
+        89.0,
+        44.0,
+        45.0
+      ],
+      "gripMm": 76.0,
+      "gripHow": "down",
+      "gripZ": 35,
       "wanted": true,
       "graspable": true,
       "reachedBy": [
@@ -471,20 +322,289 @@
       "id": "odds",
       "what": "a box of odds and ends",
       "kind": "odds",
-      "bay": 1,
+      "bay": 2,
       "at": [
-        350.0,
-        380.0,
-        157.0
+        250.0,
+        385.0,
+        281.0
       ],
-      "gripMm": 60.0,
+      "gripMm": 70.0,
       "gripHow": "level",
-      "gripZ": 177,
+      "gripZ": 299,
       "wanted": true,
       "graspable": true,
       "reachedBy": [
         "left_arm",
         "right_arm"
+      ]
+    },
+    {
+      "id": "clamp",
+      "what": "a G clamp",
+      "kind": "clamp",
+      "bay": 2,
+      "at": [
+        430.0,
+        385.0,
+        294.0
+      ],
+      "gripMm": 22.0,
+      "gripHow": "level",
+      "gripZ": 299,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "offcut2",
+      "what": "an offcut of wood",
+      "kind": "offcut",
+      "bay": 2,
+      "at": [
+        405.0,
+        450.0,
+        282.0
+      ],
+      "gripMm": 36.0,
+      "gripHow": "level",
+      "gripZ": 299,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "offcut1",
+      "what": "an offcut of wood",
+      "kind": "offcut",
+      "bay": null,
+      "at": [
+        345.0,
+        55.0,
+        18.0
+      ],
+      "gripMm": 76.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "screwdriver1",
+      "what": "a screwdriver",
+      "kind": "screwdriver",
+      "bay": null,
+      "at": [
+        350.0,
+        129.0,
+        32.0
+      ],
+      "gripMm": 32.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "screwdriver2",
+      "what": "a screwdriver",
+      "kind": "screwdriver",
+      "bay": null,
+      "at": [
+        492.0,
+        77.0,
+        32.0
+      ],
+      "gripMm": 32.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "hammer",
+      "what": "a hammer",
+      "kind": "hammer",
+      "bay": null,
+      "at": [
+        311.0,
+        205.0,
+        22.0
+      ],
+      "gripMm": 22.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm",
+        "right_arm"
+      ]
+    },
+    {
+      "id": "pliers",
+      "what": "a pair of pliers",
+      "kind": "pliers",
+      "bay": null,
+      "at": [
+        177.0,
+        66.0,
+        18.0
+      ],
+      "gripMm": 44.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm"
+      ]
+    },
+    {
+      "id": "chisel",
+      "what": "a chisel",
+      "kind": "chisel",
+      "bay": null,
+      "at": [
+        388.0,
+        319.0,
+        28.0
+      ],
+      "gripMm": 28.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "knife",
+      "what": "a craft knife",
+      "kind": "knife",
+      "bay": null,
+      "at": [
+        565.0,
+        51.0,
+        18.0
+      ],
+      "gripMm": 18.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "rule",
+      "what": "a steel rule",
+      "kind": "rule",
+      "bay": null,
+      "at": [
+        484.0,
+        326.0,
+        1.0
+      ],
+      "gripMm": 26.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "tape",
+      "what": "a roll of masking tape",
+      "kind": "tape",
+      "bay": null,
+      "at": [
+        620.0,
+        36.0,
+        13.0
+      ],
+      "gripMm": 68.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "blades",
+      "what": "a tin of spare blades",
+      "kind": "blades",
+      "bay": null,
+      "at": [
+        477.0,
+        -9.0,
+        8.0
+      ],
+      "gripMm": 36.0,
+      "gripHow": "down",
+      "gripZ": 35,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "right_arm"
+      ]
+    },
+    {
+      "id": "pot",
+      "what": "a pot of loose screws",
+      "kind": "pot",
+      "bay": null,
+      "at": [
+        191.0,
+        300.0,
+        29.0
+      ],
+      "gripMm": 66.0,
+      "gripHow": "down",
+      "gripZ": 70,
+      "wanted": false,
+      "graspable": false,
+      "reachedBy": []
+    },
+    {
+      "id": "oil",
+      "what": "a bottle of oil",
+      "kind": "oil",
+      "bay": null,
+      "at": [
+        516.0,
+        199.0,
+        48.0
+      ],
+      "gripMm": 24.0,
+      "gripHow": "level",
+      "gripZ": 130,
+      "wanted": true,
+      "graspable": true,
+      "reachedBy": [
+        "left_arm"
       ]
     }
   ]

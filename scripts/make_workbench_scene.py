@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -47,16 +48,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from workbench.scene import (  # noqa: E402
+    BACK_ROW_Y_MM,
     BAYS,
     BENCH_FROM_MM,
     BENCH_THICK_MM,
     BENCH_TO_MM,
     BOARD_Z_MM,
+    BOTTOM_BAY_USABLE_X_MM,
     CENTRE_X_MM,
     EYE_MM,
+    FRONT_ROW_Y_MM,
     GIVE_MM,
-    HOOK_Z_MM,
-    HOOKS,
     LOOK_AT_MM,
     RING_MM,
     ROBOT_EYE_MM,
@@ -64,10 +66,9 @@ from workbench.scene import (  # noqa: E402
     SHELF_FROM_MM,
     SHELF_SIDE_MM,
     SHELF_TO_MM,
-    Part,
     Thing,
     arms,
-    hooks,
+    clashes,
     reach_report,
     things,
 )
@@ -95,14 +96,15 @@ REST_ARM = (-1.0, 1.69, 1.0, 0.0, 0.2)
 #: question is which thing the person means, so the bench and both bays have to be in plain view
 #: before anything is asked.
 #:
-#: **Zero, and measured.** `web/tests/probes/visible.probe.test.ts` casts rays at all nineteen
-#: things from the default view, for a grid of nine turns and seven ways of folding, and asks
-#: how much of the world each pose leaves visible. Turning either way makes it worse: an arm
-#: square to the shelf is the narrowest thing it can be from in front, and every turn swings its
-#: forearm across the bench. The sweep sits in a band of 48 to 71 per cent, this pose is at the
-#: top of it with one thing mostly hidden, and the end demo's conclusion does not carry over
-#: because there the person sat to one side of both arms rather than square in front of them.
-REST_PAN_RAD = {"left_arm": 0.0, "right_arm": 0.0}
+#: **Measured.** `web/tests/probes/visible.probe.test.ts` casts rays at every thing from the
+#: default view, for a grid of nine turns and seven ways of folding, and asks how much of the
+#: world each pose leaves visible. Turned nearly all the way out - away from the middle of the
+#: bench and along its edge - is the best of them, and it is also what a parked arm looks like.
+#:
+#: With the arms at the sides the pose hardly matters: the sweep runs from 69 to 86 per cent,
+#: and most of it is at 86. That is the measurement agreeing with the reason they were moved
+#: there. Standing at the front facing the shelf, the same sweep ran from 48 to 71.
+REST_PAN_RAD = {"left_arm": -1.8, "right_arm": 1.8}
 
 #: Rough masses, kilograms. Nothing here is heavy; the gripper's weld does the carrying.
 MASSES: dict[str, float] = {
@@ -117,39 +119,82 @@ MASSES: dict[str, float] = {
     "pot": 0.200,
     "oil": 0.250,
     "pliers": 0.180,
-    "spanner": 0.140,
-    "jar": 0.090,
+    "jar": 0.340,
     "glue": 0.050,
     "odds": 0.150,
+    "tin": 0.420,
+    "mug": 0.320,
+    "clamp": 0.260,
 }
 
 #: Every colour in the world, and nothing else. NFR1 asks that every difference that matters be
 #: visible at a glance at 1366 x 768 - colour, size and silhouette only - so these are chosen to
 #: separate at that size and to stay apart in a photograph of a screen.
 COLOURS: dict[str, str] = {
-    "bench": "0.70 0.54 0.38 1",
-    "shelf": "0.84 0.79 0.70 1",
+    "bench": "0.68 0.52 0.36 1",
+    "shelf": "0.86 0.81 0.72 1",
     # Darker than the boards on purpose: with the back the same shade as everything else, a bay
     # read as a flat panel rather than as a space with things standing in it.
-    "shelf back": "0.56 0.50 0.42 1",
-    "hook": "0.42 0.44 0.47 1",
-    "pale wood": "0.85 0.72 0.52 1",
-    "pencil": "0.40 0.37 0.34 1",
-    "wood": "0.62 0.44 0.26 1",
-    "blue": "0.16 0.38 0.74 1",
+    "shelf back": "0.54 0.48 0.40 1",
+    "pale wood": "0.86 0.73 0.52 1",
+    "wood": "0.60 0.42 0.24 1",
+    "pencil": "0.38 0.35 0.32 1",
+    "handle blue": "0.13 0.35 0.72 1",
     "red": "0.80 0.15 0.13 1",
-    "steel": "0.72 0.74 0.78 1",
-    "grey": "0.52 0.54 0.57 1",
-    "beige": "0.88 0.80 0.62 1",
-    "shadow": "0.20 0.19 0.17 1",
-    "dark green": "0.09 0.30 0.18 1",
-    "brown card": "0.64 0.49 0.33 1",
+    "red dark": "0.58 0.10 0.09 1",
+    "steel": "0.74 0.76 0.80 1",
+    "grey": "0.50 0.52 0.55 1",
+    "beige": "0.90 0.82 0.63 1",
+    "beige dark": "0.78 0.69 0.50 1",
+    "shadow": "0.17 0.16 0.15 1",
+    "dark green": "0.08 0.29 0.17 1",
+    "oil label": "0.88 0.84 0.70 1",
+    "brown card": "0.66 0.50 0.33 1",
     "white": "0.95 0.95 0.92 1",
-    # The jars are the point of the whole demo: three of them that no word separates. Glass, so
-    # the screws inside show, and so that the one behind is visible through nothing at all.
-    "glass": "0.80 0.88 0.90 0.45",
-    "brass": "0.72 0.56 0.26 1",
+    "brass": "0.74 0.57 0.25 1",
+    "tin": "0.62 0.66 0.70 1",
+    "tin label": "0.20 0.45 0.38 1",
+    "mug": "0.92 0.93 0.95 1",
+    "jar lid": "0.46 0.48 0.52 1",
+    # The jars are the point of the whole demo: four of them that no word separates. Glass, so
+    # the screws inside show through and the lid reads as a lid.
+    "glass": "0.80 0.88 0.90 0.40",
 }
+
+#: The shapes a geom may be, and what MuJoCo calls them.
+SHAPES = {
+    "box": "box",
+    "cylinder": "cylinder",
+    "capsule": "capsule",
+    "sphere": "sphere",
+    "ellipsoid": "ellipsoid",
+}
+
+
+def quat_mul(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, ...]:
+    """Two turns, one after the other (w, x, y, z), the way MuJoCo wants them written."""
+    return (
+        a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
+        a[0] * b[1] + a[1] * b[0] + a[2] * b[3] - a[3] * b[2],
+        a[0] * b[2] - a[1] * b[3] + a[2] * b[0] + a[3] * b[1],
+        a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0],
+    )
+
+
+def quat_about(axis: str, deg: float) -> tuple[float, ...]:
+    """A turn of `deg` about one of the **world** axes."""
+    half = math.radians(deg) / 2.0
+    c, s = math.cos(half), math.sin(half)
+    return {"x": (c, s, 0.0, 0.0), "y": (c, 0.0, s, 0.0), "z": (c, 0.0, 0.0, s)}[axis]
+
+
+def quat_str(q: tuple[float, ...]) -> str:
+    return " ".join(f"{v:.6f}" for v in q)
+
+
+#: The bench frame turned into the world's: world X is bench y, world Y is minus bench x, which
+#: is a quarter turn about z. Written once, here, and used for every direction in the scene.
+BENCH_TO_WORLD_QUAT = quat_about("z", -90.0)
 
 
 def bench_to_world(x_mm: float, y_mm: float) -> tuple[float, float]:
@@ -161,88 +206,112 @@ def mm(v: float) -> str:
     return f"{v / 1000.0:.4f}"
 
 
-def box_geom(name: str, size_mm: tuple[float, float, float], colour: str, mass: str = "") -> str:
-    """A box, with its half-sizes converted from bench axes to world ones.
-
-    The world is turned a quarter against the bench: world X is depth, world Y is across. So a
-    size has to be converted as well as a position, and not doing it is how the end demo's first
-    run laid every long thing across its shelf instead of front to back.
-    """
-    across, deep, up = size_mm
-    size = f"{mm(deep / 2)} {mm(across / 2)} {mm(up / 2)}"
-    return (
-        f'<geom name="{name}" type="box" size="{size}" rgba="{COLOURS[colour]}"'
-        f'{mass} class="thing"/>'
-    )
-
-
-def cylinder_geom(
-    name: str, size_mm: tuple[float, float, float], colour: str, axis: str, mass: str = ""
+def shape_geom(
+    name: str,
+    shape: str,
+    size_mm: tuple[float, float, float],
+    colour: str,
+    axis: str,
+    tilt_deg: float,
+    turn_deg: float,
+    at_mm: tuple[float, float, float] | None,
+    mass: str,
 ) -> str:
-    """A cylinder lying up, across the bench, or front to back.
+    """One geom: its size, its turn and its place, converted from the bench frame to the world.
 
-    MuJoCo's cylinder runs along its own z, so lying one down takes a quarter turn: `across`
-    turns it onto world Y, `deep` onto world X. The quaternion is written out rather than
-    `euler` because this file has no `<compiler>`, so `euler` would be degrees here and radians
-    inside so101.xml.
+    The world is a quarter turn from the bench - world X is depth, world Y is across - so a
+    **size** has to be converted as well as a position, and not doing it is how the end demo's
+    first run laid every long thing across its shelf instead of front to back.
+
+    A cylinder or a capsule runs along its own z, so lying one down takes a quarter turn:
+    `across` puts it on the bench's x, `deep` on the bench's y. `tilt_deg` then turns it in the
+    across-up plane and `turn_deg` about up, which is what gives a hammer its claw and a pair of
+    pliers its splayed legs. Everything is worked out in the bench frame and turned into the
+    world's at the end, so there is one conversion and not one per shape.
     """
     across, deep, up = size_mm
-    if axis == "up":
-        radius, half = across / 2, up / 2
-        quat = ""
+    if shape in ("box", "ellipsoid"):
+        half = (across / 2, deep / 2, up / 2)
+        spin: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0)
+    elif shape == "sphere":
+        half = (across / 2, 0.0, 0.0)
+        spin = (1.0, 0.0, 0.0, 0.0)
+    elif axis == "up":
+        half = (across / 2, up / 2, 0.0)
+        spin = (1.0, 0.0, 0.0, 0.0)
     elif axis == "across":
-        radius, half = up / 2, across / 2
-        quat = ' quat="0.707107 0.707107 0 0"'  # z onto world Y
+        half = (up / 2, across / 2, 0.0)
+        spin = quat_about("y", 90.0)  # the shape's z onto the bench's x
     else:
-        radius, half = up / 2, deep / 2
-        quat = ' quat="0.707107 0 0.707107 0"'  # z onto world X
+        half = (up / 2, deep / 2, 0.0)
+        spin = quat_about("x", -90.0)  # the shape's z onto the bench's y
+    # In the bench frame: turn about up, then tilt in the across-up plane, then the shape's own.
+    bench = quat_mul(quat_about("z", turn_deg), quat_mul(quat_about("y", tilt_deg), spin))
+    quat = quat_mul(BENCH_TO_WORLD_QUAT, bench)
+    if shape in ("box", "ellipsoid"):
+        # A box's half-sizes are in its own axes, and the quaternion above already carries the
+        # bench-to-world quarter turn, so these stay in bench order.
+        size = f"{mm(half[0])} {mm(half[1])} {mm(half[2])}"
+    elif shape == "sphere":
+        size = mm(half[0])
+    else:
+        size = f"{mm(half[0])} {mm(half[1])}"
+    where = ""
+    if at_mm is not None:
+        dx, dy, dz = at_mm
+        where = f' pos="{dy / 1000.0:.4f} {-dx / 1000.0:.4f} {mm(dz)}"'
+    turned = "" if quat == (1.0, 0.0, 0.0, 0.0) else f' quat="{quat_str(quat)}"'
     return (
-        f'<geom name="{name}" type="cylinder" size="{mm(radius)} {mm(half)}"{quat}'
+        f'<geom name="{name}" type="{SHAPES[shape]}" size="{size}"{where}{turned}'
         f' rgba="{COLOURS[colour]}"{mass} class="thing"/>'
     )
 
 
-def part_geom(thing: Thing, part: Part, n: int) -> str:
-    """One of a thing's extra shapes, offset from its centre in bench axes.
-
-    A part carries no mass: the thing's first geom carries all of it, so that adding a hammer's
-    head cannot quietly change what the hammer weighs.
-    """
-    name = f"{thing.id}_{n}"
-    dx, dy, dz = part.at_mm
-    X, Y = (dy / 1000.0, -dx / 1000.0)  # an offset, so no centre line to subtract
-    pos = f' pos="{X:.4f} {Y:.4f} {mm(dz)}"'
-    geom = (
-        box_geom(name, part.size_mm, part.colour, ' mass="0.0001"')
-        if part.shape == "box"
-        else cylinder_geom(name, part.size_mm, part.colour, part.axis, ' mass="0.0001"')
-    )
-    return geom.replace("/>", f"{pos}/>")
-
-
 def body(thing: Thing) -> list[str]:
-    """One thing, at the centre `scene.py` gives it, with its parts bolted on."""
+    """One thing, at the centre `scene.py` gives it, turned as it stands, with its parts on.
+
+    A part carries no mass worth the name: the thing's first geom carries all of it, so adding
+    a hammer's head cannot quietly change what the hammer weighs.
+    """
     x_mm, y_mm, z_mm = thing.place_mm
     X, Y = bench_to_world(x_mm, y_mm)
-    mass = f' mass="{MASSES[thing.kind]}"'
-    first = (
-        box_geom(thing.id, thing.size_mm, thing.colour, mass)
-        if thing.shape == "box"
-        else cylinder_geom(thing.id, thing.size_mm, thing.colour, thing.axis, mass)
-    )
+    yaw = quat_mul(BENCH_TO_WORLD_QUAT, quat_about("z", thing.yaw_deg))
     out = [
-        f'    <body name="{thing.id}" pos="{X:.4f} {Y:.4f} {mm(z_mm)}">',
+        f'    <body name="{thing.id}" pos="{X:.4f} {Y:.4f} {mm(z_mm)}" quat="{quat_str(yaw)}">',
         f'      <freejoint name="{thing.id}"/>',
-        f"      {first}",
+        "      "
+        + shape_geom(
+            thing.id,
+            thing.shape,
+            thing.size_mm,
+            thing.colour,
+            thing.axis,
+            0.0,
+            0.0,
+            None,
+            f' mass="{MASSES[thing.kind]}"',
+        ),
     ]
-    out += [f"      {part_geom(thing, p, n)}" for n, p in enumerate(thing.parts, start=1)]
+    for n, p in enumerate(thing.parts, start=1):
+        out.append(
+            "      "
+            + shape_geom(
+                f"{thing.id}_{n}",
+                p.shape,
+                p.size_mm,
+                p.colour,
+                p.axis,
+                p.tilt_deg,
+                p.turn_deg,
+                p.at_mm,
+                ' mass="0.0001"',
+            )
+        )
     out.append("    </body>")
     return out
 
 
-def slab(
-    name: str, x0: float, x1: float, y0: float, y1: float, z0: float, z1: float, colour: str
-) -> str:
+def slab(name, x0, x1, y0, y1, z0, z1, colour) -> str:
     """A fixed box given by its edges in the bench frame: a board, an upright, the bench top."""
     cx, cy, cz = (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2
     X, Y = bench_to_world(cx, cy)
@@ -255,70 +324,43 @@ def slab(
 
 
 def shelf_unit() -> list[str]:
-    """The two-bay unit: two uprights, a back panel, and the two boards.
+    """The three-bay unit: two uprights, a back panel, and three boards.
 
     The bottom bay's floor is the bench top itself, so there is no board at zero. The top board
-    is the unit's lid and nothing stands on it: nothing can, because reaching down onto anything
+    is the unit's lid and nothing stands on it, because nothing can: reaching down onto anything
     above about 100 mm is not a pose this arm has (`out/stage0-bay-ring.txt`).
     """
     x0, y0 = SHELF_FROM_MM
     x1, y1 = SHELF_TO_MM
     top = BOARD_Z_MM[-1][0] + BOARD_Z_MM[-1][1]
     out = [
-        "    <!-- The shelf unit. 50 mm further back than the plan's 4.1: reaching level into",
-        "         the bottom bay the arm cannot work closer in than 280 mm, and at the plan's",
-        "         place the middle of the front row was 255 mm from both arms. -->",
+        "    <!-- The shelf unit: three bays, 440 mm across. The bottom bay is the hard one -",
+        "         reaching level into it stops at 280 mm from an arm, so only its middle 320 mm",
+        "         is usable; the two above it reach in much closer. -->",
         slab("shelf_left", x0, x0 + SHELF_SIDE_MM, y0, y1, 0.0, top, "shelf"),
         slab("shelf_right", x1 - SHELF_SIDE_MM, x1, y0, y1, 0.0, top, "shelf"),
         slab("shelf_back", x0, x1, y1 - SHELF_BACK_MM, y1, 0.0, top, "shelf back"),
     ]
     for n, (under, thick) in enumerate(BOARD_Z_MM):
-        what = "the middle board" if n == 0 else "the top board - a lid, not a place"
+        what = (
+            "the lid - not a place, nothing can reach it"
+            if n == len(BOARD_Z_MM) - 1
+            else f"board {n + 1}"
+        )
         out.append(f"    <!-- {what} -->")
         out.append(slab(f"shelf_board{n}", x0, x1, y0, y1, under, under + thick, "shelf"))
     return out
 
 
-def hook_rail() -> list[str]:
-    """A rail down each end of the unit, and the three hooks sticking out of them.
+def declared(items: list[Thing]) -> list[Thing]:
+    """The things in the order their bodies are written into the scene.
 
-    On the ends and not across the front: a hook on the front face hangs a pair of pliers
-    straight down over the bottom bay's opening, in front of the three jars. See `HOOK_Z_MM`.
-
-    190 mm is a height the ring was swept at, and it is as high as a hook can usefully be: the
-    unit's lid is at 244. Lower, and a 170 mm spanner hangs into the bench.
+    There is exactly one of these, and both the bodies and the keyframe below take it from
+    here, because the keyframe lists qpos in **declaration order**. Getting that wrong does not
+    fail to load: it quietly gives every thing the next thing's position, and the whole bench
+    comes out somewhere else. It has now done that twice.
     """
-    out = ["    <!-- A rail down each end of the unit, and three hooks: two tools, one empty. -->"]
-    for side in ("left", "right"):
-        ys = [y for s, y in HOOKS if s == side]
-        edge = SHELF_FROM_MM[0] if side == "left" else SHELF_TO_MM[0]
-        out.append(
-            slab(
-                f"hook_rail_{side}",
-                edge - 8.0 if side == "left" else edge,
-                edge if side == "left" else edge + 8.0,
-                min(ys) - 20.0,
-                max(ys) + 20.0,
-                HOOK_Z_MM - 14.0,
-                HOOK_Z_MM + 14.0,
-                "hook",
-            )
-        )
-    for n, (side, x, y, z) in enumerate(hooks()):
-        edge = SHELF_FROM_MM[0] if side == "left" else SHELF_TO_MM[0]
-        out.append(
-            slab(
-                f"hook{n}",
-                min(x, edge - 8.0) if side == "left" else edge + 8.0,
-                edge - 8.0 if side == "left" else max(x, edge + 8.0),
-                y - 5.0,
-                y + 5.0,
-                z - 5.0,
-                z + 5.0,
-                "hook",
-            )
-        )
-    return out
+    return [t for bay in (None, 0, 1, 2) for t in items if t.in_bay == bay]
 
 
 def _home_qpos(items: list[Thing]) -> str:
@@ -338,10 +380,11 @@ def _home_qpos(items: list[Thing]) -> str:
     for arm in arms():
         X, Y = bench_to_world(*arm.base_mm)
         out += [f"{X:.4f}", f"{Y:.4f}", "0.3000", "1", "0", "0", "0"]
-    for t in items:
+    for t in declared(items):
         x_mm, y_mm, z_mm = t.place_mm
         X, Y = bench_to_world(x_mm, y_mm)
-        out += [f"{X:.4f}", f"{Y:.4f}", mm(z_mm), "1", "0", "0", "0"]
+        yaw = quat_mul(BENCH_TO_WORLD_QUAT, quat_about("z", t.yaw_deg))
+        out += [f"{X:.4f}", f"{Y:.4f}", mm(z_mm), *(f"{v:.6f}" for v in yaw)]
     return " ".join(out)
 
 
@@ -359,10 +402,11 @@ def xml() -> str:
         "<!--",
         "  GENERATED by scripts/make_workbench_scene.py - do not edit by hand.",
         "",
-        "  The workbench demo's scene: a bench, a two-bay shelf unit with a hook rail, two",
-        "  SO-101 arms, and nineteen things. The geometry comes from workbench/scene.py, which",
-        "  is also what the core, the robot code and the page work from, so the shelf the arm",
-        "  reaches into and the shelf the page draws a spot on are the same shelf.",
+        "  The workbench demo's scene: a bench, a three-bay shelf unit, two SO-101 arms facing",
+        "  each other across it, and twenty-six things. The geometry comes from",
+        "  workbench/scene.py, which is also what the core, the robot code and the page work",
+        "  from, so the shelf the arm reaches into and the shelf the page draws a spot on are",
+        "  the same shelf.",
         "",
         "  World: metres, z up, origin on the bench top in the middle of the person's edge.",
         "  +X away from the person towards the shelf, +Y to the person's left.",
@@ -402,8 +446,6 @@ def xml() -> str:
         "",
     ]
     lines += shelf_unit()
-    lines.append("")
-    lines += hook_rail()
     lines += [
         "",
         "    <!-- Where a thing is held out to the person, and where the robot's own camera",
@@ -413,14 +455,17 @@ def xml() -> str:
         f'    <site name="robot_eye" pos="{eye_x:.4f} {eye_y:.4f} {mm(ROBOT_EYE_MM[2])}"'
         ' size="0.010" rgba="0.12 0.52 0.90 0.30"/>',
         "",
-        "    <!-- The arms. Unturned, forward (shoulder_pan = 0) is +X, which is the shelf, so",
-        "         neither needs turning on its stand: each one's fan already covers its own half",
-        "         of the bench and most of the unit. What they do at rest is fold outwards, out",
-        "         of the middle of the frame - see REST_PAN_RAD. -->",
-        f'    <body name="left_stand" pos="{lx:.4f} {ly:.4f} 0">',
+        "    <!-- The arms, one at each side of the bench, turned to face each other. Unturned,",
+        "         forward (shoulder_pan = 0) is +X, which is the shelf; each stand is turned a",
+        "         quarter so that the arm's dead disc and its dead sector fall off the bench",
+        "         rather than across it. The turn is a quaternion because this file has no",
+        "         <compiler>, so `euler` would be degrees here and radians inside so101.xml. -->",
+        f'    <body name="left_stand" pos="{lx:.4f} {ly:.4f} 0"'
+        f' quat="{quat_str(quat_about("z", left.facing_deg))}">',
         '      <attach model="so101" prefix="left_"/>',
         "    </body>",
-        f'    <body name="right_stand" pos="{rx:.4f} {ry:.4f} 0">',
+        f'    <body name="right_stand" pos="{rx:.4f} {ry:.4f} 0"'
+        f' quat="{quat_str(quat_about("z", right.facing_deg))}">',
         '      <attach model="so101" prefix="right_"/>',
         "    </body>",
         "",
@@ -435,10 +480,15 @@ def xml() -> str:
         '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
         "",
     ]
-    where = {None: "on the bench and the hooks", 0: "in the bottom bay", 1: "in the top bay"}
-    for bay in (None, 0, 1):
+    where = {
+        None: "on the bench top",
+        0: "in the bottom bay",
+        1: "in the middle bay",
+        2: "in the top bay",
+    }
+    for bay in (None, 0, 1, 2):
         lines.append(f"    <!-- {where[bay]} -->")
-        for t in [t for t in items if t.in_bay == bay]:
+        for t in (t for t in declared(items) if t.in_bay == bay):
             lines += body(t)
         lines.append("")
     lines += [
@@ -446,8 +496,8 @@ def xml() -> str:
         "",
         "  <!-- The arms' resting pose, folded down and turned outwards. MuJoCo's default pose",
         "       lies flat along +X, straight through the shelf. Order: the two arms' joints as",
-        "       attached, then every freejoint (7 numbers each: position then quaternion), left",
-        "       exactly where the bodies were placed. -->",
+        "       attached, then every freejoint (7 numbers each: a place and a turn), exactly",
+        "       where `declared()` put the bodies, and in that same order. -->",
         "  <keyframe>",
         f'    <key name="home" qpos="{_home_qpos(items)}"/>',
         "  </keyframe>",
@@ -495,8 +545,8 @@ def reach_json() -> str:
             "from": list(SHELF_FROM_MM),
             "to": list(SHELF_TO_MM),
             "bays": [list(b) for b in BAYS],
-            "hookZ": HOOK_Z_MM,
-            "hooks": [{"side": side, "at": [x, y, z]} for side, x, y, z in hooks()],
+            "rows": [FRONT_ROW_Y_MM, BACK_ROW_Y_MM],
+            "bottomBayUsableX": list(BOTTOM_BAY_USABLE_X_MM),
         },
         "things": [
             {
@@ -542,6 +592,9 @@ def main(argv: list[str] | None = None) -> int:
     for path, want in wanted.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(want, encoding="utf-8")
+    if clashes():
+        print(f"two things stand in the same place: {clashes()}", file=sys.stderr)
+        return 1
     if not a.quiet:
         print(f"wrote {OUT}")
         print(f"wrote {REACH_OUT}")

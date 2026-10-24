@@ -46,9 +46,10 @@
     <main>
       <h1>The workbench</h1>
       <p class="lead">
-        A bench, a shelf unit of two bays with a hook rail, two arms, and nineteen things. This
-        is the world the demo happens in — a look at it, nothing more. Drag to turn the view,
-        scroll to move in and out, and move the pointer over anything to put the spot on it.
+        A bench, a shelf unit of three bays, two arms facing each other across it, and
+        twenty-six things. This is the world the demo happens in — a look at it, nothing more.
+        Drag to turn the view, scroll to move in and out, and move the pointer over anything to
+        put the spot on it.
       </p>
       <canvas id="scene"></canvas>
       <div class="bar">
@@ -75,10 +76,11 @@
 
       <h2>What to look for</h2>
       <dl>
-        <dt>Three jars</dt>
+        <dt>Six sets of the same thing</dt>
         <dd>
-          In the bottom bay, left of centre. They are the same jar three times over: no word
-          tells them apart, so only pointing can.
+          Four jars, three tins, two mugs, two screwdrivers, two offcuts, and two tubes of glue
+          that differ only by a cap. No word tells any set apart, so only pointing can. That is
+          the whole demo, and it is what a real bench looks like.
         </dd>
         <dt>A fourth jar</dt>
         <dd>
@@ -87,6 +89,12 @@
         </dd>
         <dt>Two tubes of glue</dt>
         <dd>To the right of the jars: one capped, one open. They differ by a state, not a word.</dd>
+        <dt>The arms</dt>
+        <dd>
+          One at each side, facing each other. Each cannot work closer in than 135&nbsp;mm from
+          itself, nor more than 100° off the way it faces, so standing them at the edges throws
+          those dead zones off the bench instead of across it.
+        </dd>
         <dt>A bottle of oil</dt>
         <dd>
           At the back right of the bench, 150&nbsp;mm tall. It is taller than either bay is
@@ -107,8 +115,10 @@
         inverse kinematics: the widest thing the gripper holds through a lift and a move
         (<b>76&nbsp;mm</b> on the jaws alone, 96 with the grip assist), and the reach ring at
         each height something here is gripped at. Reaching level into the bottom bay the arm
-        cannot work closer in than <b>280&nbsp;mm</b>, which is why the shelf unit stands 50 mm
-        further back than it was first drawn.
+        cannot work closer in than <b>280&nbsp;mm</b>, which is why only the middle 320&nbsp;mm
+        of that bay is used; the two bays above it reach in much closer and are usable right
+        across. Every thing here stands somewhere an arm can really work, and nothing stands in
+        anything else's place — both are tested, not eyeballed.
       </p>
       <p class="note">
         Nothing drives anything yet: no physics, no voice, no model. The arms are in their

@@ -64,8 +64,8 @@ const EYE_MM = REACH.eye;
  */
 const ORBITS: { name: string; at: readonly number[] }[] = [
   { name: 'up 120 mm', at: [REACH.eye[0], REACH.eye[1], REACH.eye[2] + 120] },
-  { name: 'round to the left', at: [120, -350, 400] },
-  { name: 'round to the right', at: [580, -350, 400] },
+  { name: 'round to the left', at: [40, -420, 420] },
+  { name: 'round to the right', at: [660, -420, 420] },
 ];
 
 /** Poses to try for the arms at rest: the shoulder's turn, then how the rest of it folds. */
@@ -147,16 +147,27 @@ function boxes(r: Rig): void {
 }
 
 /**
- * The share of a thing that can be seen from a point: rays at a grid over its own box, counting
- * those that reach it before anything else.
+ * The share of a thing that can be seen from a point.
+ *
+ * Rays are cast at a grid over the thing's own box, and counted twice: once against the whole
+ * scene, and once against **only that thing**. The answer is the first over the second.
+ *
+ * Dividing matters. A craft knife is a sliver inside a box that is mostly air, so most rays at
+ * its box miss it however clear the view is; counting those as "hidden" marked a knife lying
+ * alone in the open as 22 per cent visible. What is wanted is how much of what *could* be seen
+ * of a thing is actually seen, and that is this ratio.
  */
 function visible(r: Rig, id: string, eye: THREE.Vector3): number {
   const box = r.boxOf.get(id);
   if (!box) return 0;
+  const mine = r.view.pickable.filter((o) => {
+    const geom = (o as THREE.Mesh).userData.geom as number | undefined;
+    return geom !== undefined && r.ownerOf.get(geom) === id;
+  });
   const ray = new THREE.Raycaster();
   const at = new THREE.Vector3();
   let seen = 0;
-  let tried = 0;
+  let could = 0;
   for (let i = 0; i < GRID; i++) {
     for (let j = 0; j < GRID; j++) {
       for (let k = 0; k < GRID; k++) {
@@ -166,15 +177,16 @@ function visible(r: Rig, id: string, eye: THREE.Vector3): number {
           box.min.y + f(j) * (box.max.y - box.min.y),
           box.min.z + f(k) * (box.max.z - box.min.z),
         );
-        tried += 1;
         ray.set(eye, at.clone().sub(eye).normalize());
+        if (!ray.intersectObjects(mine, false).length) continue;
+        could += 1;
         const hit = ray.intersectObjects(r.view.pickable, false)[0];
         const geom = hit?.object.userData.geom as number | undefined;
         if (geom !== undefined && r.ownerOf.get(geom) === id) seen += 1;
       }
     }
   }
-  return seen / tried;
+  return could ? seen / could : 0;
 }
 
 /** Set both arms to a pose (the left one mirrored) and bring the drawing up to date. */
@@ -218,8 +230,8 @@ test('what can be seen from the default view', async () => {
   // ------------------------------------------------- the arms' resting pose
   say('');
   say('the resting pose: how much of the world does each one hide?');
-  say('  (the share of all nineteen things that can be seen, averaged, and how many are');
-  say('   less than a fifth visible)');
+  say(`  (the share of all ${REACH.things.length} things that can be seen, averaged, and how`);
+  say('   many are less than a fifth visible)');
   const score = () => {
     const shares = REACH.things.map((t) => visible(r, t.id, eye));
     return {
@@ -311,14 +323,14 @@ test('what can be seen from the default view', async () => {
 
   // jar4 is the whole of Act 4: it has to be hidden here and findable by moving.
   expect(jar4, 'jar4 should be hidden from the default view').toBeLessThan(0.05);
-  expect(found, 'jar4 should appear from some small orbit').toBeGreaterThan(0.2);
+  expect(found, 'jar4 should appear from some small orbit').toBeGreaterThan(0.15);
   for (const n of [1, 2, 3]) {
     expect(share.get(`jar${n}`), `jar${n} should be in plain view`).toBeGreaterThan(0.3);
   }
   // Every thing has to be recognisable from the default view without moving the camera.
   for (const [id, seen] of share) {
     if (id === 'jar4') continue; // the one thing that is meant to be hidden
-    expect(seen, `${id} should be visible enough to point at`).toBeGreaterThan(0.25);
+    expect(seen, `${id} should be visible enough to point at`).toBeGreaterThan(0.3);
   }
   // And the pose in use has to be a real contender, not just whatever was typed in.
   expect(mine.mean, 'the resting pose should be close to the best found').toBeGreaterThan(
