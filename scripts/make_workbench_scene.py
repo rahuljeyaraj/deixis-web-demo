@@ -284,8 +284,14 @@ def shape_geom(
         half = (up / 2, deep / 2, 0.0)
         spin = quat_about("x", -90.0)  # the shape's z onto the bench's y
     # In the bench frame: turn about up, then tilt in the across-up plane, then the shape's own.
-    bench = quat_mul(quat_about("z", turn_deg), quat_mul(quat_about("y", tilt_deg), spin))
-    quat = quat_mul(BENCH_TO_WORLD_QUAT, bench)
+    #
+    # **And that is all of it.** A geom's quaternion is read in its body's frame, and the body
+    # already carries `BENCH_TO_WORLD_QUAT` times its own yaw, so turning it here as well puts
+    # the bench's quarter turn on twice - every shape a further 90 degrees round inside its own
+    # thing. On a box or an upright cylinder that cannot be seen, which is why it survived a
+    # stage that never stepped the physics; on an offcut of wood it swung a 132 mm plank across
+    # the bench into a craft knife, and MuJoCo answered by firing the knife off the bench.
+    quat = quat_mul(quat_about("z", turn_deg), quat_mul(quat_about("y", tilt_deg), spin))
     if shape in ("box", "ellipsoid"):
         # A box's half-sizes are in its own axes, and the quaternion above already carries the
         # bench-to-world quarter turn, so these stay in bench order.
@@ -296,8 +302,22 @@ def shape_geom(
         size = f"{mm(half[0])} {mm(half[1])}"
     where = ""
     if at_mm is not None:
+        # **In the thing's own frame, not the world's.** A geom's pos is read in its body's
+        # frame, and the body already carries `BENCH_TO_WORLD_QUAT` times its own yaw - so a
+        # part written in world components is turned by that quarter turn a second time.
+        #
+        # This was wrong from the first build and it is not a small wrong: every part that
+        # stands off the middle of its thing sat 90 degrees round from where the geometry puts
+        # it. A hammer's head lay beside its handle instead of on the end of it, and a craft
+        # knife's blade reached across the bench into an offcut of wood 126 mm away - which
+        # MuJoCo answered by firing the knife off the bench, over and over (rahul, 24 Oct).
+        # Centred parts - a lid, a label, the screws in a jar - were unharmed, which is why it
+        # took a running physics to show it.
+        #
+        # The sizes a few lines up were already written in the thing's own frame, with a
+        # comment saying so. The two disagreed.
         dx, dy, dz = at_mm
-        where = f' pos="{dy / 1000.0:.4f} {-dx / 1000.0:.4f} {mm(dz)}"'
+        where = f' pos="{dx / 1000.0:.4f} {dy / 1000.0:.4f} {mm(dz)}"'
     turned = "" if quat == (1.0, 0.0, 0.0, 0.0) else f' quat="{quat_str(quat)}"'
     return (
         f'<geom name="{name}" type="{SHAPES[shape]}" size="{size}"{where}{turned}'
@@ -562,7 +582,13 @@ def xml() -> str:
         "    <!-- One parking body: where the weld points while the arm holds nothing.",
         "         Declared after the arm and before the things, because the keyframe lists qpos",
         "         in declaration order. -->",
-        f'    <body name="park" pos="{px:.4f} {py:.4f} 0.30"><freejoint name="park"/>',
+        "    <!-- gravcomp: the weld is switched off whenever nothing is held, and a free body",
+        "         with nothing to hold it falls for as long as the page is open. It is invisible",
+        "         and touches nothing, so nobody would see it - but it is a speed that grows",
+        "         without end, and MuJoCo resets a whole simulation when one of those gets out",
+        "         of hand. Weightless, it simply waits where it is. -->",
+        f'    <body name="park" pos="{px:.4f} {py:.4f} 0.30" gravcomp="1">'
+        '<freejoint name="park"/>',
         '      <geom name="park" type="sphere" size="0.002" mass="0.0001"',
         '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
         "",
@@ -646,6 +672,15 @@ def reach_json() -> str:
                 "kind": t.kind,
                 "bay": t.in_bay,
                 "at": [round(v, 1) for v in t.place_mm],
+                # What the robot code needs to work out a grip and a place for itself, rather
+                # than being told one: how big the thing is, which way it lies, how much room
+                # it takes with every part counted, and where its top and bottom are.
+                "size": list(t.size_mm),
+                "axis": t.axis,
+                "yaw": t.yaw_deg,
+                "room": [round(v, 1) for v in t.room_mm],
+                "rises": [round(v, 1) for v in t.rises_mm],
+                "round": t.is_round,
                 "gripMm": t.grip_mm,
                 "gripHow": t.grip_how,
                 "gripZ": t.grip_z_mm,

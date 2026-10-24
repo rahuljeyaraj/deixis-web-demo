@@ -252,6 +252,22 @@ def test_nothing_in_a_bay_is_perched_on_the_front_edge():
         assert over < OVERHANG_MM, f"{t.id} stands {over:.0f} mm over the front edge"
 
 
+def test_everything_rests_on_what_it_stands_on():
+    """Floating is not free once the physics runs.
+
+    A thing's `at_mm` height is where its **first** shape's bottom goes, and on five things the
+    first shape was not the lowest: a screwdriver stood on its collar with its fatter handle
+    13 mm in the air, a hammer on its handle with the head clear of the bench. Drawn, that is
+    invisible. Stepped, every one of them dropped on the first frame, and the round ones rolled
+    where they landed - 14 mm from where the layout had solved them to be.
+    """
+    for t in things():
+        floor = 0.0 if t.in_bay is None else BAYS[t.in_bay][0]
+        assert t.rises_mm[0] == pytest.approx(floor, abs=0.01), (
+            f"{t.id} rests at {t.rises_mm[0]:.1f} mm, not {floor:.0f}"
+        )
+
+
 def test_nothing_on_the_bench_is_sunk_into_it():
     """The bench top is the floor of this world and a part that dips below it is a part you
     cannot see. The roll of tape had a hub a millimetre too tall and sat 1 mm into the bench."""

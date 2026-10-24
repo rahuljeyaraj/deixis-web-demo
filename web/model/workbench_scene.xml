@@ -105,174 +105,179 @@
     <!-- One parking body: where the weld points while the arm holds nothing.
          Declared after the arm and before the things, because the keyframe lists qpos
          in declaration order. -->
-    <body name="park" pos="0.0200 -0.2800 0.30"><freejoint name="park"/>
+    <!-- gravcomp: the weld is switched off whenever nothing is held, and a free body
+         with nothing to hold it falls for as long as the page is open. It is invisible
+         and touches nothing, so nobody would see it - but it is a speed that grows
+         without end, and MuJoCo resets a whole simulation when one of those gets out
+         of hand. Weightless, it simply waits where it is. -->
+    <body name="park" pos="0.0200 -0.2800 0.30" gravcomp="1"><freejoint name="park"/>
       <geom name="park" type="sphere" size="0.002" mass="0.0001"
         contype="0" conaffinity="0" rgba="0 0 0 0"/></body>
 
     <!-- on the bench top -->
     <body name="offcut1" pos="0.1630 -0.2470 0.0180" quat="0.981627 0.000000 0.000000 0.190809">
       <freejoint name="offcut1"/>
-      <geom name="offcut1" type="box" size="0.0660 0.0380 0.0180" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.86 0.73 0.52 1" mass="0.18" class="thing"/>
-      <geom name="offcut1_1" type="box" size="0.0600 0.0010 0.0005" pos="0.0120 -0.0000 0.0180" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.38 0.35 0.32 1" mass="0.0001" class="thing"/>
-      <geom name="offcut1_2" type="box" size="0.0015 0.0150 0.0035" pos="-0.0140 -0.0480 0.0150" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="offcut1" type="box" size="0.0660 0.0380 0.0180" rgba="0.86 0.73 0.52 1" mass="0.18" class="thing"/>
+      <geom name="offcut1_1" type="box" size="0.0600 0.0010 0.0005" pos="0.0000 0.0120 0.0180" rgba="0.38 0.35 0.32 1" mass="0.0001" class="thing"/>
+      <geom name="offcut1_2" type="box" size="0.0015 0.0150 0.0035" pos="0.0480 -0.0140 0.0150" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
-    <body name="screwdriver1" pos="0.2900 0.1930 0.0320" quat="0.782608 0.000000 0.000000 -0.622515">
+    <body name="screwdriver1" pos="0.2900 0.1930 0.0185" quat="0.782608 0.000000 0.000000 -0.622515">
       <freejoint name="screwdriver1"/>
-      <geom name="screwdriver1" type="cylinder" size="0.0160 0.0430" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.13 0.35 0.72 1" mass="0.07" class="thing"/>
-      <geom name="screwdriver1_1" type="cylinder" size="0.0185 0.0080" pos="0.0000 -0.0280 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.13 0.35 0.72 1" mass="0.0001" class="thing"/>
-      <geom name="screwdriver1_2" type="cylinder" size="0.0045 0.0480" pos="0.0000 -0.0900 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="screwdriver1_3" type="box" size="0.0080 0.0050 0.0015" pos="0.0000 -0.1420 0.0000" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver1" type="cylinder" size="0.0160 0.0430" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.13 0.35 0.72 1" mass="0.07" class="thing"/>
+      <geom name="screwdriver1_1" type="cylinder" size="0.0185 0.0080" pos="0.0280 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.13 0.35 0.72 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver1_2" type="cylinder" size="0.0045 0.0480" pos="0.0900 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver1_3" type="box" size="0.0080 0.0050 0.0015" pos="0.1420 0.0000 0.0000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
-    <body name="screwdriver2" pos="0.2480 -0.0890 0.0320" quat="-0.156434 0.000000 0.000000 -0.987688">
+    <body name="screwdriver2" pos="0.2480 -0.0890 0.0185" quat="-0.156434 0.000000 0.000000 -0.987688">
       <freejoint name="screwdriver2"/>
-      <geom name="screwdriver2" type="cylinder" size="0.0160 0.0430" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.13 0.35 0.72 1" mass="0.07" class="thing"/>
-      <geom name="screwdriver2_1" type="cylinder" size="0.0185 0.0080" pos="0.0000 -0.0280 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.13 0.35 0.72 1" mass="0.0001" class="thing"/>
-      <geom name="screwdriver2_2" type="cylinder" size="0.0045 0.0480" pos="0.0000 -0.0900 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="screwdriver2_3" type="box" size="0.0080 0.0050 0.0015" pos="0.0000 -0.1420 0.0000" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver2" type="cylinder" size="0.0160 0.0430" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.13 0.35 0.72 1" mass="0.07" class="thing"/>
+      <geom name="screwdriver2_1" type="cylinder" size="0.0185 0.0080" pos="0.0280 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.13 0.35 0.72 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver2_2" type="cylinder" size="0.0045 0.0480" pos="0.0900 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="screwdriver2_3" type="box" size="0.0080 0.0050 0.0015" pos="0.1420 0.0000 0.0000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
-    <body name="hammer" pos="0.1730 0.1340 0.0220" quat="0.771625 0.000000 0.000000 0.636078">
+    <body name="hammer" pos="0.1730 0.1340 0.0140" quat="0.771625 0.000000 0.000000 0.636078">
       <freejoint name="hammer"/>
-      <geom name="hammer" type="cylinder" size="0.0110 0.0900" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.60 0.42 0.24 1" mass="0.45" class="thing"/>
-      <geom name="hammer_1" type="cylinder" size="0.0140 0.0310" pos="0.0000 0.0660 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.60 0.42 0.24 1" mass="0.0001" class="thing"/>
-      <geom name="hammer_2" type="cylinder" size="0.0130 0.0400" pos="0.0000 -0.1030 0.0030" quat="0.500000 -0.500000 0.500000 -0.500000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="hammer_3" type="cylinder" size="0.0165 0.0100" pos="-0.0420 -0.1030 0.0030" quat="0.500000 -0.500000 0.500000 -0.500000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="hammer_4" type="box" size="0.0130 0.0170 0.0080" pos="0.0420 -0.1030 0.0090" quat="0.698401 0.110616 0.110616 -0.698401" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="hammer" type="cylinder" size="0.0110 0.0900" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.60 0.42 0.24 1" mass="0.45" class="thing"/>
+      <geom name="hammer_1" type="cylinder" size="0.0140 0.0310" pos="-0.0660 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.60 0.42 0.24 1" mass="0.0001" class="thing"/>
+      <geom name="hammer_2" type="cylinder" size="0.0130 0.0400" pos="0.1030 0.0000 0.0030" quat="0.707107 -0.707107 0.000000 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="hammer_3" type="cylinder" size="0.0165 0.0100" pos="0.1030 -0.0420 0.0030" quat="0.707107 -0.707107 0.000000 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="hammer_4" type="box" size="0.0130 0.0170 0.0080" pos="0.1030 0.0420 0.0090" quat="0.987688 0.000000 0.156434 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
     <body name="pliers" pos="0.2840 -0.2570 0.0100" quat="0.622515 0.000000 0.000000 -0.782608">
       <freejoint name="pliers"/>
-      <geom name="pliers" type="cylinder" size="0.0120 0.0100" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.76 0.80 1" mass="0.18" class="thing"/>
-      <geom name="pliers_1" type="box" size="0.0500 0.0070 0.0080" pos="0.0150 0.0560 -0.0010" quat="0.649448 0.000000 0.000000 -0.760406" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
-      <geom name="pliers_2" type="box" size="0.0500 0.0070 0.0080" pos="-0.0150 0.0560 -0.0010" quat="0.760406 0.000000 0.000000 -0.649448" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
-      <geom name="pliers_3" type="box" size="0.0290 0.0055 0.0060" pos="0.0060 -0.0320 -0.0010" quat="0.731354 0.000000 0.000000 -0.681998" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="pliers_4" type="box" size="0.0290 0.0055 0.0060" pos="-0.0060 -0.0320 -0.0010" quat="0.681998 0.000000 0.000000 -0.731354" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="pliers" type="cylinder" size="0.0120 0.0100" rgba="0.74 0.76 0.80 1" mass="0.18" class="thing"/>
+      <geom name="pliers_1" type="box" size="0.0500 0.0070 0.0080" pos="-0.0560 0.0150 -0.0010" quat="0.996917 0.000000 0.000000 -0.078459" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="pliers_2" type="box" size="0.0500 0.0070 0.0080" pos="-0.0560 -0.0150 -0.0010" quat="0.996917 0.000000 0.000000 0.078459" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="pliers_3" type="box" size="0.0290 0.0055 0.0060" pos="0.0320 0.0060 -0.0010" quat="0.999391 0.000000 0.000000 0.034899" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="pliers_4" type="box" size="0.0290 0.0055 0.0060" pos="0.0320 -0.0060 -0.0010" quat="0.999391 0.000000 0.000000 -0.034899" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
-    <body name="chisel" pos="0.1260 0.2930 0.0280" quat="0.995396 0.000000 0.000000 0.095846">
+    <body name="chisel" pos="0.1260 0.2930 0.0160" quat="0.995396 0.000000 0.000000 0.095846">
       <freejoint name="chisel"/>
-      <geom name="chisel" type="cylinder" size="0.0140 0.0420" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.60 0.42 0.24 1" mass="0.12" class="thing"/>
-      <geom name="chisel_1" type="cylinder" size="0.0160 0.0070" pos="0.0000 -0.0460 0.0000" quat="0.500000 0.500000 0.500000 -0.500000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="chisel_2" type="box" size="0.0430 0.0110 0.0040" pos="0.0000 -0.0960 -0.0020" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
-      <geom name="chisel_3" type="box" size="0.0050 0.0120 0.0020" pos="0.0000 -0.1430 -0.0040" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="chisel" type="cylinder" size="0.0140 0.0420" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.60 0.42 0.24 1" mass="0.12" class="thing"/>
+      <geom name="chisel_1" type="cylinder" size="0.0160 0.0070" pos="0.0460 0.0000 0.0000" quat="0.707107 0.000000 0.707107 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="chisel_2" type="box" size="0.0430 0.0110 0.0040" pos="0.0960 0.0000 -0.0020" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="chisel_3" type="box" size="0.0050 0.0120 0.0020" pos="0.1430 0.0000 -0.0040" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
-    <body name="knife" pos="0.1730 -0.1210 0.0180" quat="0.991445 0.000000 0.000000 -0.130526">
+    <body name="knife" pos="0.1730 -0.1210 0.0105" quat="0.991445 0.000000 0.000000 -0.130526">
       <freejoint name="knife"/>
-      <geom name="knife" type="box" size="0.0560 0.0080 0.0090" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.50 0.52 0.55 1" mass="0.03" class="thing"/>
-      <geom name="knife_1" type="box" size="0.0170 0.0090 0.0105" pos="0.0000 0.0620 0.0000" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
-      <geom name="knife_2" type="box" size="0.0270 0.0090 0.0020" pos="0.0000 -0.0000 0.0100" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
-      <geom name="knife_3" type="box" size="0.0190 0.0015 0.0075" pos="0.0000 -0.0720 0.0010" quat="0.704927 -0.055479 -0.055479 -0.704927" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
+      <geom name="knife" type="box" size="0.0560 0.0080 0.0090" rgba="0.50 0.52 0.55 1" mass="0.03" class="thing"/>
+      <geom name="knife_1" type="box" size="0.0170 0.0090 0.0105" pos="-0.0620 0.0000 0.0000" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="knife_2" type="box" size="0.0270 0.0090 0.0020" pos="0.0000 0.0000 0.0100" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="knife_3" type="box" size="0.0190 0.0015 0.0075" pos="0.0720 0.0000 0.0010" quat="0.996917 0.000000 -0.078459 0.000000" rgba="0.74 0.76 0.80 1" mass="0.0001" class="thing"/>
     </body>
     <body name="blades" pos="0.2590 0.0690 0.0080" quat="-0.642788 0.000000 0.000000 -0.766044">
       <freejoint name="blades"/>
-      <geom name="blades" type="box" size="0.0310 0.0180 0.0080" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.15 0.13 1" mass="0.04" class="thing"/>
-      <geom name="blades_1" type="box" size="0.0320 0.0190 0.0020" pos="0.0000 -0.0000 0.0070" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.58 0.10 0.09 1" mass="0.0001" class="thing"/>
-      <geom name="blades_2" type="box" size="0.0200 0.0110 0.0005" pos="0.0000 -0.0000 0.0090" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
+      <geom name="blades" type="box" size="0.0310 0.0180 0.0080" rgba="0.80 0.15 0.13 1" mass="0.04" class="thing"/>
+      <geom name="blades_1" type="box" size="0.0320 0.0190 0.0020" pos="0.0000 0.0000 0.0070" rgba="0.58 0.10 0.09 1" mass="0.0001" class="thing"/>
+      <geom name="blades_2" type="box" size="0.0200 0.0110 0.0005" pos="0.0000 0.0000 0.0090" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
     </body>
     <body name="pot" pos="0.2940 -0.0210 0.0290" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="pot"/>
-      <geom name="pot" type="cylinder" size="0.0330 0.0290" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.50 0.52 0.55 1" mass="0.2" class="thing"/>
-      <geom name="pot_1" type="cylinder" size="0.0290 0.0050" pos="0.0000 -0.0000 0.0180" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
-      <geom name="pot_2" type="cylinder" size="0.0350 0.0035" pos="0.0000 -0.0000 0.0260" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.50 0.52 0.55 1" mass="0.0001" class="thing"/>
-      <geom name="pot_3" type="cylinder" size="0.0270 0.0020" pos="0.0000 -0.0000 0.0280" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="pot" type="cylinder" size="0.0330 0.0290" rgba="0.50 0.52 0.55 1" mass="0.2" class="thing"/>
+      <geom name="pot_1" type="cylinder" size="0.0290 0.0050" pos="0.0000 0.0000 0.0180" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
+      <geom name="pot_2" type="cylinder" size="0.0350 0.0035" pos="0.0000 0.0000 0.0260" rgba="0.50 0.52 0.55 1" mass="0.0001" class="thing"/>
+      <geom name="pot_3" type="cylinder" size="0.0270 0.0020" pos="0.0000 0.0000 0.0280" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
     <body name="oil" pos="0.1060 -0.1680 0.0480" quat="0.920505 0.000000 0.000000 0.390731">
       <freejoint name="oil"/>
-      <geom name="oil" type="cylinder" size="0.0280 0.0480" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.08 0.29 0.17 1" mass="0.25" class="thing"/>
-      <geom name="oil_1" type="cylinder" size="0.0220 0.0070" pos="0.0000 -0.0000 0.0540" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.08 0.29 0.17 1" mass="0.0001" class="thing"/>
-      <geom name="oil_2" type="cylinder" size="0.0120 0.0140" pos="0.0000 -0.0000 0.0740" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.08 0.29 0.17 1" mass="0.0001" class="thing"/>
-      <geom name="oil_3" type="cylinder" size="0.0140 0.0060" pos="0.0000 -0.0000 0.0940" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
-      <geom name="oil_4" type="cylinder" size="0.0290 0.0130" pos="0.0000 -0.0000 -0.0100" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.88 0.84 0.70 1" mass="0.0001" class="thing"/>
+      <geom name="oil" type="cylinder" size="0.0280 0.0480" rgba="0.08 0.29 0.17 1" mass="0.25" class="thing"/>
+      <geom name="oil_1" type="cylinder" size="0.0220 0.0070" pos="0.0000 0.0000 0.0540" rgba="0.08 0.29 0.17 1" mass="0.0001" class="thing"/>
+      <geom name="oil_2" type="cylinder" size="0.0120 0.0140" pos="0.0000 0.0000 0.0740" rgba="0.08 0.29 0.17 1" mass="0.0001" class="thing"/>
+      <geom name="oil_3" type="cylinder" size="0.0140 0.0060" pos="0.0000 0.0000 0.0940" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="oil_4" type="cylinder" size="0.0290 0.0130" pos="0.0000 0.0000 -0.0100" rgba="0.88 0.84 0.70 1" mass="0.0001" class="thing"/>
     </body>
 
     <!-- in the bottom bay -->
     <body name="jar1" pos="0.3850 0.1500 0.0390" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="jar1"/>
-      <geom name="jar1" type="cylinder" size="0.0320 0.0390" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
-      <geom name="jar1_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 -0.0000 -0.0140" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
-      <geom name="jar1_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 -0.0000 0.0360" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
-      <geom name="jar1_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 -0.0000 0.0450" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
+      <geom name="jar1" type="cylinder" size="0.0320 0.0390" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
+      <geom name="jar1_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 0.0000 -0.0140" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
+      <geom name="jar1_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 0.0000 0.0360" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
+      <geom name="jar1_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 0.0000 0.0450" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
     </body>
     <body name="jar2" pos="0.3850 0.0500 0.0390" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="jar2"/>
-      <geom name="jar2" type="cylinder" size="0.0320 0.0390" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
-      <geom name="jar2_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 -0.0000 -0.0140" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
-      <geom name="jar2_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 -0.0000 0.0360" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
-      <geom name="jar2_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 -0.0000 0.0450" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
+      <geom name="jar2" type="cylinder" size="0.0320 0.0390" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
+      <geom name="jar2_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 0.0000 -0.0140" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
+      <geom name="jar2_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 0.0000 0.0360" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
+      <geom name="jar2_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 0.0000 0.0450" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
     </body>
     <body name="jar3" pos="0.3850 -0.0500 0.0390" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="jar3"/>
-      <geom name="jar3" type="cylinder" size="0.0320 0.0390" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
-      <geom name="jar3_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 -0.0000 -0.0140" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
-      <geom name="jar3_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 -0.0000 0.0360" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
-      <geom name="jar3_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 -0.0000 0.0450" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
+      <geom name="jar3" type="cylinder" size="0.0320 0.0390" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
+      <geom name="jar3_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 0.0000 -0.0140" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
+      <geom name="jar3_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 0.0000 0.0360" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
+      <geom name="jar3_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 0.0000 0.0450" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
     </body>
     <body name="jar4" pos="0.4550 0.0529 0.0390" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="jar4"/>
-      <geom name="jar4" type="cylinder" size="0.0320 0.0390" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
-      <geom name="jar4_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 -0.0000 -0.0140" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
-      <geom name="jar4_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 -0.0000 0.0360" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
-      <geom name="jar4_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 -0.0000 0.0450" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
+      <geom name="jar4" type="cylinder" size="0.0320 0.0390" rgba="0.80 0.88 0.90 0.40" mass="0.34" class="thing"/>
+      <geom name="jar4_1" type="cylinder" size="0.0270 0.0230" pos="0.0000 0.0000 -0.0140" rgba="0.74 0.57 0.25 1" mass="0.0001" class="thing"/>
+      <geom name="jar4_2" type="cylinder" size="0.0280 0.0040" pos="0.0000 0.0000 0.0360" rgba="0.80 0.88 0.90 0.40" mass="0.0001" class="thing"/>
+      <geom name="jar4_3" type="cylinder" size="0.0330 0.0075" pos="0.0000 0.0000 0.0450" rgba="0.46 0.48 0.52 1" mass="0.0001" class="thing"/>
     </body>
     <body name="glue1" pos="0.3850 -0.2400 0.0380" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="glue1"/>
-      <geom name="glue1" type="cylinder" size="0.0150 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.05" class="thing"/>
-      <geom name="glue1_1" type="cylinder" size="0.0105 0.0050" pos="0.0000 -0.0000 0.0410" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
-      <geom name="glue1_2" type="cylinder" size="0.0060 0.0050" pos="0.0000 -0.0000 0.0490" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
-      <geom name="glue1_3" type="cylinder" size="0.0090 0.0080" pos="0.0000 -0.0000 0.0580" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
+      <geom name="glue1" type="cylinder" size="0.0150 0.0380" rgba="0.95 0.95 0.92 1" mass="0.05" class="thing"/>
+      <geom name="glue1_1" type="cylinder" size="0.0105 0.0050" pos="0.0000 0.0000 0.0410" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
+      <geom name="glue1_2" type="cylinder" size="0.0060 0.0050" pos="0.0000 0.0000 0.0490" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
+      <geom name="glue1_3" type="cylinder" size="0.0090 0.0080" pos="0.0000 0.0000 0.0580" rgba="0.80 0.15 0.13 1" mass="0.0001" class="thing"/>
     </body>
     <body name="glue2" pos="0.3850 -0.2900 0.0380" quat="0.707107 0.000000 0.000000 -0.707107">
       <freejoint name="glue2"/>
-      <geom name="glue2" type="cylinder" size="0.0150 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.05" class="thing"/>
-      <geom name="glue2_1" type="cylinder" size="0.0105 0.0050" pos="0.0000 -0.0000 0.0410" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
-      <geom name="glue2_2" type="cylinder" size="0.0060 0.0070" pos="0.0000 -0.0000 0.0510" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
-      <geom name="glue2_3" type="cylinder" size="0.0040 0.0020" pos="0.0000 -0.0000 0.0580" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="glue2" type="cylinder" size="0.0150 0.0380" rgba="0.95 0.95 0.92 1" mass="0.05" class="thing"/>
+      <geom name="glue2_1" type="cylinder" size="0.0105 0.0050" pos="0.0000 0.0000 0.0410" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
+      <geom name="glue2_2" type="cylinder" size="0.0060 0.0070" pos="0.0000 0.0000 0.0510" rgba="0.95 0.95 0.92 1" mass="0.0001" class="thing"/>
+      <geom name="glue2_3" type="cylinder" size="0.0040 0.0020" pos="0.0000 0.0000 0.0580" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
 
     <!-- in the middle bay -->
     <body name="tin1" pos="0.3850 0.1700 0.1600" quat="0.777146 0.000000 0.000000 -0.629320">
       <freejoint name="tin1"/>
-      <geom name="tin1" type="cylinder" size="0.0360 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.62 0.66 0.70 1" mass="0.42" class="thing"/>
-      <geom name="tin1_1" type="cylinder" size="0.0370 0.0170" pos="0.0000 -0.0000 -0.0040" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.20 0.45 0.38 1" mass="0.0001" class="thing"/>
-      <geom name="tin1_2" type="cylinder" size="0.0380 0.0040" pos="0.0000 -0.0000 0.0340" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.62 0.66 0.70 1" mass="0.0001" class="thing"/>
-      <geom name="tin1_3" type="cylinder" size="0.0290 0.0020" pos="0.0000 -0.0000 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="tin1" type="cylinder" size="0.0360 0.0380" rgba="0.62 0.66 0.70 1" mass="0.42" class="thing"/>
+      <geom name="tin1_1" type="cylinder" size="0.0370 0.0170" pos="0.0000 0.0000 -0.0040" rgba="0.20 0.45 0.38 1" mass="0.0001" class="thing"/>
+      <geom name="tin1_2" type="cylinder" size="0.0380 0.0040" pos="0.0000 0.0000 0.0340" rgba="0.62 0.66 0.70 1" mass="0.0001" class="thing"/>
+      <geom name="tin1_3" type="cylinder" size="0.0290 0.0020" pos="0.0000 0.0000 0.0380" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
     <body name="tin2" pos="0.3850 0.0500 0.1600" quat="0.492424 0.000000 0.000000 -0.870356">
       <freejoint name="tin2"/>
-      <geom name="tin2" type="cylinder" size="0.0360 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.62 0.66 0.70 1" mass="0.42" class="thing"/>
-      <geom name="tin2_1" type="cylinder" size="0.0370 0.0170" pos="0.0000 -0.0000 -0.0040" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.20 0.45 0.38 1" mass="0.0001" class="thing"/>
-      <geom name="tin2_2" type="cylinder" size="0.0380 0.0040" pos="0.0000 -0.0000 0.0340" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.62 0.66 0.70 1" mass="0.0001" class="thing"/>
-      <geom name="tin2_3" type="cylinder" size="0.0290 0.0020" pos="0.0000 -0.0000 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="tin2" type="cylinder" size="0.0360 0.0380" rgba="0.62 0.66 0.70 1" mass="0.42" class="thing"/>
+      <geom name="tin2_1" type="cylinder" size="0.0370 0.0170" pos="0.0000 0.0000 -0.0040" rgba="0.20 0.45 0.38 1" mass="0.0001" class="thing"/>
+      <geom name="tin2_2" type="cylinder" size="0.0380 0.0040" pos="0.0000 0.0000 0.0340" rgba="0.62 0.66 0.70 1" mass="0.0001" class="thing"/>
+      <geom name="tin2_3" type="cylinder" size="0.0290 0.0020" pos="0.0000 0.0000 0.0380" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
     <body name="mug" pos="0.3850 -0.1500 0.1670" quat="0.838671 0.000000 0.000000 -0.544639">
       <freejoint name="mug"/>
-      <geom name="mug" type="cylinder" size="0.0380 0.0450" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.32" class="thing"/>
-      <geom name="mug_1" type="cylinder" size="0.0310 0.0370" pos="0.0000 -0.0000 0.0100" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
-      <geom name="mug_2" type="cylinder" size="0.0400 0.0030" pos="0.0000 -0.0000 0.0420" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_3" type="sphere" size="0.0070" pos="0.0000 -0.0243 0.0241" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_4" type="sphere" size="0.0070" pos="0.0000 -0.0324 0.0267" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_5" type="sphere" size="0.0070" pos="0.0000 -0.0409 0.0265" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_6" type="sphere" size="0.0070" pos="0.0000 -0.0489 0.0234" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_7" type="sphere" size="0.0070" pos="0.0000 -0.0553 0.0178" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_8" type="sphere" size="0.0070" pos="0.0000 -0.0595 0.0104" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_9" type="sphere" size="0.0070" pos="0.0000 -0.0610 0.0020" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_10" type="sphere" size="0.0070" pos="0.0000 -0.0595 -0.0064" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_11" type="sphere" size="0.0070" pos="0.0000 -0.0553 -0.0138" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_12" type="sphere" size="0.0070" pos="0.0000 -0.0489 -0.0194" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_13" type="sphere" size="0.0070" pos="0.0000 -0.0409 -0.0225" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_14" type="sphere" size="0.0070" pos="0.0000 -0.0324 -0.0227" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
-      <geom name="mug_15" type="sphere" size="0.0070" pos="0.0000 -0.0243 -0.0201" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug" type="cylinder" size="0.0380 0.0450" rgba="0.92 0.93 0.95 1" mass="0.32" class="thing"/>
+      <geom name="mug_1" type="cylinder" size="0.0310 0.0370" pos="0.0000 0.0000 0.0100" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="mug_2" type="cylinder" size="0.0400 0.0030" pos="0.0000 0.0000 0.0420" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_3" type="sphere" size="0.0070" pos="0.0243 0.0000 0.0241" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_4" type="sphere" size="0.0070" pos="0.0324 0.0000 0.0267" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_5" type="sphere" size="0.0070" pos="0.0409 0.0000 0.0265" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_6" type="sphere" size="0.0070" pos="0.0489 0.0000 0.0234" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_7" type="sphere" size="0.0070" pos="0.0553 0.0000 0.0178" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_8" type="sphere" size="0.0070" pos="0.0595 0.0000 0.0104" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_9" type="sphere" size="0.0070" pos="0.0610 0.0000 0.0020" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_10" type="sphere" size="0.0070" pos="0.0595 0.0000 -0.0064" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_11" type="sphere" size="0.0070" pos="0.0553 0.0000 -0.0138" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_12" type="sphere" size="0.0070" pos="0.0489 0.0000 -0.0194" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_13" type="sphere" size="0.0070" pos="0.0409 0.0000 -0.0225" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_14" type="sphere" size="0.0070" pos="0.0324 0.0000 -0.0227" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
+      <geom name="mug_15" type="sphere" size="0.0070" pos="0.0243 0.0000 -0.0201" rgba="0.92 0.93 0.95 1" mass="0.0001" class="thing"/>
     </body>
 
     <!-- in the top bay -->
     <body name="odds" pos="0.3850 0.1400 0.2810" quat="0.662620 0.000000 0.000000 -0.748956">
       <freejoint name="odds"/>
-      <geom name="odds" type="box" size="0.0580 0.0350 0.0370" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.66 0.50 0.33 1" mass="0.15" class="thing"/>
-      <geom name="odds_1" type="box" size="0.0600 0.0370 0.0040" pos="0.0000 -0.0000 0.0330" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.66 0.50 0.33 1" mass="0.0001" class="thing"/>
-      <geom name="odds_2" type="box" size="0.0310 0.0020 0.0150" pos="-0.0370 -0.0000 0.0000" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="odds" type="box" size="0.0580 0.0350 0.0370" rgba="0.66 0.50 0.33 1" mass="0.15" class="thing"/>
+      <geom name="odds_1" type="box" size="0.0600 0.0370 0.0040" pos="0.0000 0.0000 0.0330" rgba="0.66 0.50 0.33 1" mass="0.0001" class="thing"/>
+      <geom name="odds_2" type="box" size="0.0310 0.0020 0.0150" pos="0.0000 -0.0370 0.0000" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
     <body name="offcut2" pos="0.3850 -0.1700 0.2820" quat="0.731354 0.000000 0.000000 -0.681998">
       <freejoint name="offcut2"/>
-      <geom name="offcut2" type="box" size="0.0660 0.0180 0.0380" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.86 0.73 0.52 1" mass="0.18" class="thing"/>
-      <geom name="offcut2_1" type="box" size="0.0600 0.0010 0.0005" pos="-0.0170 -0.0000 0.0200" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.38 0.35 0.32 1" mass="0.0001" class="thing"/>
-      <geom name="offcut2_2" type="box" size="0.0015 0.0150 0.0035" pos="0.0000 -0.0480 0.0350" quat="0.707107 0.000000 0.000000 -0.707107" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
+      <geom name="offcut2" type="box" size="0.0660 0.0180 0.0380" rgba="0.86 0.73 0.52 1" mass="0.18" class="thing"/>
+      <geom name="offcut2_1" type="box" size="0.0600 0.0010 0.0005" pos="0.0000 -0.0170 0.0200" rgba="0.38 0.35 0.32 1" mass="0.0001" class="thing"/>
+      <geom name="offcut2_2" type="box" size="0.0015 0.0150 0.0035" pos="0.0480 0.0000 0.0350" rgba="0.17 0.16 0.15 1" mass="0.0001" class="thing"/>
     </body>
 
   </worldbody>
@@ -283,7 +288,7 @@
        each: a place and a turn), exactly where `declared()` put the bodies, and in
        that same order. -->
   <keyframe>
-    <key name="home" qpos="0.2800 1.4 -0.6 1.3 0.9 0 0.2 0.0200 -0.2800 0.3000 1 0 0 0 0.1630 -0.2470 0.0180 0.981627 0.000000 0.000000 0.190809 0.2900 0.1930 0.0320 0.782608 0.000000 0.000000 -0.622515 0.2480 -0.0890 0.0320 -0.156434 0.000000 0.000000 -0.987688 0.1730 0.1340 0.0220 0.771625 0.000000 0.000000 0.636078 0.2840 -0.2570 0.0100 0.622515 0.000000 0.000000 -0.782608 0.1260 0.2930 0.0280 0.995396 0.000000 0.000000 0.095846 0.1730 -0.1210 0.0180 0.991445 0.000000 0.000000 -0.130526 0.2590 0.0690 0.0080 -0.642788 0.000000 0.000000 -0.766044 0.2940 -0.0210 0.0290 0.707107 0.000000 0.000000 -0.707107 0.1060 -0.1680 0.0480 0.920505 0.000000 0.000000 0.390731 0.3850 0.1500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 0.0500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.0500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.4550 0.0529 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.2400 0.0380 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.2900 0.0380 0.707107 0.000000 0.000000 -0.707107 0.3850 0.1700 0.1600 0.777146 0.000000 0.000000 -0.629320 0.3850 0.0500 0.1600 0.492424 0.000000 0.000000 -0.870356 0.3850 -0.1500 0.1670 0.838671 0.000000 0.000000 -0.544639 0.3850 0.1400 0.2810 0.662620 0.000000 0.000000 -0.748956 0.3850 -0.1700 0.2820 0.731354 0.000000 0.000000 -0.681998"/>
+    <key name="home" qpos="0.2800 1.4 -0.6 1.3 0.9 0 0.2 0.0200 -0.2800 0.3000 1 0 0 0 0.1630 -0.2470 0.0180 0.981627 0.000000 0.000000 0.190809 0.2900 0.1930 0.0185 0.782608 0.000000 0.000000 -0.622515 0.2480 -0.0890 0.0185 -0.156434 0.000000 0.000000 -0.987688 0.1730 0.1340 0.0140 0.771625 0.000000 0.000000 0.636078 0.2840 -0.2570 0.0100 0.622515 0.000000 0.000000 -0.782608 0.1260 0.2930 0.0160 0.995396 0.000000 0.000000 0.095846 0.1730 -0.1210 0.0105 0.991445 0.000000 0.000000 -0.130526 0.2590 0.0690 0.0080 -0.642788 0.000000 0.000000 -0.766044 0.2940 -0.0210 0.0290 0.707107 0.000000 0.000000 -0.707107 0.1060 -0.1680 0.0480 0.920505 0.000000 0.000000 0.390731 0.3850 0.1500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 0.0500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.0500 0.0390 0.707107 0.000000 0.000000 -0.707107 0.4550 0.0529 0.0390 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.2400 0.0380 0.707107 0.000000 0.000000 -0.707107 0.3850 -0.2900 0.0380 0.707107 0.000000 0.000000 -0.707107 0.3850 0.1700 0.1600 0.777146 0.000000 0.000000 -0.629320 0.3850 0.0500 0.1600 0.492424 0.000000 0.000000 -0.870356 0.3850 -0.1500 0.1670 0.838671 0.000000 0.000000 -0.544639 0.3850 0.1400 0.2810 0.662620 0.000000 0.000000 -0.748956 0.3850 -0.1700 0.2820 0.731354 0.000000 0.000000 -0.681998"/>
   </keyframe>
 
   <!-- The carriage's own motor. so101.xml brings six position actuators with it; this

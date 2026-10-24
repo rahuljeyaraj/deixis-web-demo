@@ -1,9 +1,12 @@
 /**
- * A look at the workbench, and nothing else (stage 1 of `workbench-requirements.md`).
+ * The workbench: a look at it (stage 1), and a body that can be told to do something with it
+ * (stage 2 of `workbench-requirements.md`).
  *
- * The smallest page that answers "can I see it?": it compiles `workbench_scene.xml`, loads the
- * arms' resting pose, and draws the world from where a person standing at the bench would see
- * it. No physics, no voice, no model - those are stages 2 to 4.
+ * It compiles `workbench_scene.xml`, puts the arm in its resting pose, draws the world from
+ * where a person standing at the bench would see it, and **steps the physics**, so a thing that
+ * is picked up is really picked up and a thing put down really stays there. No voice and no
+ * model yet - those are stages 3 and 4; until then the pointer and five buttons stand in for
+ * what will be said out loud.
  *
  * What it does have is the pointer, because the pointer is part of the world rather than part of
  * the plumbing:
@@ -17,8 +20,11 @@
  *   depth is never guessed: the hit is already x, y and height.
  * - **the name under the spot** (FR9), quietly, so a person knows what they are about to refer
  *   to before they speak.
+ * - **the arm's own words** when it will not do something (FR15): out of reach, never picked
+ *   up, too tall for that bay. The refusal is the robot's, not the page's - the page only
+ *   prints what `rig.ts` hands back.
  *
- *   ?settle=1   step the physics for a second, to see what is not yet held in place
+ *   ?still=1    don't step the physics (stage 1's view of the world, for a clean picture)
  *   ?view=default | over | side | bays
  *
  * The names come from `workbench_reach.json`, which the generator writes from the same Python
@@ -31,6 +37,7 @@ import reach from '../model/workbench_reach.json';
 import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import type { MjModel, Mujoco } from './sim/mujoco';
 import { LOOK, TableView } from './sim/render';
+import { Rig, type Done } from './sim/rig';
 
 /**
  * Bench millimetres to world metres, in the **workbench** scene's frame: the origin is on the
@@ -155,6 +162,27 @@ function naming(mj: Mujoco, model: MjModel): (geom: number) => string | null {
   };
 }
 
+/**
+ * Which thing each geom belongs to, by geom id - `jar2_3` is part of `jar2`.
+ *
+ * The page needs this as well as the name, because two things can share a name and only one of
+ * them is the one being pointed at. That is the whole demo.
+ */
+function owners(mj: Mujoco, model: MjModel): (geom: number) => string | null {
+  const G = mj.mjtObj.mjOBJ_GEOM.value;
+  const ids = new Set(reach.things.map((t) => t.id));
+  const cache = new Map<number, string | null>();
+  return (geom: number) => {
+    const had = cache.get(geom);
+    if (had !== undefined) return had;
+    const name = mj.mj_id2name(model, G, geom);
+    const base = name ? name.replace(/_\d+$/, '') : '';
+    const owner = ids.has(base) ? base : null;
+    cache.set(geom, owner);
+    return owner;
+  };
+}
+
 /** The laser spot: a filled amber circle with a dark edge, lying on whatever it is put on. */
 function makeSpot(): THREE.Group {
   const spot = new THREE.Group();
@@ -186,13 +214,19 @@ async function main(): Promise<void> {
   const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
   const status = document.querySelector<HTMLElement>('#status')!;
   const under = document.querySelector<HTMLElement>('#under')!;
+  const doing = document.querySelector<HTMLElement>('#doing')!;
+  /** What the spot is on: a thing to pick up, and a place to put one. */
+  const pointed: { at: string | null; place: { xMm: number; yMm: number; zMm: number } | null } = {
+    at: null,
+    place: null,
+  };
   const say = (s: string) => {
     status.textContent = s;
   };
 
   const params = new URLSearchParams(location.search);
   const start = (params.get('view') ?? 'default') as ViewName;
-  const settle = params.get('settle') === '1';
+  const still = params.get('still') === '1';
 
   say('Loading the arms…');
   const [mj, files] = await Promise.all([
@@ -201,23 +235,20 @@ async function main(): Promise<void> {
   ]);
   const { model, data } = loadScene(mj, files, 'workbench_scene.xml');
 
-  // The resting pose. MuJoCo's default has both arms stretched flat along +X - straight through
-  // the shelf unit - so without this they lie in the bays.
+  // The resting pose. MuJoCo's default has the arm stretched flat along +X - straight through
+  // the shelf unit - so without this it lies in the bays.
+  //
+  // `restNow` also sets every control to match, which matters: the keyframe says where the
+  // joints *are* and the motors say where they are *held*, and without the second the arm
+  // drifts to wherever a control of nought puts it the moment the physics starts.
   mj.mj_resetDataKeyframe(model, data, 0);
-  // The keyframe says where the joints *are*; the motors say where they are *held*. Without
-  // this the arms drift to wherever a control of zero puts them, which is upright over the
-  // bench, and the pose in the scene file turns out to mean nothing.
-  const ctrl = data.ctrl as Float64Array;
-  const keyQpos = model.key_qpos as Float64Array;
-  for (let i = 0; i < model.nu; i++) ctrl[i] = keyQpos[i];
-  mj.mj_forward(model, data);
-  // Stage 1 draws the pose the numbers describe and does not step the physics at all; what
-  // happens when it is stepped is stage 2's business.
-  if (settle) for (let i = 0; i < 200; i++) mj.mj_step(model, data);
+  const rig = new Rig(mj, model, data);
+  rig.restNow();
 
   const view = new TableView(canvas, mj, model, { bare: true });
   view.sync(data);
   const nameOf = naming(mj, model);
+  const thingOf = owners(mj, model);
   const spot = makeSpot();
   view.scene.add(spot);
 
@@ -290,11 +321,89 @@ async function main(): Promise<void> {
     const geom = hit.object.userData.geom as number | undefined;
     const label = geom === undefined ? null : nameOf(geom);
     const [x, y] = [hit.point.y, hit.point.x];
+    // What the buttons act on: the thing under the spot, and the place under it.
+    pointed.at = geom === undefined ? null : thingOf(geom);
+    pointed.place = {
+      xMm: reach.bench.centreX - x * 1000,
+      yMm: y * 1000,
+      zMm: hit.point.z * 1000,
+    };
+    showButtons();
     const atMm = `${(reach.bench.centreX - x * 1000).toFixed(0)}, ${(y * 1000).toFixed(0)}, ${(hit.point.z * 1000).toFixed(0)}`;
     under.innerHTML = label
       ? `<b>${label}</b> &middot; ${atMm} mm`
       : `nothing named here &middot; ${atMm} mm`;
   };
+
+  // ----------------------------------------------------------------- the buttons
+  //
+  // Standing in for what will be said out loud in stage 4: point at a thing, pick it up; point
+  // at a place, put it down there. Every one of them goes to `rig.ts` and prints whatever comes
+  // back, refusals included, because the refusal is the robot's answer and not the page's.
+
+  const button = (id: string) => document.querySelector<HTMLButtonElement>(`#${id}`)!;
+  const buttons = {
+    take: button('take'),
+    put: button('put'),
+    pot: button('pot'),
+    park: button('park'),
+    stop: button('stop'),
+  };
+  const tell = (line: string, no = false) => {
+    doing.textContent = line;
+    doing.classList.toggle('no', no);
+  };
+  const showButtons = () => {
+    const held = rig.holding !== null;
+    buttons.take.disabled = held || rig.busy || !pointed.at;
+    buttons.put.disabled = !held || rig.busy || !pointed.place;
+    buttons.pot.disabled = !held || rig.busy;
+    buttons.park.disabled = rig.busy;
+    buttons.stop.disabled = !rig.busy;
+  };
+  const after = (what: string) => (d: Done) => {
+    tell(d.ok ? `${what}.` : `It will not: ${d.why}.`, !d.ok);
+    showButtons();
+  };
+  buttons.take.addEventListener('click', () => {
+    const id = pointed.at;
+    if (!id) return;
+    const name = reach.things.find((t) => t.id === id)?.what ?? id;
+    tell(`Picking up ${name}…`);
+    showButtons();
+    void rig.take(id).then(after(`Holding ${name}`));
+  });
+  buttons.put.addEventListener('click', () => {
+    const place = pointed.place;
+    if (!place) return;
+    tell('Putting it down…');
+    showButtons();
+    void rig.putOn(place).then(after('Put down'));
+  });
+  buttons.pot.addEventListener('click', () => {
+    tell('Dropping it in the pot…');
+    showButtons();
+    void rig.dropInto('pot').then(after('Dropped in the pot'));
+  });
+  buttons.park.addEventListener('click', () => {
+    tell('Parking…');
+    showButtons();
+    void rig.park().then(after('Parked'));
+  });
+  buttons.stop.addEventListener('click', () => {
+    rig.stop();
+    tell('Stopped.', true);
+    showButtons();
+  });
+  // Stop is a key as well as a button, and it never waits for anything (FR27).
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' && e.key !== ' ') return;
+    e.preventDefault();
+    rig.stop();
+    tell('Stopped.', true);
+    showButtons();
+  });
+  showButtons();
 
   // ------------------------------------------------------------------- the camera
 
@@ -347,10 +456,28 @@ async function main(): Promise<void> {
   resize();
 
   // One frame after another, so that the frame rate can be read off while orbiting (NFR3).
+  //
+  // The physics runs on the clock rather than one step a frame, so the arm moves at the same
+  // speed on a fast machine as on a slow one; a frame that took too long is cut short rather
+  // than caught up, because catching up on a long stall is how a simulation explodes.
+  const STEP = model.opt.timestep;
+  const MOST = 0.05; // of simulated time in one frame
+  let drawnAt = performance.now();
   let frames = 0;
   let since = performance.now();
   let fps = 0;
   const draw = () => {
+    const nowMs = performance.now();
+    let owed = Math.min(MOST, (nowMs - drawnAt) / 1000);
+    drawnAt = nowMs;
+    if (!still) {
+      while (owed > 0) {
+        rig.update();
+        mj.mj_step(model, data);
+        owed -= STEP;
+      }
+      view.sync(data);
+    }
     view.render();
     frames += 1;
     const now = performance.now();
@@ -360,7 +487,8 @@ async function main(): Promise<void> {
       since = now;
       say(
         `${reach.things.length} things, ${model.nbody} bodies, ${model.nu} joints to drive. ` +
-          `${fps} frames a second. Drag to turn, scroll to move in and out.`,
+          `${fps} frames a second. Drag to turn, scroll to move in and out; ` +
+          `space or Esc stops the arm at once.`,
       );
     }
     requestAnimationFrame(draw);
@@ -376,6 +504,7 @@ async function main(): Promise<void> {
     data,
     view,
     reach,
+    rig,
     THREE,
   });
 }

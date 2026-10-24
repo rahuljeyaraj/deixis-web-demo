@@ -30,6 +30,15 @@ export interface IkTarget {
   /** The jaws open exactly along `yaw`, not the nearest of its four quarter turns. */
   yawExact?: boolean;
   /**
+   * How many ways round count as the same grip. 4 (the default) is a cube, which looks the
+   * same every quarter turn. **2 is a pair of jaws**: they open both ways at once, so opening
+   * along +y and along -y are the same grip and the solver should be free to take whichever it
+   * can reach. Demanding one of the two cost six things their grip - three jars, two tubes of
+   * glue and a bottle - all of them refused for a jaw heading 168 degrees out, which is to say
+   * for being 12 degrees from the other way round.
+   */
+  yawTurns?: number;
+  /**
    * How far the fingers may tilt from `point`, degrees (0: exactly along it). Close to the
    * base the wrist can't point straight down at height, so carry poses allow some tilt.
    */
@@ -117,6 +126,10 @@ export class ArmKinematics {
   /** The arm's own bodies (base to jaws), for the check that it doesn't hit itself. */
   private readonly armBodies: Set<number>;
   private readonly scratch: MjData;
+  /** The body the arm hangs from: its own base, or the carriage when it rides a rail. */
+  private readonly rootBody: number;
+  /** The carriage's slide joint, qpos address, or -1 when the arm stands still. */
+  private railAdr = -1;
   private readonly jacp: InstanceType<Mujoco['DoubleBuffer']>;
   private readonly jacr: InstanceType<Mujoco['DoubleBuffer']>;
 
@@ -124,8 +137,13 @@ export class ArmKinematics {
    * Where this arm stands, world metres. The one-arm scene puts its arm at the origin; the
    * end demo's shelf scene has two, each inside a `<body name="left_stand"/>` of its own, so
    * nothing may assume the base is at 0.
+   *
+   * **Not fixed when the arm rides a rail**: the workbench's arm stands on a carriage, and
+   * `rideTo` moves this with it. Without that, every solve would be answered for a carriage
+   * parked in the middle of the rail wherever the real one stood, which is the whole point of
+   * having a rail.
    */
-  readonly base: Vec3;
+  base: Vec3;
   /**
    * Which way it faces, radians about z, 0 being +x. The shoulder turns 110 degrees either
    * side of this and no further, which is what decides whether a thing can be reached at all
@@ -164,6 +182,7 @@ export class ArmKinematics {
     // calling one arm touching the other a fold in the first arm: they are separate trees,
     // rooted at their own stand.
     this.armBodies = new Set([...root.keys()].filter((b) => b > 0 && root[b] === armRoot));
+    this.rootBody = armRoot;
     const bp = model.body_pos as Float64Array;
     this.base = [bp[armRoot * 3], bp[armRoot * 3 + 1], bp[armRoot * 3 + 2]];
     // The stand's yaw out of its quaternion (w, x, y, z). Only the turn about z matters: a
@@ -174,6 +193,34 @@ export class ArmKinematics {
     this.scratch = new mj.MjData(model);
     this.jacp = new mj.DoubleBuffer(3 * model.nv);
     this.jacr = new mj.DoubleBuffer(3 * model.nv);
+  }
+
+  /**
+   * Tell the solver the arm rides a rail, and name the joint that moves it.
+   *
+   * Everything here is solved in a scratch `MjData` of its own, so that planning a move never
+   * disturbs the scene being drawn. That scratch starts every joint at nought - including the
+   * carriage's - so until it is told otherwise the solver answers for an arm parked in the
+   * middle of its rail, whatever the real one is doing.
+   */
+  ridesOn(jointName: string): void {
+    const id = this.mj.mj_name2id(this.model, this.mj.mjtObj.mjOBJ_JOINT.value, jointName);
+    if (id < 0) throw new Error(`no joint ${jointName} to ride on`);
+    this.railAdr = (this.model.jnt_qposadr as Int32Array)[id];
+  }
+
+  /** Where on the rail the carriage is, for everything solved from here on (metres). */
+  rideTo(where: number): void {
+    if (this.railAdr < 0) throw new Error('this arm does not ride on a rail');
+    this.scratch.qpos[this.railAdr] = where;
+    this.mj.mj_kinematics(this.model, this.scratch);
+    const p = this.scratch.xpos as Float64Array;
+    this.base = [p[3 * this.rootBody], p[3 * this.rootBody + 1], p[3 * this.rootBody + 2]];
+  }
+
+  /** Where on the rail the solver currently thinks the carriage is, metres. */
+  get ridingAt(): number {
+    return this.railAdr < 0 ? 0 : this.scratch.qpos[this.railAdr];
   }
 
   /** The gripper's pose for the 5 arm joints (the rest of the scene is ignored). */
@@ -282,8 +329,9 @@ export class ArmKinematics {
       if (target.yaw !== null && target.yaw !== undefined && wantOpen === null) {
         // Of the four equivalent yaws, take the one closest to where the jaws face now.
         let bestDot = -Infinity;
-        for (let k = 0; k < (target.yawExact ? 1 : 4); k++) {
-          const a = target.yaw + (k * Math.PI) / 2;
+        const turns = target.yawExact ? 1 : (target.yawTurns ?? 4);
+        for (let k = 0; k < turns; k++) {
+          const a = target.yaw + (k * 2 * Math.PI) / turns;
           const c: Vec3 = [Math.cos(a), Math.sin(a), 0];
           if (dot(c, pose.open) > bestDot) {
             bestDot = dot(c, pose.open);

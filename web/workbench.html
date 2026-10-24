@@ -24,6 +24,11 @@
       /* The name of whatever is under the spot: quiet, so the person knows what they are
          about to refer to before they speak, without it shouting over the scene (FR9). */
       #under { margin-left: auto; color: var(--dim); font-size: 0.95rem; min-height: 1.5em; }
+      button.stop { border-color: #c62828; background: #fde8e8; color: #8e1b1b; }
+      button:disabled { opacity: 0.45; cursor: default; }
+      /* What the arm is doing, or why it will not: the robot's own words (FR15). */
+      #doing { color: var(--ink); font-size: 0.95rem; min-height: 1.5em; }
+      #doing.no { color: #8e1b1b; }
       #under b { color: var(--ink); font-weight: 600; }
       #under b::before { content: ""; display: inline-block; width: 9px; height: 9px;
         margin-right: 6px; border-radius: 50%; background: var(--amber);
@@ -59,6 +64,14 @@
         <button type="button" data-view="bays">Into the bays</button>
         <span id="under"></span>
       </div>
+      <div class="bar">
+        <button type="button" id="take">Pick that up</button>
+        <button type="button" id="put">Put it down there</button>
+        <button type="button" id="pot">Drop it in the pot</button>
+        <button type="button" id="park">Park</button>
+        <button type="button" id="stop" class="stop">Stop</button>
+        <span id="doing"></span>
+      </div>
       <p id="status">Loading…</p>
 
       <blockquote class="scope">
@@ -76,16 +89,17 @@
 
       <h2>What to look for</h2>
       <dl>
-        <dt>Six sets of the same thing</dt>
+        <dt>Five sets of the same thing</dt>
         <dd>
-          Four jars, three tins, two mugs, two screwdrivers, two offcuts, and two tubes of glue
-          that differ only by a cap. No word tells any set apart, so only pointing can. That is
-          the whole demo, and it is what a real bench looks like.
+          Four jars, two tins, two screwdrivers, two offcuts, and two tubes of glue that differ
+          only by a cap. No word tells any set apart, so only pointing can. That is the whole
+          demo, and it is what a real bench looks like.
         </dd>
         <dt>A fourth jar</dt>
         <dd>
-          Behind the middle one, in the back row. From this view you cannot see it, and neither
-          can the robot. Orbit the camera up and it appears.
+          Behind the middle one, in the back row. From this view you cannot see it at all, and
+          neither can the robot. Going <em>up</em> does not find it; drag the view <em>round</em>
+          to one side and it appears.
         </dd>
         <dt>Two tubes of glue</dt>
         <dd>To the right of the jars: one capped, one open. They differ by a state, not a word.</dd>
@@ -97,9 +111,16 @@
           whatever it is reaching for — which is why every bay is reachable along its whole
           width, and two fixed arms could not manage that.
         </dd>
+        <dt>Picking things up</dt>
+        <dd>
+          Point at something and press <b>Pick that up</b>. The arm slides along its rail until
+          it is standing where it can work, comes at the thing from above if it is on the bench
+          or straight in from the front if it is under a board, and closes the jaws on it. Then
+          point somewhere and press <b>Put it down there</b>. When it cannot, it says why.
+        </dd>
         <dt>A bottle of oil</dt>
         <dd>
-          At the back right of the bench, 150&nbsp;mm tall. It is taller than either bay is
+          On the right of the bench, 150&nbsp;mm tall. It is taller than either bay is
           high, so asking for it to be put away has an honest answer: it cannot be.
         </dd>
         <dt>The top board</dt>

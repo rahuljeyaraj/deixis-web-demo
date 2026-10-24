@@ -690,7 +690,11 @@ def _screwdriver(n: int, x: float, y: float, yaw: float) -> Thing:
         "cylinder",
         (86.0, 32.0, 32.0),
         "handle blue",
-        (x, y, 16.0),
+        # 2.5, not 16: a thing's `at_mm` height is where its **first** shape's bottom goes,
+        # and a screwdriver's fattest part is its handle, 37 mm across against the 32 of the
+        # shaft's collar. Standing it on the collar hung the handle 13 mm in the air, and once
+        # the physics was running every screwdriver dropped and rolled on landing.
+        (x, y, 2.5),
         grip_mm=32.0,
         yaw_deg=yaw,
         axis="across",
@@ -868,7 +872,7 @@ def things() -> list[Thing]:
             "cylinder",
             (180.0, 22.0, 22.0),
             "wood",
-            (bench["hammer"][0], bench["hammer"][1], 11.0),
+            (bench["hammer"][0], bench["hammer"][1], 3.0),
             grip_mm=22.0,
             yaw_deg=bench["hammer"][2],
             axis="across",
@@ -887,7 +891,7 @@ def things() -> list[Thing]:
             "cylinder",
             (84.0, 28.0, 28.0),
             "wood",
-            (bench["chisel"][0], bench["chisel"][1], 14.0),
+            (bench["chisel"][0], bench["chisel"][1], 2.0),
             grip_mm=28.0,
             yaw_deg=bench["chisel"][2],
             axis="across",
@@ -904,7 +908,7 @@ def things() -> list[Thing]:
             "box",
             (112.0, 16.0, 18.0),
             "grey",
-            (bench["knife"][0], bench["knife"][1], 9.0),
+            (bench["knife"][0], bench["knife"][1], 1.5),
             grip_mm=18.0,
             yaw_deg=bench["knife"][2],
             parts=(
