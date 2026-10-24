@@ -17,15 +17,20 @@ from pathlib import Path
 import pytest
 
 from workbench.scene import (
+    BACK_ROW_Y_MM,
     BAY_CLEAR_X_MM,
+    BAY_GRIP_Z_MM,
     BAY_TALLEST_FLAT_MM,
     BAYS,
-    BOTTOM_BAY_USABLE_X_MM,
     EYE_MM,
+    FRONT_ROW_Y_MM,
     GRIP_WIDEST_MM,
+    RAIL_FROM_MM,
+    RAIL_TO_MM,
+    RAIL_Y_MM,
     RING_MM,
     SHELF_FROM_MM,
-    arms,
+    arm,
     behind_from_the_eye,
     by_id,
     clashes,
@@ -66,24 +71,22 @@ def test_the_keyframe_has_a_number_for_every_joint():
     """
     text = SCENE.read_text(encoding="utf-8")
     qpos = text.split('<key name="home" qpos="')[1].split('"')[0].split()
-    parks = 2  # one parking body per arm
-    assert len(qpos) == 6 * len(arms()) + 7 * (parks + len(things()))
+    joints = 1 + 6  # the carriage's slide, then the arm's six
+    assert len(qpos) == joints + 7 * (1 + len(things()))  # one parking body, then the things
 
 
-def test_both_arms_are_attached_rather_than_copied():
+def test_the_arm_is_attached_rather_than_copied():
     """`<attach prefix>`, because `<replicate>` is not in this MuJoCo build and a prefixed copy
     of so101.xml would be a file to maintain."""
     text = SCENE.read_text(encoding="utf-8")
-    assert text.count('<attach model="so101"') == 2
-    for a in arms():
-        assert f'prefix="{a.id.split("_")[0]}_"' in text
+    assert text.count('<attach model="so101"') == 1
+    assert 'prefix="arm_"' in text
 
 
-def test_there_is_one_weld_per_gripper():
-    """Two grips means the page cannot use MuJoCo's global equality-disable flag: it would let
-    go of both at once."""
+def test_there_is_one_weld():
     text = SCENE.read_text(encoding="utf-8")
-    assert 'name="left_grip"' in text and 'name="right_grip"' in text
+    assert text.count("<weld ") == 1
+    assert 'name="grip"' in text
 
 
 # ------------------------------------------------- the world against what stage 0 measured
@@ -107,18 +110,27 @@ def test_six_sets_of_things_no_word_separates():
     }
 
 
+def test_nothing_stands_on_the_rail():
+    """It is a moving part, and the carriage sweeps the strip in front of it."""
+    for t in things():
+        if t.in_bay is not None:
+            continue
+        assert t.place_mm[1] - t.room_mm[1] / 2 > RAIL_Y_MM + 20, t.id
+
+
 def test_nothing_stands_where_something_else_stands():
     """A bench is crowded and this is easy to get wrong by hand: the first full layout had
     nineteen pairs of things inside one another. The places were solved against this test."""
     assert clashes() == []
 
 
-def test_nothing_in_the_bottom_bay_is_outside_what_an_arm_can_work_in():
-    """Its ring is 280 to 470 mm, the narrowest in the world, so two arms at the sides cover
-    only its middle. The two bays above reach in much closer and are usable right across."""
+def test_everything_has_somewhere_on_the_rail_to_be_worked_on_from():
+    """The gate on the layout. Every ring here was swept at the height the thing is gripped at,
+    so this is arithmetic over measurements rather than a guess."""
+    a = arm()
     for t in things():
-        if t.in_bay == 0:
-            assert BOTTOM_BAY_USABLE_X_MM[0] <= t.at_mm[0] <= BOTTOM_BAY_USABLE_X_MM[1], t.id
+        x, y, _ = t.place_mm
+        assert a.slide_for(x, y, t.grip_how, t.grip_z_mm) is not None, t.id
 
 
 def test_nothing_is_wider_than_the_gripper_can_hold():
@@ -151,23 +163,11 @@ def test_nothing_in_a_bay_is_too_tall_for_it():
         assert top <= BAYS[bay][1], f"{t.id} reaches {top} mm in a bay {BAYS[bay][1]} mm high"
 
 
-def test_everything_is_reachable_by_at_least_one_arm():
-    """The gate on the layout. Every ring here was swept at the height the thing is gripped at,
-    so this is arithmetic over measurements rather than a guess - and
-    `web/tests/probes/visible.probe.test.ts` and stage 2 drive the real solver at them."""
-    both = arms()
-    for t in things():
-        if not t.graspable:
-            continue
-        who = [a.id for a in both if a.can_reach(t)]
-        assert who, f"no arm reaches {t.id}"
-
-
 def test_the_pot_can_be_dropped_into_even_though_it_is_never_picked_up():
     pot = by_id(things())["pot"]
     assert not pot.graspable
     x, y, _ = pot.place_mm
-    assert any(a.reaches(x, y, pot.grip_how, pot.grip_z_mm) for a in arms())
+    assert arm().reaches(x, y, pot.grip_how, pot.grip_z_mm)
 
 
 def test_every_ring_a_thing_uses_was_actually_swept():
@@ -227,10 +227,10 @@ def test_the_keyframe_puts_every_thing_where_its_body_is_declared():
     text = SCENE.read_text(encoding="utf-8")
     qpos = text.split('<key name="home" qpos="')[1].split('"')[0].split()
     declared = re.findall(r'<body name="([a-z0-9_]+)" pos="([^"]+)"', text)
-    # Past the two arms' joints and the two parking bodies.
-    at = 6 * len(arms())
+    # Past the carriage's slide and the arm's six joints.
+    at = 7
     for name, pos in declared:
-        if name.endswith("_stand"):
+        if name == "carriage":
             continue
         want = [float(v) for v in pos.split()]
         got = [float(v) for v in qpos[at : at + 3]]
@@ -261,14 +261,59 @@ def test_three_bays():
     assert [round(f) for f, _ in BAYS] == [0, 122, 244]
 
 
-def test_the_arms_stand_at_the_sides_facing_each_other():
-    """Facing the shelf from the front put both arms' dead zones on the bench, in front of the
-    person. At the edges, facing inward, half of each dead disc and the whole of each dead
-    sector fall off it."""
-    left, right = arms()
-    assert left.facing_deg == -90.0 and right.facing_deg == 90.0
-    assert left.base_mm[1] == right.base_mm[1]
-    assert left.base_mm[0] < 150 and right.base_mm[0] > 550
+def test_one_arm_on_a_rail_across_the_front():
+    """Two arms standing still left 40 per cent of the bottom bay's back row out of reach of
+    either: an arm cannot work closer in than 135 mm from itself nor more than 100 degrees off
+    the way it faces, and no placing makes those dead zones go away. Sliding one arm does."""
+    a = arm()
+    assert a.facing_deg == 0.0  # square to the shelf: it slides rather than turns
+    assert a.rail_y_mm == RAIL_Y_MM
+    assert a.rail_from_mm < 100 and a.rail_to_mm > 600
+
+
+def test_the_rail_can_stand_the_arm_in_front_of_every_bay():
+    """The point of a rail: the bearing can always be nothing, so only how far back it runs
+    matters. Every bay's whole width is reachable, which two fixed arms could not manage."""
+    a = arm()
+    for z in BAY_GRIP_Z_MM:
+        for x in range(int(BAY_CLEAR_X_MM[0]), int(BAY_CLEAR_X_MM[1]) + 1, 20):
+            assert a.reaches(x, FRONT_ROW_Y_MM, "level", z), f"({x}, front row) at z {z}"
+
+
+def test_the_back_row_is_reachable_in_the_two_lower_bays_but_not_the_top_one():
+    """A finding, kept as a test so it cannot be forgotten.
+
+    Reaching level is a different ring at every height, and up at the top bay it is 90 to **430**
+    mm - the outer edge having shrunk as the inner one collapsed. The back row is 435 mm from
+    the rail, which is five millimetres too far. So the top bay is a front-row-only bay, and
+    nothing is put behind in it. The two below reach the back row comfortably.
+    """
+    a = arm()
+    for z in BAY_GRIP_Z_MM[:2]:
+        for x in range(int(BAY_CLEAR_X_MM[0]), int(BAY_CLEAR_X_MM[1]) + 1, 20):
+            assert a.reaches(x, BACK_ROW_Y_MM, "level", z), f"({x}, back row) at z {z}"
+    assert not a.reaches(350, BACK_ROW_Y_MM, "level", BAY_GRIP_Z_MM[2])
+    for t in things():
+        if t.in_bay == 2:
+            assert t.at_mm[1] == FRONT_ROW_Y_MM, f"{t.id} is in the top bay's back row"
+
+
+def test_the_rail_is_sunk_so_the_measured_rings_still_hold():
+    """Every ring was measured with the arm's base on the bench at z = 0. A rail standing proud
+    would raise the arm and put all of them out by its own height."""
+    text = SCENE.read_text(encoding="utf-8")
+    rail = re.search(r'<geom name="rail"[^>]*pos="[-\d.]+ [-\d.]+ ([-\d.]+)"', text)
+    assert rail and float(rail.group(1)) < 0
+    assert '<body name="carriage" pos="' in text
+    assert 'type="slide"' in text
+
+
+def test_the_slide_has_a_motor_and_comes_first():
+    """so101.xml brings six position actuators; the slide is the seventh and must be first in
+    the list, because the page sets every control straight from the keyframe by index."""
+    text = SCENE.read_text(encoding="utf-8")
+    assert '<position name="slide" joint="slide"' in text
+    assert text.index("<actuator>") < text.index("<equality>")
 
 
 def test_everything_stands_on_the_bench_or_in_the_unit():
@@ -295,4 +340,5 @@ def test_the_reach_json_is_written_for_the_page_and_the_probes():
     out = json.loads(REACH.read_text(encoding="utf-8"))
     assert len(out["things"]) == 26
     assert out["eye"] == list(EYE_MM)
-    assert {a["id"] for a in out["arms"]} == {a.id for a in arms()}
+    assert out["rail"]["y"] == RAIL_Y_MM
+    assert out["rail"]["from"] == RAIL_FROM_MM and out["rail"]["to"] == RAIL_TO_MM

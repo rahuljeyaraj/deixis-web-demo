@@ -23,16 +23,19 @@ from them, so
 and `bench_to_world` below is the only place that conversion is written. The 350 is this
 world's centre line; the end demo's was 250.
 
-**Two arms** come in by `<attach model="so101" prefix="left_"/>`, which this MuJoCo build
-supports and `<replicate>` does not (`web/tests/probes/twoarms.probe.test.ts`). The prefix is
-applied to the attached model's own root body, which is called `base`, so the wrapper bodies are
-named `left_stand` and `right_stand` - `left_base` would collide.
+**One arm, on a rail.** It comes in by `<attach model="so101" prefix="arm_"/>`, which this
+MuJoCo build supports and `<replicate>` does not (`web/tests/probes/twoarms.probe.test.ts`). The
+prefix is applied to the attached model's own root body, which is called `base`, so the wrapper
+body is `carriage` - `arm_base` would collide.
 
-**Two welds and two parking bodies**, one per gripper. `data.eq_active` cannot be touched in
-this build (a `memory_view<bool>`; emscripten throws on any access), and MuJoCo's global
-equality-disable flag would let go of both grips at once, so both welds stay active and an arm
-holding nothing has its weld on an invisible parking body. See
-`web/tests/probes/eqactive.probe.test.ts`. Nothing drives them in stage 1; they are here so the
+The carriage carries a **slide joint** along the bench's x. The rail is sunk into the bench so
+the carriage's top is flush with it: every ring in `RING_MM` was measured with the arm's base at
+z = 0, and a rail standing proud of the bench would put all of them out by its own height.
+
+**One weld and one parking body.** `data.eq_active` cannot be touched in this build (a
+`memory_view<bool>`; emscripten throws on any access), so the weld stays active and an arm
+holding nothing has it pointed at an invisible parking body. See
+`web/tests/probes/eqactive.probe.test.ts`. Nothing drives it in stage 1; it is here so the
 keyframe's qpos order is settled once rather than twice.
 """
 
@@ -60,6 +63,11 @@ from workbench.scene import (  # noqa: E402
     FRONT_ROW_Y_MM,
     GIVE_MM,
     LOOK_AT_MM,
+    RAIL_FROM_MM,
+    RAIL_SUNK_MM,
+    RAIL_TO_MM,
+    RAIL_WIDE_MM,
+    RAIL_Y_MM,
     RING_MM,
     ROBOT_EYE_MM,
     SHELF_BACK_MM,
@@ -67,6 +75,7 @@ from workbench.scene import (  # noqa: E402
     SHELF_SIDE_MM,
     SHELF_TO_MM,
     Thing,
+    arm,
     arms,
     clashes,
     reach_report,
@@ -104,7 +113,16 @@ REST_ARM = (-1.0, 1.69, 1.0, 0.0, 0.2)
 #: With the arms at the sides the pose hardly matters: the sweep runs from 69 to 86 per cent,
 #: and most of it is at 86. That is the measurement agreeing with the reason they were moved
 #: there. Standing at the front facing the shelf, the same sweep ran from 48 to 71.
-REST_PAN_RAD = {"left_arm": -1.8, "right_arm": 1.8}
+REST_PAN_RAD = -1.8
+#: Where the carriage parks, in the bench frame.
+#:
+#: At the right-hand end, which is measured rather than chosen. Wherever the arm parks it hides
+#: a band of the bench behind it, and the question is only what is in that band. Parked in the
+#: middle it stood in front of the hammer, which is 292 mm long and cannot be moved far enough
+#: either way to clear the band - 21 per cent of it could be seen. At the left end it hid a pot
+#: of screws. At the right end the band falls on the bench's far corner, where nothing needs to
+#: stand, and every thing in the world is at least 45 per cent visible with the arm at rest.
+REST_SLIDE_X_MM = RAIL_TO_MM
 
 #: Rough masses, kilograms. Nothing here is heavy; the gripper's weld does the carrying.
 MASSES: dict[str, float] = {
@@ -132,6 +150,7 @@ MASSES: dict[str, float] = {
 #: separate at that size and to stay apart in a photograph of a screen.
 COLOURS: dict[str, str] = {
     "bench": "0.68 0.52 0.36 1",
+    "rail": "0.22 0.23 0.26 1",
     "shelf": "0.86 0.81 0.72 1",
     # Darker than the boards on purpose: with the back the same shade as everything else, a bay
     # read as a flat panel rather than as a space with things standing in it.
@@ -366,20 +385,15 @@ def declared(items: list[Thing]) -> list[Thing]:
 def _home_qpos(items: list[Thing]) -> str:
     """The whole qpos vector for the resting pose.
 
-    Both arms' joints first, in the order `<attach>` adds them, then every free joint in the
-    order its body is declared: the two parking bodies, then the things. Getting that order
-    wrong does not fail, it scrambles the scene - in the end demo it moved the remote 38 mm and
-    looked like a physics problem.
+    The carriage's slide first, then the arm's six joints, then every free joint in declaration
+    order - the parking body, then the things. Getting that order wrong does not fail: it gives
+    every thing the next thing's position and the whole bench comes out somewhere else. It has
+    done that twice here, which is why `declared()` exists and why two tests watch it.
     """
-    out: list[str] = []
-    for arm in arms():
-        # Six per arm - the five joints and the gripper - and not five. Five put every free
-        # joint after them two numbers out, which does not fail: it quietly lays the whole
-        # bench out somewhere else, with each thing wearing the next thing's position.
-        out += [f"{q:g}" for q in (REST_PAN_RAD[arm.id], *REST_ARM)]
-    for arm in arms():
-        X, Y = bench_to_world(*arm.base_mm)
-        out += [f"{X:.4f}", f"{Y:.4f}", "0.3000", "1", "0", "0", "0"]
+    out = [f"{slide_of(REST_SLIDE_X_MM):.4f}"]
+    out += [f"{q:g}" for q in (REST_PAN_RAD, *REST_ARM)]
+    X, Y = bench_to_world(REST_SLIDE_X_MM, RAIL_Y_MM)
+    out += [f"{X:.4f}", f"{Y:.4f}", "0.3000", "1", "0", "0", "0"]
     for t in declared(items):
         x_mm, y_mm, z_mm = t.place_mm
         X, Y = bench_to_world(x_mm, y_mm)
@@ -388,11 +402,23 @@ def _home_qpos(items: list[Thing]) -> str:
     return " ".join(out)
 
 
+def slide_of(x_mm: float) -> float:
+    """Where the carriage sits on its rail, metres, for a place across the bench.
+
+    The slide joint runs along world **-Y**, because world Y is minus the bench's x. Written
+    that way round so that sliding the joint forward moves the arm towards the person's right,
+    which is the way everything else in this world is measured.
+    """
+    return (x_mm - CENTRE_X_MM) / 1000.0
+
+
 def xml() -> str:
     items = things()
-    left, right = arms()
-    lx, ly = bench_to_world(*left.base_mm)
-    rx, ry = bench_to_world(*right.base_mm)
+    a = arm()
+    cx, cy = bench_to_world(CENTRE_X_MM, RAIL_Y_MM)
+    slide_lo, slide_hi = slide_of(a.rail_from_mm), slide_of(a.rail_to_mm)
+    # The parking body starts where the carriage parks, so that the keyframe and the body agree.
+    px, py = bench_to_world(REST_SLIDE_X_MM, RAIL_Y_MM)
     give_x, give_y = bench_to_world(GIVE_MM[0], GIVE_MM[1])
     eye_x, eye_y = bench_to_world(ROBOT_EYE_MM[0], ROBOT_EYE_MM[1])
     bx0, by0 = BENCH_FROM_MM
@@ -455,28 +481,38 @@ def xml() -> str:
         f'    <site name="robot_eye" pos="{eye_x:.4f} {eye_y:.4f} {mm(ROBOT_EYE_MM[2])}"'
         ' size="0.010" rgba="0.12 0.52 0.90 0.30"/>',
         "",
-        "    <!-- The arms, one at each side of the bench, turned to face each other. Unturned,",
-        "         forward (shoulder_pan = 0) is +X, which is the shelf; each stand is turned a",
-        "         quarter so that the arm's dead disc and its dead sector fall off the bench",
-        "         rather than across it. The turn is a quaternion because this file has no",
-        "         <compiler>, so `euler` would be degrees here and radians inside so101.xml. -->",
-        f'    <body name="left_stand" pos="{lx:.4f} {ly:.4f} 0"'
-        f' quat="{quat_str(quat_about("z", left.facing_deg))}">',
-        '      <attach model="so101" prefix="left_"/>',
-        "    </body>",
-        f'    <body name="right_stand" pos="{rx:.4f} {ry:.4f} 0"'
-        f' quat="{quat_str(quat_about("z", right.facing_deg))}">',
-        '      <attach model="so101" prefix="right_"/>',
+        "    <!-- The rail, sunk into the bench so that the carriage's top is flush with it.",
+        "         That is not decoration: every ring in RING_MM was measured with the arm's base",
+        "         at z = 0, and a rail standing proud would put all of them out by its height. -->",
+        slab(
+            "rail",
+            RAIL_FROM_MM - 40.0,
+            RAIL_TO_MM + 40.0,
+            RAIL_Y_MM - RAIL_WIDE_MM / 2,
+            RAIL_Y_MM + RAIL_WIDE_MM / 2,
+            -RAIL_SUNK_MM,
+            0.0,
+            "rail",
+        ),
+        "",
+        "    <!-- The arm, on a carriage that slides along the rail. Forward (shoulder_pan = 0)",
+        "         is +X, which is the shelf, so the stand is not turned: the arm can always",
+        "         slide to stand square in front of whatever it is reaching for, and that is the",
+        "         whole reason for the rail. -->",
+        f'    <body name="carriage" pos="{cx:.4f} {cy:.4f} 0">',
+        '      <joint name="slide" type="slide" axis="0 -1 0"',
+        f'        range="{slide_lo:.4f} {slide_hi:.4f}" damping="60" armature="0.4"/>',
+        f'      <geom name="carriage" type="box" pos="0 0 {-RAIL_SUNK_MM / 2000:.4f}"',
+        f'        size="{mm(RAIL_WIDE_MM / 2 - 4)} 0.045 {mm(RAIL_SUNK_MM / 2 - 1)}"',
+        '        rgba="0.36 0.38 0.42 1" contype="0" conaffinity="0"/>',
+        '      <attach model="so101" prefix="arm_"/>',
         "    </body>",
         "",
-        "    <!-- One parking body per arm: where its weld points while it holds nothing.",
-        "         Declared after the arms and before the things, because the keyframe lists qpos",
+        "    <!-- One parking body: where the weld points while the arm holds nothing.",
+        "         Declared after the arm and before the things, because the keyframe lists qpos",
         "         in declaration order. -->",
-        f'    <body name="left_park" pos="{lx:.4f} {ly:.4f} 0.30"><freejoint name="left_park"/>',
-        '      <geom name="left_park" type="sphere" size="0.002" mass="0.0001"',
-        '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
-        f'    <body name="right_park" pos="{rx:.4f} {ry:.4f} 0.30"><freejoint name="right_park"/>',
-        '      <geom name="right_park" type="sphere" size="0.002" mass="0.0001"',
+        f'    <body name="park" pos="{px:.4f} {py:.4f} 0.30"><freejoint name="park"/>',
+        '      <geom name="park" type="sphere" size="0.002" mass="0.0001"',
         '        contype="0" conaffinity="0" rgba="0 0 0 0"/></body>',
         "",
     ]
@@ -502,11 +538,17 @@ def xml() -> str:
         f'    <key name="home" qpos="{_home_qpos(items)}"/>',
         "  </keyframe>",
         "",
-        "  <!-- One weld per gripper, both always active, each starting on its own parking body.",
-        "       Nothing drives them until stage 2; see the module docstring. -->",
+        "  <!-- The carriage's own motor. so101.xml brings six position actuators with it; this",
+        "       is the seventh, and it comes first because the slide is first in qpos, which is",
+        "       what lets the page set every control straight from the keyframe. -->",
+        "  <actuator>",
+        '    <position name="slide" joint="slide" kp="4000" kv="120" forcerange="-150 150"/>',
+        "  </actuator>",
+        "",
+        "  <!-- One weld, always active, starting on the parking body. Nothing drives it until",
+        "       stage 2; see the module docstring. -->",
         "  <equality>",
-        '    <weld name="left_grip" body1="left_gripper" body2="left_park"/>',
-        '    <weld name="right_grip" body1="right_gripper" body2="right_park"/>',
+        '    <weld name="grip" body1="arm_gripper" body2="park"/>',
         "  </equality>",
         "</mujoco>",
     ]
@@ -521,18 +563,16 @@ def reach_json() -> str:
     name of whatever is under the laser spot.
     """
     all_arms = arms()
+    one = all_arms[0]
     out = {
         "_": "GENERATED by scripts/make_workbench_scene.py - do not edit by hand.",
         "ringMm": {f"{how} {z}": list(v) for (how, z), v in sorted(RING_MM.items())},
-        "arms": [
-            {
-                "id": a.id,
-                "prefix": f"{a.id.split('_')[0]}_",
-                "base": [round(v, 4) for v in bench_to_world(*a.base_mm)],
-                "holdsOut": a.reaches_person,
-            }
-            for a in all_arms
-        ],
+        "rail": {
+            "y": one.rail_y_mm,
+            "from": one.rail_from_mm,
+            "to": one.rail_to_mm,
+            "holdsOut": one.reaches_person,
+        },
         "give": [round(v, 4) for v in bench_to_world(GIVE_MM[0], GIVE_MM[1])],
         "eye": list(EYE_MM),
         "lookAt": list(LOOK_AT_MM),
@@ -560,7 +600,11 @@ def reach_json() -> str:
                 "gripZ": t.grip_z_mm,
                 "wanted": t.wanted,
                 "graspable": t.graspable,
-                "reachedBy": [a.id for a in all_arms if t.graspable and a.can_reach(t)],
+                "slideTo": (
+                    one.slide_for(t.place_mm[0], t.place_mm[1], t.grip_how, t.grip_z_mm)
+                    if t.graspable
+                    else None
+                ),
             }
             for t in things()
         ],

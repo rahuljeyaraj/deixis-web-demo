@@ -108,8 +108,8 @@ const FURNITURE: Record<string, string> = {
   shelf_board0: 'the board over the bottom bay',
   shelf_board1: 'the board over the middle bay',
   shelf_board2: 'the top of the shelf unit',
-  left_stand: 'the left arm',
-  right_stand: 'the right arm',
+  rail: 'the rail the arm runs on',
+  carriage: 'the arm',
 };
 
 /**

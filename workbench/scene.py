@@ -155,9 +155,14 @@ BOTTOM_BAY_USABLE_X_MM = (200.0, 520.0)
 FRONT_ROW_Y_MM = 385.0
 BACK_ROW_Y_MM = 455.0
 
-#: Where a thing is held out to the person: the middle of the bench, as near them as an arm can
-#: work, 60 mm up.
-GIVE_MM = (350.0, 40.0, 60.0)
+#: Where a thing is put for the person to take: in the middle of the bench, just in front of
+#: the rail, as near them as the arm can work.
+#:
+#: Not held out in mid-air. With the rail across the front, everything on the person's side of
+#: it is **behind** the arm - past the shoulder's 100 degrees - so the arm cannot hold anything
+#: out over that edge at all. It puts the thing down where they can reach it instead, which is
+#: what happens at a real bench anyway.
+GIVE_MM = (350.0, 150.0, 40.0)
 
 #: The robot's own camera: a point above and between the arms. What it can see is computed from
 #: here rather than stored, so the list the model is given cannot quietly disagree with the
@@ -205,45 +210,91 @@ BAYS = tuple(bay_z_mm(n) for n in range(len(BOARD_Z_MM)))
 BAY_GRIP_Z_MM = (55, 177, 299)
 
 
-# -------------------------------------------------------------------- the arms
+# --------------------------------------------------------------------- the arm
+
+#: The rail the arm rides on: how far back from the person it runs, and how far along the bench
+#: the carriage can travel.
+#:
+#: **Across the front, not down a side** (rahul, 24 Oct). Down a side it would be hopeless: the
+#: far end of the shelf would be 498 mm away and the arm reaches 470, so half the unit could
+#: never be touched from any position on the rail. Across the front, the arm can always slide to
+#: stand **square in front of** whatever it is reaching for, which makes every bay reachable
+#: along its whole width - the bearing is zero and the only thing that matters is how far back
+#: the rail is.
+#:
+#: How far back it sits is then the only real choice, and it is a squeeze from both ends. The
+#: bottom bay's ring - the tightest in the world, 280 to 470 mm - has to swallow the distance to
+#: **both** rows of the shelf, which wants the rail near the person; and everything the arm
+#: works on has to be at least 135 mm from it, which wants it far from the bench. 20 mm back
+#: puts the shelf's rows at 365 and 435 mm, both comfortably inside, and leaves the bench
+#: usable from 75 mm onwards - 265 mm of depth for the loose tools to lie in.
+RAIL_Y_MM = 20.0
+RAIL_FROM_MM = 70.0
+RAIL_TO_MM = 630.0
+#: The carriage is recessed, so the arm's base still sits at z = 0 - which is where every ring
+#: in `RING_MM` was measured from. A rail standing proud of the bench would raise the arm, and
+#: every one of those measurements would be 25 mm out.
+RAIL_SUNK_MM = 16.0
+RAIL_WIDE_MM = 54.0
 
 
 @dataclass(frozen=True)
 class Arm:
-    """One SO-101, standing on the bench. Pointable: the person may mean *you*."""
+    """The SO-101, on its rail. Pointable: the person may mean *you*."""
 
     id: str
-    #: Where its base stands, in the bench frame, millimetres.
-    base_mm: tuple[float, float]
-    #: Which way it faces, degrees, 0 being straight at the shelf and + towards the person's
-    #: left. The shoulder turns `PAN_LIMIT_DEG` either side of this.
+    rail_y_mm: float = RAIL_Y_MM
+    rail_from_mm: float = RAIL_FROM_MM
+    rail_to_mm: float = RAIL_TO_MM
+    #: Which way it faces from the carriage, degrees, 0 being straight at the shelf. The
+    #: shoulder turns `PAN_LIMIT_DEG` either side of this.
     facing_deg: float = 0.0
 
-    def radius_to(self, x: float, y: float) -> float:
-        return math.hypot(x - self.base_mm[0], y - self.base_mm[1])
+    def base_mm_at(self, slide_x: float) -> tuple[float, float]:
+        return (slide_x, self.rail_y_mm)
 
-    def bearing_to(self, x: float, y: float) -> float:
-        """How far a spot lies off this arm's forward, degrees, -180 to 180.
+    def bearing_from(self, slide_x: float, x: float, y: float) -> float:
+        """How far a spot lies off the arm's forward from a carriage position, degrees.
 
-        Forward is +y, away from the person towards the shelf, before the arm is turned. A
-        positive turn swings forward towards the person's left, which is a step of -x, which is
-        why the x term is negated. The same convention as `end_demo.scene`.
+        Forward is +y, away from the person towards the shelf. The same convention as
+        `end_demo.scene`: a positive turn swings forward towards the person's left, which is a
+        step of -x, which is why the x term is negated.
         """
-        world = math.degrees(math.atan2(-(x - self.base_mm[0]), y - self.base_mm[1]))
+        world = math.degrees(math.atan2(-(x - slide_x), y - self.rail_y_mm))
         return (world - self.facing_deg + 180.0) % 360.0 - 180.0
 
-    def reaches(self, x: float, y: float, how: str, z: int) -> bool:
-        """Can this arm work at this spot, pointing `how`, at the height the ring was swept at?
+    def margin_from(self, slide_x: float, x: float, y: float, how: str, z: int) -> float:
+        """How much room to spare this carriage position has, millimetres.
 
-        Three things have to hold: the spot is far enough out that the arm is not folded into
-        itself, it is in front of the arm rather than behind it, and it is inside the reach left
-        at that bearing. `how` and `z` must name a ring that was really measured.
+        Negative when it cannot be done at all: how far outside the ring, or how far past the
+        shoulder's limit, measured in millimetres so the two can be compared.
         """
-        bearing = abs(self.bearing_to(x, y))
+        bearing = abs(self.bearing_from(slide_x, x, y))
         if bearing > PAN_LIMIT_DEG:
-            return False
+            return -(bearing - PAN_LIMIT_DEG) * 10.0
         near, far = RING_MM[(how, z)]
-        return near <= self.radius_to(x, y) <= far - REACH_FALL_MM_PER_DEG * bearing
+        r = math.hypot(x - slide_x, y - self.rail_y_mm)
+        return min(r - near, far - REACH_FALL_MM_PER_DEG * bearing - r)
+
+    def slide_for(self, x: float, y: float, how: str, z: int) -> float | None:
+        """Where to slide to, to work at this spot with the most room to spare - or None.
+
+        Searched rather than solved: the ring's outer edge falls with the bearing, so the best
+        place on the rail is not simply the one straight in front, and 5 mm steps over half a
+        metre of rail are cheap. Stage 2 drives the real solver from here.
+        """
+        best, best_margin = None, 0.0
+        here = self.rail_from_mm
+        while here <= self.rail_to_mm:
+            margin = self.margin_from(here, x, y, how, z)
+            if margin > best_margin:
+                best, best_margin = here, margin
+            here += 5.0
+        return best
+
+    def reaches(self, x: float, y: float, how: str, z: int) -> bool:
+        """Can the arm work at this spot from anywhere on its rail?"""
+        return self.slide_for(x, y, how, z) is not None
 
     def can_reach(self, thing: Thing) -> bool:
         x, y, _ = thing.place_mm
@@ -251,34 +302,39 @@ class Arm:
 
     @property
     def reaches_person(self) -> bool:
-        """Can it hold a thing out to them? Their hand is 60 mm up, nearest the down-70 ring."""
+        """Can it put a thing down where the person can take it?"""
         return self.reaches(GIVE_MM[0], GIVE_MM[1], "down", 70)
 
 
-def arms() -> list[Arm]:
-    """The two arms, one at each side of the bench, **facing each other**.
+def arm() -> Arm:
+    """The one arm, on a rail across the front of the bench.
 
-    Two is not decoration, it is forced by the rings. Each arm drags a dead disc about with it -
-    135 mm reaching down, 280 reaching level into the bottom bay - and can work only 100 degrees
-    either side of the way it faces. Standing them at the sides and turning them inward throws
-    half of each disc, and the whole of each dead sector, off the bench.
+    **One arm, not two** (rahul, 24 Oct). Two SO-101s standing at the sides of the bench, facing
+    each other, left 40 per cent of the bottom bay's back row out of reach of either, and 49 per
+    cent of the bench top out of reach of both: each arm drags a dead disc about with it and
+    cannot turn more than 100 degrees off the way it faces, and no amount of placing them well
+    makes those discs go away. Sliding one arm does. Measured over the same points:
 
-    What they can do between them, written out by `scripts/make_workbench_scene.py`:
+    | | two arms | one on a rail |
+    |---|---|---|
+    | the bottom bay, front row | 79% | 100% |
+    | the bottom bay, back row | 60% | 100% |
+    | the middle bay | 81% | 100% |
+    | the bench top | 51% | 80% |
 
-    - each covers its own half of the bench top and reaches a little past the middle, so the
-      middle strip is where "either of us could do this one" lives;
-    - in the **bottom** bay the ring is narrowest, so each arm covers the half of it **away**
-      from itself: the left arm works the right of that bay and the right arm works the left.
-      "It is on my side, so you take it" comes out backwards here, which is worth knowing before
-      anybody writes the words;
-    - in the two bays above, where the ring reaches in much closer, both cover nearly all of it.
+    What it costs is a kind of pointing: with two arms a person can say *you*, or *the other
+    one*, and mean something by it. With one there is nothing to choose between. That was
+    weighed and spent.
 
-    Left and right are **the person's**, as they look at the bench.
+    The arm faces the shelf and does not turn on its carriage, because it never needs to: it can
+    always slide to stand square in front of whatever it is reaching for.
     """
-    return [
-        Arm("left_arm", base_mm=(90.0, 210.0), facing_deg=-90.0),
-        Arm("right_arm", base_mm=(610.0, 210.0), facing_deg=90.0),
-    ]
+    return Arm("arm")
+
+
+def arms() -> list[Arm]:
+    """The arm, as a list, for the places that walk over them."""
+    return [arm()]
 
 
 # ------------------------------------------------------------------ the things
@@ -626,7 +682,7 @@ def things() -> list[Thing]:
         _tin(2, 292.0, FRONT_ROW_Y_MM, -31.0),
         _tin(3, 379.0, FRONT_ROW_Y_MM, 48.0),
         _mug(1, 478.0, FRONT_ROW_Y_MM, 0.0, bay1, "level", BAY_GRIP_Z_MM[1]),
-        _mug(2, 89.0, 44.0, 138.0, 0.0, "down", 35),
+        _mug(2, 84.0, 283.0, -114.0, 0.0, "down", 35),
         # ------------------------------------------------------------------- the top bay
         Thing(
             "odds",
@@ -636,7 +692,7 @@ def things() -> list[Thing]:
             # 70 deep, not 86: the gripper holds 76 mm and the box is taken by its sides.
             (116.0, 70.0, 74.0),
             "brown card",
-            (250.0, FRONT_ROW_Y_MM, bay2),
+            (212.0, FRONT_ROW_Y_MM, bay2),
             grip_mm=70.0,
             grip_how="level",
             grip_z_mm=BAY_GRIP_Z_MM[2],
@@ -653,25 +709,25 @@ def things() -> list[Thing]:
             "box",
             (22.0, 20.0, 100.0),
             "steel",
-            (430.0, FRONT_ROW_Y_MM, bay2),
+            (352.0, FRONT_ROW_Y_MM, bay2),
             grip_mm=22.0,
             grip_how="level",
             grip_z_mm=BAY_GRIP_Z_MM[2],
             yaw_deg=24.0,
             parts=(
-                Part("box", (74.0, 20.0, 20.0), (37.0, 0.0, 40.0), "steel"),
-                Part("box", (74.0, 20.0, 18.0), (37.0, 0.0, -41.0), "steel"),
-                Part("cylinder", (14.0, 14.0, 44.0), (68.0, 0.0, -18.0), "steel"),
-                Part("cylinder", (46.0, 11.0, 11.0), (68.0, 0.0, -42.0), "steel", "across"),
-                Part("cylinder", (26.0, 26.0, 8.0), (68.0, 0.0, 6.0), "steel"),
+                Part("box", (54.0, 20.0, 20.0), (27.0, 0.0, 40.0), "steel"),
+                Part("box", (54.0, 20.0, 18.0), (27.0, 0.0, -41.0), "steel"),
+                Part("cylinder", (14.0, 14.0, 44.0), (48.0, 0.0, -18.0), "steel"),
+                Part("cylinder", (46.0, 11.0, 11.0), (48.0, 0.0, -42.0), "steel", "across"),
+                Part("cylinder", (26.0, 26.0, 8.0), (48.0, 0.0, 6.0), "steel"),
             ),
-            footprint_mm=(160.0, 46.0),
+            footprint_mm=(120.0, 46.0),
         ),
-        _offcut(2, 405.0, BACK_ROW_Y_MM - 5.0, 4.0, bay2, on_edge=True),
+        _offcut(2, 490.0, FRONT_ROW_Y_MM, 4.0, bay2, on_edge=True),
         # ---------------------------------------------------------------- on the bench top
-        _offcut(1, 345.0, 55.0, 7.0),
-        _screwdriver(1, 350.0, 129.0, 8.0),
-        _screwdriver(2, 492.0, 77.0, 50.0),
+        _offcut(1, 264.0, 108.0, -83.0),
+        _screwdriver(1, 431.0, 164.0, 4.0),
+        _screwdriver(2, 563.0, 120.0, 17.0),
         Thing(
             "hammer",
             "a hammer",
@@ -679,9 +735,9 @@ def things() -> list[Thing]:
             "cylinder",
             (210.0, 22.0, 22.0),
             "wood",
-            (311.0, 205.0, 11.0),
+            (390.0, 270.0, 11.0),
             grip_mm=22.0,
-            yaw_deg=9.0,
+            yaw_deg=-172.0,
             axis="across",
             parts=(
                 Part("cylinder", (70.0, 28.0, 28.0), (-78.0, 0.0, 0.0), "wood", "across"),
@@ -698,9 +754,9 @@ def things() -> list[Thing]:
             "box",
             (96.0, 14.0, 18.0),
             "red",
-            (177.0, 66.0, 9.0),
+            (146.0, 243.0, 9.0),
             grip_mm=44.0,
-            yaw_deg=-41.0,
+            yaw_deg=-115.0,
             parts=(
                 Part("box", (96.0, 14.0, 18.0), (-4.0, 16.0, 0.0), "red", turn_deg=-9.0),
                 Part("box", (96.0, 14.0, 18.0), (-4.0, -16.0, 0.0), "red", turn_deg=9.0),
@@ -717,9 +773,9 @@ def things() -> list[Thing]:
             "cylinder",
             (84.0, 28.0, 28.0),
             "wood",
-            (388.0, 319.0, 14.0),
+            (150.0, 114.0, 14.0),
             grip_mm=28.0,
-            yaw_deg=-169.0,
+            yaw_deg=55.0,
             axis="across",
             parts=(
                 Part("cylinder", (14.0, 32.0, 32.0), (46.0, 0.0, 0.0), "steel", "across"),
@@ -735,9 +791,9 @@ def things() -> list[Thing]:
             "box",
             (112.0, 16.0, 18.0),
             "grey",
-            (565.0, 51.0, 9.0),
+            (592.0, 320.0, 9.0),
             grip_mm=18.0,
-            yaw_deg=63.0,
+            yaw_deg=88.0,
             parts=(
                 Part("box", (34.0, 18.0, 21.0), (-62.0, 0.0, 0.0), "red"),
                 Part("box", (54.0, 18.0, 4.0), (0.0, 0.0, 10.0), "red"),
@@ -752,9 +808,9 @@ def things() -> list[Thing]:
             "box",
             (168.0, 26.0, 2.0),
             "steel",
-            (484.0, 326.0, 0.0),
+            (517.0, 234.0, 0.0),
             grip_mm=26.0,
-            yaw_deg=-168.0,
+            yaw_deg=144.0,
             parts=tuple(
                 Part("box", (2.0, 14.0, 1.0), (k * 24.0, 6.0, 1.0), "pencil")
                 for k in (-3, -2, -1, 0, 1, 2, 3)
@@ -767,9 +823,9 @@ def things() -> list[Thing]:
             "cylinder",
             (68.0, 68.0, 26.0),
             "beige",
-            (620.0, 36.0, 0.0),
+            (368.0, 100.0, 0.0),
             grip_mm=68.0,
-            yaw_deg=-120.0,
+            yaw_deg=4.0,
             parts=(
                 Part("cylinder", (30.0, 30.0, 28.0), (0.0, 0.0, 0.0), "shadow"),
                 Part("cylinder", (70.0, 70.0, 3.0), (0.0, 0.0, 12.0), "beige dark"),
@@ -784,9 +840,9 @@ def things() -> list[Thing]:
             "box",
             (62.0, 36.0, 16.0),
             "red",
-            (477.0, -9.0, 0.0),
+            (44.0, 188.0, 0.0),
             grip_mm=36.0,
-            yaw_deg=49.0,
+            yaw_deg=-105.0,
             parts=(
                 Part("box", (64.0, 38.0, 4.0), (0.0, 0.0, 7.0), "red dark"),
                 Part("box", (40.0, 22.0, 1.0), (0.0, 0.0, 9.0), "white"),
@@ -799,7 +855,7 @@ def things() -> list[Thing]:
             "cylinder",
             (66.0, 66.0, 58.0),
             "grey",
-            (191.0, 300.0, 0.0),
+            (50.0, 103.0, 0.0),
             grip_mm=66.0,
             grip_z_mm=70,  # letting go over its rim, not picking it up
             wanted=False,
@@ -817,11 +873,11 @@ def things() -> list[Thing]:
             "cylinder",
             (56.0, 56.0, 96.0),
             "dark green",
-            (516.0, 199.0, 0.0),
+            (654.0, 273.0, 0.0),
             grip_mm=24.0,
             grip_how="level",
             grip_z_mm=130,  # 150 mm tall: far too tall to be gripped from over the top
-            yaw_deg=-53.0,
+            yaw_deg=-165.0,
             parts=(
                 Part("cylinder", (44.0, 44.0, 14.0), (0.0, 0.0, 54.0), "dark green"),
                 Part("cylinder", (24.0, 24.0, 28.0), (0.0, 0.0, 74.0), "dark green"),
@@ -898,23 +954,30 @@ def clashes(items: list[Thing] | None = None) -> list[tuple[str, str]]:
 
 
 def reach_report() -> list[str]:
-    """Who can reach what, from the measured rings. The gate on the layout."""
-    all_arms = arms()
-    out = ["reach, from the measured rings and the fan:"]
+    """What the arm can reach, and where it has to slide to do it. The gate on the layout."""
+    one = arm()
+    out = ["reach, from the measured rings, the fan, and the rail:"]
     for t in things():
-        if not t.graspable:
-            who = ["(never picked up)"]
-        else:
-            who = [a.id for a in all_arms if a.can_reach(t)] or ["NOBODY"]
-        r = " ".join(
-            f"{a.id[0]}:r{a.radius_to(*t.place_mm[:2]):.0f}/b{abs(a.bearing_to(*t.place_mm[:2])):.0f}"
-            for a in all_arms
+        x, y, _ = t.place_mm
+        at = one.slide_for(x, y, t.grip_how, t.grip_z_mm)
+        if at is None:
+            out.append(f"  {t.id:<13} {t.grip_how:<5} z{t.grip_z_mm:<4} NOWHERE ON THE RAIL")
+            continue
+        out.append(
+            f"  {t.id:<13} {t.grip_how:<5} z{t.grip_z_mm:<4} slide to x={at:<5.0f}"
+            f" r={math.hypot(x - at, y - one.rail_y_mm):.0f}"
+            f" bearing={abs(one.bearing_from(at, x, y)):.0f}"
+            f" room={one.margin_from(at, x, y, t.grip_how, t.grip_z_mm):.0f} mm"
+            + ("" if t.graspable else "   (never picked up, only dropped into)")
         )
-        out.append(f"  {t.id:<13} {t.grip_how:<5} z{t.grip_z_mm:<4} {', '.join(who):<24} {r}")
     for (how, z), (near, far) in sorted(RING_MM.items()):
         out.append(f"  ring {how:<5} z{z:<4} {near:.0f} to {far:.0f} mm ahead, less off to a side")
     for kind, n in sorted(kind_counts(things()).items()):
         if n > 1:
             out.append(f"  {n} x {kind}: no word separates them")
+    out.append(
+        f"  the rail runs x {one.rail_from_mm:.0f} to {one.rail_to_mm:.0f} at y {one.rail_y_mm:.0f}"
+    )
+    out.append(f"  it can put a thing where the person can take it: {one.reaches_person}")
     out.append(f"  things standing in the same place: {clashes() or 'none'}")
     return out

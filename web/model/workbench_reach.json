@@ -26,28 +26,14 @@
       430.0
     ]
   },
-  "arms": [
-    {
-      "id": "left_arm",
-      "prefix": "left_",
-      "base": [
-        0.21,
-        0.26
-      ],
-      "holdsOut": false
-    },
-    {
-      "id": "right_arm",
-      "prefix": "right_",
-      "base": [
-        0.21,
-        -0.26
-      ],
-      "holdsOut": false
-    }
-  ],
+  "rail": {
+    "y": 20.0,
+    "from": 70.0,
+    "to": 630.0,
+    "holdsOut": true
+  },
   "give": [
-    0.04,
+    0.15,
     -0.0
   ],
   "eye": [
@@ -119,9 +105,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 155.0
     },
     {
       "id": "jar2",
@@ -138,10 +122,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 235.0
     },
     {
       "id": "jar3",
@@ -158,10 +139,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 315.0
     },
     {
       "id": "jar4",
@@ -178,10 +156,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 305.0
     },
     {
       "id": "glue1",
@@ -198,9 +173,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 390.0
     },
     {
       "id": "glue2",
@@ -217,9 +190,7 @@
       "gripZ": 55,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 430.0
     },
     {
       "id": "tin1",
@@ -236,9 +207,7 @@
       "gripZ": 177,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 205.0
     },
     {
       "id": "tin2",
@@ -255,10 +224,7 @@
       "gripZ": 177,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 290.0
     },
     {
       "id": "tin3",
@@ -275,10 +241,7 @@
       "gripZ": 177,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 380.0
     },
     {
       "id": "mug1",
@@ -295,9 +258,7 @@
       "gripZ": 177,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 480.0
     },
     {
       "id": "mug2",
@@ -305,8 +266,8 @@
       "kind": "mug",
       "bay": null,
       "at": [
-        89.0,
-        44.0,
+        84.0,
+        283.0,
         45.0
       ],
       "gripMm": 76.0,
@@ -314,9 +275,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 85.0
     },
     {
       "id": "odds",
@@ -324,7 +283,7 @@
       "kind": "odds",
       "bay": 2,
       "at": [
-        250.0,
+        212.0,
         385.0,
         281.0
       ],
@@ -333,10 +292,7 @@
       "gripZ": 299,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 210.0
     },
     {
       "id": "clamp",
@@ -344,7 +300,7 @@
       "kind": "clamp",
       "bay": 2,
       "at": [
-        430.0,
+        352.0,
         385.0,
         294.0
       ],
@@ -353,10 +309,7 @@
       "gripZ": 299,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 350.0
     },
     {
       "id": "offcut2",
@@ -364,8 +317,8 @@
       "kind": "offcut",
       "bay": 2,
       "at": [
-        405.0,
-        450.0,
+        490.0,
+        385.0,
         282.0
       ],
       "gripMm": 36.0,
@@ -373,10 +326,7 @@
       "gripZ": 299,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 490.0
     },
     {
       "id": "offcut1",
@@ -384,8 +334,8 @@
       "kind": "offcut",
       "bay": null,
       "at": [
-        345.0,
-        55.0,
+        264.0,
+        108.0,
         18.0
       ],
       "gripMm": 76.0,
@@ -393,10 +343,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 460.0
     },
     {
       "id": "screwdriver1",
@@ -404,8 +351,8 @@
       "kind": "screwdriver",
       "bay": null,
       "at": [
-        350.0,
-        129.0,
+        431.0,
+        164.0,
         32.0
       ],
       "gripMm": 32.0,
@@ -413,10 +360,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 595.0
     },
     {
       "id": "screwdriver2",
@@ -424,8 +368,8 @@
       "kind": "screwdriver",
       "bay": null,
       "at": [
-        492.0,
-        77.0,
+        563.0,
+        120.0,
         32.0
       ],
       "gripMm": 32.0,
@@ -433,9 +377,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 375.0
     },
     {
       "id": "hammer",
@@ -443,8 +385,8 @@
       "kind": "hammer",
       "bay": null,
       "at": [
-        311.0,
-        205.0,
+        390.0,
+        270.0,
         22.0
       ],
       "gripMm": 22.0,
@@ -452,10 +394,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm",
-        "right_arm"
-      ]
+      "slideTo": 390.0
     },
     {
       "id": "pliers",
@@ -463,8 +402,8 @@
       "kind": "pliers",
       "bay": null,
       "at": [
-        177.0,
-        66.0,
+        146.0,
+        243.0,
         18.0
       ],
       "gripMm": 44.0,
@@ -472,9 +411,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 190.0
     },
     {
       "id": "chisel",
@@ -482,8 +419,8 @@
       "kind": "chisel",
       "bay": null,
       "at": [
-        388.0,
-        319.0,
+        150.0,
+        114.0,
         28.0
       ],
       "gripMm": 28.0,
@@ -491,9 +428,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 345.0
     },
     {
       "id": "knife",
@@ -501,8 +436,8 @@
       "kind": "knife",
       "bay": null,
       "at": [
-        565.0,
-        51.0,
+        592.0,
+        320.0,
         18.0
       ],
       "gripMm": 18.0,
@@ -510,9 +445,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 590.0
     },
     {
       "id": "rule",
@@ -520,8 +453,8 @@
       "kind": "rule",
       "bay": null,
       "at": [
-        484.0,
-        326.0,
+        517.0,
+        234.0,
         1.0
       ],
       "gripMm": 26.0,
@@ -529,9 +462,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 445.0
     },
     {
       "id": "tape",
@@ -539,8 +470,8 @@
       "kind": "tape",
       "bay": null,
       "at": [
-        620.0,
-        36.0,
+        368.0,
+        100.0,
         13.0
       ],
       "gripMm": 68.0,
@@ -548,9 +479,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 170.0
     },
     {
       "id": "blades",
@@ -558,8 +487,8 @@
       "kind": "blades",
       "bay": null,
       "at": [
-        477.0,
-        -9.0,
+        44.0,
+        188.0,
         8.0
       ],
       "gripMm": 36.0,
@@ -567,9 +496,7 @@
       "gripZ": 35,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "right_arm"
-      ]
+      "slideTo": 185.0
     },
     {
       "id": "pot",
@@ -577,8 +504,8 @@
       "kind": "pot",
       "bay": null,
       "at": [
-        191.0,
-        300.0,
+        50.0,
+        103.0,
         29.0
       ],
       "gripMm": 66.0,
@@ -586,7 +513,7 @@
       "gripZ": 70,
       "wanted": false,
       "graspable": false,
-      "reachedBy": []
+      "slideTo": null
     },
     {
       "id": "oil",
@@ -594,8 +521,8 @@
       "kind": "oil",
       "bay": null,
       "at": [
-        516.0,
-        199.0,
+        654.0,
+        273.0,
         48.0
       ],
       "gripMm": 24.0,
@@ -603,9 +530,7 @@
       "gripZ": 130,
       "wanted": true,
       "graspable": true,
-      "reachedBy": [
-        "left_arm"
-      ]
+      "slideTo": 400.0
     }
   ]
 }

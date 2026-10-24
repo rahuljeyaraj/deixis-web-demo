@@ -35,8 +35,8 @@ const TARGETS = [
   ['shelf_left', 'the side of the shelf unit', 'an upright'],
   ['tin2', 'a tin of varnish', 'one of three that are the same'],
   ['clamp_1', 'a G clamp', 'the jaw of the clamp'],
-  ['pliers_3', 'a pair of pliers', 'the pivot'],
-  ['knife_3', 'a craft knife', 'the blade'],
+  ['pliers', 'a pair of pliers', 'a tool with legs'],
+  ['knife', 'a craft knife', 'a small sharp thing'],
   ['screwdriver1_2', 'a screwdriver', 'the shaft'],
 ];
 
