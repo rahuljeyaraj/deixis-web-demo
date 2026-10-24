@@ -515,6 +515,22 @@ class Thing:
         return self.rises_mm[1]
 
     @property
+    def grip_above_mm(self) -> float | None:
+        """How far above its **own bottom** the jaws close on it, millimetres.
+
+        None for a thing taken from above, which is gripped a few millimetres above whatever it
+        rests on whatever that is, and so needs no number of its own.
+
+        For a thing taken level this is the number that lets the arm work a grip out from where
+        the thing **now** stands rather than from where it started. `grip_z_mm` is a height
+        above the bench, and a jar carried from the bottom bay to the top one is then described
+        by a height 244 mm below where it is - which is what sent the arm to the wrong bay
+        (rahul, 24 Oct). This is the same measurement with the shelf taken out of it: a jar is
+        gripped 55 mm up its own side, in whatever bay it stands, and on the bench.
+        """
+        return None if self.grip_how != "level" else self.grip_z_mm - self.rises_mm[0]
+
+    @property
     def place_mm(self) -> tuple[float, float, float]:
         """Its **centre**: what the physics wants for a body, and what the eye looks at."""
         return (self.at_mm[0], self.at_mm[1], self.at_mm[2] + self.tall_mm / 2)

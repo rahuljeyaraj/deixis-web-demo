@@ -530,3 +530,65 @@ def test_the_reach_json_is_written_for_the_page_and_the_probes():
     assert out["eye"] == list(EYE_MM)
     assert out["rail"]["y"] == RAIL_Y_MM
     assert out["rail"]["from"] == RAIL_FROM_MM and out["rail"]["to"] == RAIL_TO_MM
+
+
+def test_everything_but_the_oil_has_a_bay_it_fits_in():
+    """Can the bench be tidied away? (rahul, 24 Oct)
+
+    "Everything should be able to put in the shelf, so later the clean up table can be
+    executed" - and the answer is yes for every loose thing **except the bottle of oil**, which
+    is on purpose. One honest "I cannot" is the best act in the demo and it is already in the
+    plan: the oil is 148 mm tall against a 110 mm opening, so the robot puts eleven things away
+    and then says it cannot put the oil away because it is taller than any shelf. This keeps
+    that true in both directions - everything else fitting, and the oil not.
+
+    **How a thing goes in depends on how it was picked up**, and the hammer is the case that
+    matters. A thing taken level out of a bay stays upright and goes in standing; a thing taken
+    from above cannot be carried with the fingers still down (`out/stage2-carry.txt`), so the
+    hand pitches a quarter turn and the thing goes in **on its side** - which stands the jaws'
+    own axis up, making the width the jaws closed on its height. A 216 mm hammer gripped across
+    a 22 mm handle is 22 mm tall in a bay, lying broadside across 676 mm of bay rather than
+    pointing into 140 mm of depth. So it fits as it is, and nothing has to be shrunk.
+    """
+    clear_tall = min(ceiling - floor for floor, ceiling in BAYS)
+    clear_deep = BAY_CLEAR_Y_MM[1] - BAY_CLEAR_Y_MM[0]
+    put_away, refused = [], []
+    for t in things():
+        if not t.graspable:
+            continue
+        lo, hi = t.rises_mm
+        # Upright if it was taken level; on its side, jaws-axis up, if it was taken from above.
+        tall = (hi - lo) if t.grip_how == "level" else t.grip_mm
+        # Broadside: its long way lies across the bay, its short way goes into the depth.
+        deep = min(t.room_mm)
+        (put_away if tall <= clear_tall - 4 and deep <= clear_deep else refused).append(t.id)
+
+    assert refused == ["oil"], (
+        "every loose thing but the bottle of oil should have a bay it fits in, and the oil"
+        f" should not: {refused} could not be put away"
+    )
+    assert len(put_away) == 19, f"nineteen things to tidy away, not {len(put_away)}"
+
+
+def test_a_level_grip_knows_how_high_up_its_own_side_it_is():
+    """`grip_above_mm`: the figure that lets a grip be worked out from where a thing **is**.
+
+    `grip_z_mm` is a height above the bench, so a jar carried from the bottom bay to the top one
+    is still described by a height 244 mm below where it is - and the arm went to the bottom bay
+    for it (rahul, 24 Oct). This is the same measurement with the shelf taken out of it.
+
+    Every level grip in this world comes out at 55 mm up the thing's own side except the bottle
+    of oil, which is taken by its neck at 130, and a thing taken from above has no figure at all
+    because it is gripped just above whatever it rests on, whatever that is.
+    """
+    above = {t.id: t.grip_above_mm for t in things()}
+    assert above["jar1"] == 55
+    assert above["tin1"] == 55, "a tin in the middle bay is gripped 55 mm up itself, not 177"
+    assert above["odds"] == 55, "and a box in the top bay the same, not 299"
+    assert above["oil"] == 130, "the bottle of oil is taken by its neck"
+    assert above["screwdriver1"] is None, "a thing taken from above needs no figure of its own"
+    for t in things():
+        if t.grip_how != "level":
+            continue
+        lo, hi = t.rises_mm
+        assert lo < lo + t.grip_above_mm < hi, f"{t.id} is gripped off its own side"

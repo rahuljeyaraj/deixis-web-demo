@@ -59,6 +59,7 @@ sys.path.insert(0, str(ROOT))
 
 from workbench.scene import (  # noqa: E402
     BACK_ROW_Y_MM,
+    BAY_GRIP_Z_MM,
     BAYS,
     BENCH_FROM_MM,
     BENCH_THICK_MM,
@@ -664,6 +665,11 @@ def reach_json() -> str:
             "to": list(SHELF_TO_MM),
             "bays": [list(b) for b in BAYS],
             "rows": [FRONT_ROW_Y_MM, BACK_ROW_Y_MM],
+            # The height the hand works at inside each bay, as a plain number per bay rather
+            # than per thing: a thing that has been moved has to be gripped at the height of
+            # the bay it is in **now**, and until this was here the only copy of these three
+            # numbers the page had was the one baked into each thing's own `gripZ`.
+            "gripZ": list(BAY_GRIP_Z_MM),
         },
         "things": [
             {
@@ -679,11 +685,18 @@ def reach_json() -> str:
                 "axis": t.axis,
                 "yaw": t.yaw_deg,
                 "room": [round(v, 1) for v in t.room_mm],
+                # Where that room sits, from the thing's own middle: nothing here is centred on
+                # its own footprint - a hammer's head is all at one end - so a footprint drawn
+                # about the middle of a hammer covers 50 mm of bare bench and misses 50 mm of
+                # hammer. Needed live, to answer whether something is already standing where a
+                # held thing would go.
+                "box": [round(v, 1) for v in t.box_mm[:2]],
                 "rises": [round(v, 1) for v in t.rises_mm],
                 "round": t.is_round,
                 "gripMm": t.grip_mm,
                 "gripHow": t.grip_how,
                 "gripZ": t.grip_z_mm,
+                "gripAbove": t.grip_above_mm,
                 "wanted": t.wanted,
                 "graspable": t.graspable,
                 "slideTo": (

@@ -23,6 +23,23 @@ export interface IkTarget {
   /** Where the gripperframe site should be, world metres. */
   pos: Vec3;
   /**
+   * Aim a point this far from the site **along the way the jaws open** at `pos`, rather than
+   * the site itself, metres.
+   *
+   * This is how to aim the middle of the grip at a thing. The jaws are not symmetric about the
+   * site - one is fixed and the other swings along the site's z - so the middle of the opening
+   * sits about 30 mm to one side of it, and which side depends on which way round the jaws come
+   * out. Standing the hand to one side by hand cannot work: the side has to be chosen before
+   * the pose is solved and is only known after, and trying it both ways found that the arm
+   * opens the jaws away from wherever the hand is put, so neither side ever lands the thing in
+   * the middle (measured, 24 Oct: 50 and 58 mm off, whichever side was tried).
+   *
+   * Asked for this way there is no side to choose. The solver aims the middle of the opening
+   * itself, and the hand ends up wherever that puts it - the jaws may come out either way round
+   * and the thing is between them either way.
+   */
+  alongOpenM?: number;
+  /**
    * The jaws' opening direction (yaw about z, radians), modulo a quarter turn: a cube looks the
    * same every 90 degrees, so the solver picks the nearest one. Null: any yaw.
    */
@@ -43,6 +60,40 @@ export interface IkTarget {
    * base the wrist can't point straight down at height, so carry poses allow some tilt.
    */
   maxTiltDeg?: number;
+  /**
+   * Which way the **jaw hinge** should point, world metres, any length: the site's y axis, the
+   * pin the moving jaw swings on.
+   *
+   * This is what says which way up a held thing is. A thing held by a level hand stands with
+   * its own up along the hinge, so a vertical hinge is an upright jar and a hinge laid over is
+   * a jar on its side - which is what the solver chose when it was left free (rahul, 24 Oct).
+   *
+   * **Ask for this rather than for `point` and `open` together.** Those two pin the hand's
+   * whole orientation, which with the position is six things asked of a five-joint arm: the
+   * jar came up straight and then there was no pose at all to carry it in. The hinge and the
+   * position are five, which this arm has, and what is left free is the hand's heading - so
+   * `point` becomes a preference rather than a demand, pulled at faintly and reported as
+   * `angErrDeg` for the caller to judge against `maxTiltDeg`.
+   *
+   * Exact: there is no "either way round" here. A pair of jaws opens both ways, but a hinge
+   * turned end for end holds a thing upside down.
+   */
+  hinge?: Vec3;
+  /**
+   * Which way the jaws should open, in full, world metres, any length - not merely their
+   * compass heading, which is what `yaw` says.
+   *
+   * `yaw` can only ask for a heading, and a heading says nothing about the hand's roll: the
+   * jaws opening along +x are the same heading whether they stand level or on end. That is
+   * enough for a grip, where the hand's pointing settles the roll between them, and it is not
+   * enough for a **carry**. Told to hold a jar level with the yaw free, the solver rolled the
+   * wrist to whatever was easiest and laid the jar on its side (rahul, 24 Oct). The jar stays
+   * upright only while the jaws stay level, which is a direction in three dimensions.
+   *
+   * Given, it replaces `yaw`. `yawTurns` still applies: a pair of jaws opens both ways at
+   * once, so `open` and its opposite are the same grip.
+   */
+  open?: Vec3;
   /**
    * Which way the fingers should point, world metres, any length. Default: straight down,
    * which is how a thing lying on a table or standing on an open shelf is picked up.
@@ -263,6 +314,85 @@ export class ArmKinematics {
     return this.selfDepth(q, gripper) > toleranceM;
   }
 
+  /**
+   * What the arm would run into in this pose, and how deep - or null for nothing.
+   *
+   * **The other half of `selfDepth`, and the one that was missing.** That one asks whether the
+   * arm folds into itself; this one asks whether it folds into the world. Nothing asked that
+   * before, so every pose in a plan was solved and then driven blind: "the hand knocks out all
+   * the things on its way" (rahul, 24 Oct), and two of the failures in `out/stage2-body.txt`
+   * were the arm leaning on the bench, 97 mm from the pose it had been sent to, with the
+   * motors pushing against a board for the rest of the move.
+   *
+   * The world is read from `live`, not from this solver's own scratch: a scratch that has never
+   * been told where anything is has every thing at the place the scene file put it, which is
+   * the same mistake as planning from the layout. Everything but the arm's own joints is copied
+   * across, so the check is against the world as it stands at this moment.
+   *
+   * What does not count: the arm's own bodies (that is `selfDepth`), the body the arm stands on
+   * - a carriage sitting in its trough touches the rail by design - and whatever geoms the
+   * caller is willing to pass through, which is how a grip is allowed to close through a jar.
+   */
+  worldHit(
+    live: MjData,
+    q: number[],
+    gripper: number,
+    ignore: ReadonlySet<number>,
+    toleranceM = 0.002,
+    /**
+     * Geoms held to a **stricter** figure than the rest, and what that figure is.
+     *
+     * The two are not the same question. A thing that is touched falls over, and that is the
+     * fault being hunted - "the hand knocks out all the things on its way" (rahul, 24 Oct) - so
+     * the slightest touch of one counts. The bench and the shelf do not fall over, and a hand
+     * reaching under a board grazes it: refusing every plan that grazes the shelf refused every
+     * grip in all three bays, which is a worse answer than a graze.
+     */
+    strict?: ReadonlySet<number>,
+    strictM = 0.002,
+  ): { name: string; depthM: number } | null {
+    const d = this.scratch;
+    const rail = this.railAdr >= 0 ? d.qpos[this.railAdr] : 0;
+    (d.qpos as Float64Array).set(live.qpos as Float64Array);
+    if (this.railAdr >= 0) d.qpos[this.railAdr] = rail;
+    for (let j = 0; j < 5; j++) d.qpos[this.qposAdr[j]] = q[j];
+    d.qpos[this.gripperAdr] = gripper;
+    this.mj.mj_fwdPosition(this.model, d);
+    const bodyOf = this.model.geom_bodyid as Int32Array;
+    const contacts = d.contact;
+    let worst: { name: string; depthM: number } | null = null;
+    for (let i = 0; i < d.ncon; i++) {
+      const c = contacts.get(i);
+      if (!c) continue;
+      const pair: [number, number][] = [
+        [c.geom1, c.geom2],
+        [c.geom2, c.geom1],
+      ];
+      for (const [arm, other] of pair) {
+        const mine = this.armBodies.has(bodyOf[arm]) && bodyOf[arm] !== this.rootBody;
+        if (!mine) continue;
+        if (this.armBodies.has(bodyOf[other]) || ignore.has(other)) continue;
+        const depthM = -c.dist;
+        const allowed = strict?.has(other) ? strictM : toleranceM;
+        if (depthM > allowed && (!worst || depthM > worst.depthM)) {
+          // The geom's own name first: every bench slab, shelf board and upright has one, and
+          // all of them hang off the world body, so the body's name would say only "world".
+          // Both ends of it are named: what was hit, and what hit it. Which part of the arm
+          // is leaning on the shelf is the difference between lowering the hand and choosing
+          // another elbow.
+          const naming = (g: number) =>
+            this.mj.mj_id2name(this.model, this.mj.mjtObj.mjOBJ_GEOM.value, g) ??
+            this.mj.mj_id2name(this.model, this.mj.mjtObj.mjOBJ_BODY.value, bodyOf[g]) ??
+            'something';
+          worst = { name: `${naming(other)} (with its ${naming(arm)})`, depthM };
+        }
+      }
+      c.delete();
+    }
+    contacts.delete();
+    return worst;
+  }
+
   private pose(): Pose {
     const p = this.scratch.site_xpos as Float64Array;
     const R = this.scratch.site_xmat as Float64Array;
@@ -310,6 +440,7 @@ export class ArmKinematics {
     const m = this.model;
     const q = q0.map((v, j) => Math.min(this.hi[j], Math.max(this.lo[j], v)));
     const want = unit(target.point ?? DOWN);
+    const along = target.alongOpenM ?? 0;
     const nv = m.nv;
     const maxTilt = ((target.maxTiltDeg ?? 0) * Math.PI) / 180;
     // 1 rad of tilt weighs like 10 cm of position; steady: much less when some tilt is
@@ -323,10 +454,17 @@ export class ArmKinematics {
     const wYaw = 0.05;
     const lambda2 = 1e-4;
     let wantOpen: Vec3 | null = null;
+    const wantHinge = target.hinge ? unit(target.hinge) : null;
     let pose = this.fk(q);
     let it = 0;
     for (; it < maxIter; it++) {
-      if (target.yaw !== null && target.yaw !== undefined && wantOpen === null) {
+      if (target.open && wantOpen === null) {
+        // The nearer of the two ways round, for the same reason `yaw` takes the nearest turn.
+        const c = unit(target.open);
+        const turns = target.yawTurns ?? 4;
+        wantOpen = turns === 2 && dot(c, pose.open) < 0 ? [-c[0], -c[1], -c[2]] : c;
+      }
+      if (!target.open && target.yaw !== null && target.yaw !== undefined && wantOpen === null) {
         // Of the four equivalent yaws, take the one closest to where the jaws face now.
         let bestDot = -Infinity;
         const turns = target.yawExact ? 1 : (target.yawTurns ?? 4);
@@ -339,19 +477,33 @@ export class ArmKinematics {
           }
         }
       }
+      // What is really being aimed: the site, or a point out along the jaws' opening.
+      const aimed: Vec3 = [
+        pose.pos[0] + along * pose.open[0],
+        pose.pos[1] + along * pose.open[1],
+        pose.pos[2] + along * pose.open[2],
+      ];
       const ep: Vec3 = [
-        target.pos[0] - pose.pos[0],
-        target.pos[1] - pose.pos[1],
-        target.pos[2] - pose.pos[2],
+        target.pos[0] - aimed[0],
+        target.pos[1] - aimed[1],
+        target.pos[2] - aimed[2],
       ];
       const ea = cross(pose.point, want);
       // The yaw is the jaws' heading only (their direction seen from above), so the hand may
       // still tip forward with the jaws facing the same way.
-      const heading = flat(pose.open);
-      const ec = wantOpen ? cross(heading, wantOpen) : ([0, 0, 0] as Vec3);
+      // Asked for a whole direction, the jaws are held to all three turns of it; asked for a
+      // heading, only to the turn about up, so the hand may still tip forward.
+      const jaws = target.open ? pose.open : flat(pose.open);
+      const ec = wantOpen ? cross(jaws, wantOpen) : ([0, 0, 0] as Vec3);
+      const hinge = cross(pose.open, pose.point);
+      const eh = wantHinge ? cross(hinge, wantHinge) : ([0, 0, 0] as Vec3);
       const posErr = Math.hypot(...ep);
       const angErr = angle(pose.point, want);
-      const yawErr = wantOpen ? angle(heading, wantOpen) : 0;
+      const yawErr = wantHinge
+        ? angle(hinge, wantHinge)
+        : wantOpen
+          ? angle(jaws, wantOpen)
+          : 0;
       if (posErr < POS_TOL_M && angErr < Math.max(ANG_TOL, maxTilt) && yawErr < ANG_TOL) break;
 
       this.mj.mj_comPos(m, d);
@@ -361,18 +513,51 @@ export class ArmKinematics {
       // Rows: 3 position, 3 tilt (weighted), 3 yaw (weighted); columns: the 5 arm dofs.
       const rows: number[][] = [];
       const err: number[] = [];
+      // A point carried out along the opening moves with the hand's turn as well as with it,
+      // so its own Jacobian is the site's plus how fast that offset is swung about.
+      const spun = along
+        ? this.dofAdr.map((c) =>
+            cross([Jr[0 * nv + c], Jr[1 * nv + c], Jr[2 * nv + c]], pose.open),
+          )
+        : null;
       for (let r = 0; r < 3; r++) {
-        rows.push(this.dofAdr.map((c) => Jp[r * nv + c]));
+        rows.push(
+          this.dofAdr.map((c, i) => Jp[r * nv + c] + (spun ? along * spun[i][r] : 0)),
+        );
         err.push(ep[r]);
       }
       const over = cone && maxTilt > 0 ? Math.max(0, angErr - maxTilt) : angErr;
-      const wAng = maxTilt === 0 ? W_ANG : !cone ? W_ANG_STEADY : over === 0 ? W_ANG_INSIDE : W_ANG;
+      // Asked for a hinge, the fingers are only a preference: the hinge and the position are
+      // already all five joints, and pulling hard at the fingers as well is what left the arm
+      // with no pose to carry a jar in.
+      const wAng = wantHinge
+        ? W_ANG_STEADY
+        : maxTilt === 0
+          ? W_ANG
+          : !cone
+            ? W_ANG_STEADY
+            : over === 0
+              ? W_ANG_INSIDE
+              : W_ANG;
       const share = cone && over > 0 ? over / angErr : 1; // only the part past the edge
       for (let r = 0; r < 3; r++) {
         rows.push(this.dofAdr.map((c) => wAng * Jr[r * nv + c]));
         err.push(wAng * share * ea[r]);
       }
-      if (wantOpen) {
+      if (wantHinge) {
+        for (let r = 0; r < 3; r++) {
+          rows.push(this.dofAdr.map((c) => W_ANG * Jr[r * nv + c]));
+          err.push(W_ANG * eh[r]);
+        }
+      }
+      if (wantHinge) {
+        // The hinge has had its say; the jaws' own heading is then settled by it.
+      } else if (wantOpen && target.open) {
+        for (let r = 0; r < 3; r++) {
+          rows.push(this.dofAdr.map((c) => wYaw * Jr[r * nv + c]));
+          err.push(wYaw * ec[r]);
+        }
+      } else if (wantOpen) {
         rows.push(this.dofAdr.map((c) => wYaw * Jr[2 * nv + c])); // turning about up only
         err.push(wYaw * ec[2]);
       }
@@ -401,13 +586,19 @@ export class ArmKinematics {
       }
       pose = this.fk(q);
     }
-    const posErrMm = 1000 * Math.hypot(
-      target.pos[0] - pose.pos[0],
-      target.pos[1] - pose.pos[1],
-      target.pos[2] - pose.pos[2],
-    );
+    const posErrMm =
+      1000 *
+      Math.hypot(
+        target.pos[0] - (pose.pos[0] + along * pose.open[0]),
+        target.pos[1] - (pose.pos[1] + along * pose.open[1]),
+        target.pos[2] - (pose.pos[2] + along * pose.open[2]),
+      );
     const angErrDeg = (angle(pose.point, want) * 180) / Math.PI;
-    const yawErrDeg = wantOpen ? (angle(flat(pose.open), wantOpen) * 180) / Math.PI : 0;
+    const yawErrDeg = wantHinge
+      ? (angle(cross(pose.open, pose.point), wantHinge) * 180) / Math.PI
+      : wantOpen
+        ? (angle(target.open ? pose.open : flat(pose.open), wantOpen) * 180) / Math.PI
+        : 0;
     return {
       q,
       posErrMm,

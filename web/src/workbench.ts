@@ -23,6 +23,15 @@
  * - **the arm's own words** when it will not do something (FR15): out of reach, never picked
  *   up, too tall for that bay. The refusal is the robot's, not the page's - the page only
  *   prints what `rig.ts` hands back.
+ * - **where what it is holding can go** (rahul, 24 Oct): the moment something is picked up, a
+ *   patch of light lands on every spot on the bench and in every bay where the arm could really
+ *   put it down. "Wherever i tried to place thing it keeps on saying there is no way to put it
+ *   there" is what a reach limit feels like when it cannot be seen - and the limits here are
+ *   real and strange. A jar is held upright by a level hand, and a level hand at jar height
+ *   cannot work closer in than 280 mm, so a jar can go in the bays and along the back of the
+ *   bench and nowhere near the person. Shown, that reads as the arm's reach. Unshown, it reads
+ *   as a broken robot. The patches come from `rig.canPut`, the same answer the arm will give,
+ *   so the two cannot disagree.
  *
  *   ?still=1    don't step the physics (stage 1's view of the world, for a clean picture)
  *   ?view=default | over | side | bays
@@ -111,6 +120,19 @@ const AT: [number, number, number] = [
 const SPOT_R_M = 0.009;
 const SPOT_LIFT_M = 0.0008;
 
+/**
+ * The patches that show where a held thing can be put down: how big each one is and how many
+ * there may be.
+ *
+ * One patch per spot swept, laid flat on the bench or on a bay's board. 20 mm apart with 17 mm
+ * squares leaves a hair between them, so the grid reads as a field of light rather than as a
+ * solid sheet - and a field of light reads as "about here", which is the truth: the sweep is in
+ * 20 mm steps and a spot 10 mm from one of them was never asked about.
+ */
+const PATCH_STEP_MM = 20;
+const PATCH_SIDE_M = 0.017;
+const MOST_PATCHES = 4000;
+
 /** The fixed parts of the world, named as a person would name them (FR9). */
 const FURNITURE: Record<string, string> = {
   bench_near: 'the bench top',
@@ -183,6 +205,33 @@ function owners(mj: Mujoco, model: MjModel): (geom: number) => string | null {
   };
 }
 
+/**
+ * The field of patches, as one instanced mesh: cheap to draw however many there are.
+ *
+ * Drawn without asking the depth buffer, like the laser spot, and for the same reason - a patch
+ * lying on a board is in the same plane as the board - but **behind** the spot, so pointing at a
+ * place still shows where the spot is.
+ */
+function makePatches(): THREE.InstancedMesh {
+  const mesh = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(PATCH_SIDE_M, PATCH_SIDE_M),
+    new THREE.MeshBasicMaterial({
+      color: 0x51d16a,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    }),
+    MOST_PATCHES,
+  );
+  mesh.count = 0;
+  mesh.renderOrder = 2;
+  mesh.frustumCulled = false;
+  mesh.raycast = () => {}; // the ray goes to the world, never to the patches
+  return mesh;
+}
+
 /** The laser spot: a filled amber circle with a dark edge, lying on whatever it is put on. */
 function makeSpot(): THREE.Group {
   const spot = new THREE.Group();
@@ -251,6 +300,30 @@ async function main(): Promise<void> {
   const thingOf = owners(mj, model);
   const spot = makeSpot();
   view.scene.add(spot);
+  const patches = makePatches();
+  view.scene.add(patches);
+
+  /**
+   * Light up everywhere the held thing can be put down - or put the light out.
+   *
+   * Swept once, when something is picked up or let go, rather than every frame: it is some
+   * hundreds of reach sums and a footprint test against every other thing, which is nothing
+   * once and too much sixty times a second.
+   */
+  const where = new THREE.Matrix4();
+  const showWherePut = () => {
+    const places = rig.holding ? rig.wherePut(PATCH_STEP_MM) : [];
+    patches.count = Math.min(places.length, MOST_PATCHES);
+    for (let i = 0; i < patches.count; i++) {
+      const p = places[i];
+      const [X, Y] = benchToWorld(p.xMm, p.yMm);
+      where.makeTranslation(X, Y, p.zMm / 1000 + 0.0012);
+      patches.setMatrixAt(i, where);
+    }
+    patches.instanceMatrix.needsUpdate = true;
+    patches.visible = patches.count > 0;
+    return places.length;
+  };
 
   // Where the camera sits, as a distance and two angles about the point it looks at, so a drag
   // can move it without the three.js orbit controls.
@@ -362,7 +435,9 @@ async function main(): Promise<void> {
     buttons.stop.disabled = !rig.busy;
   };
   const after = (what: string) => (d: Done) => {
-    tell(d.ok ? `${what}.` : `It will not: ${d.why}.`, !d.ok);
+    const spots = showWherePut();
+    const andWhere = d.ok && rig.holding ? ` ${spots} places it can go.` : '';
+    tell(d.ok ? `${what}.${andWhere}` : `It will not: ${d.why}.`, !d.ok);
     showButtons();
   };
   // The buttons do the same as the keys. They are there to say what the keys are, and because

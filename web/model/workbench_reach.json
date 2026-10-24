@@ -83,6 +83,11 @@
     "rows": [
       385.0,
       455.0
+    ],
+    "gripZ": [
+      55,
+      177,
+      299
     ]
   },
   "things": [
@@ -107,6 +112,10 @@
         66.0,
         66.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         91.5
@@ -115,6 +124,7 @@
       "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 125.0
@@ -140,6 +150,10 @@
         66.0,
         66.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         91.5
@@ -148,6 +162,7 @@
       "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 225.0
@@ -173,6 +188,10 @@
         66.0,
         66.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         91.5
@@ -181,6 +200,7 @@
       "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 325.0
@@ -206,6 +226,10 @@
         66.0,
         66.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         91.5
@@ -214,6 +238,7 @@
       "gripMm": 64.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 295.0
@@ -239,6 +264,10 @@
         30.0,
         30.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         104.0
@@ -247,6 +276,7 @@
       "gripMm": 30.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 515.0
@@ -272,6 +302,10 @@
         30.0,
         30.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         98.0
@@ -280,6 +314,7 @@
       "gripMm": 30.0,
       "gripHow": "level",
       "gripZ": 55,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 565.0
@@ -305,6 +340,10 @@
         76.0,
         76.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         122.0,
         200.0
@@ -313,6 +352,7 @@
       "gripMm": 72.0,
       "gripHow": "level",
       "gripZ": 177,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 180.0
@@ -338,6 +378,10 @@
         76.0,
         76.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         122.0,
         200.0
@@ -346,6 +390,7 @@
       "gripMm": 72.0,
       "gripHow": "level",
       "gripZ": 177,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 300.0
@@ -371,6 +416,10 @@
         108.0,
         80.0
       ],
+      "box": [
+        14.0,
+        0.0
+      ],
       "rises": [
         122.0,
         214.0
@@ -379,6 +428,7 @@
       "gripMm": 76.0,
       "gripHow": "level",
       "gripZ": 177,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 500.0
@@ -404,6 +454,10 @@
         120.0,
         76.0
       ],
+      "box": [
+        0.0,
+        -1.0
+      ],
       "rises": [
         244.0,
         318.0
@@ -412,6 +466,7 @@
       "gripMm": 70.0,
       "gripHow": "level",
       "gripZ": 299,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 210.0
@@ -437,6 +492,10 @@
         132.0,
         36.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         244.0,
         320.5
@@ -445,6 +504,7 @@
       "gripMm": 36.0,
       "gripHow": "level",
       "gripZ": 299,
+      "gripAbove": 55.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 520.0
@@ -470,6 +530,10 @@
         132.0,
         76.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         36.5
@@ -478,6 +542,7 @@
       "gripMm": 76.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 430.0
@@ -503,6 +568,10 @@
         193.0,
         37.0
       ],
+      "box": [
+        53.5,
+        0.0
+      ],
       "rises": [
         0.0,
         37.0
@@ -511,6 +580,7 @@
       "gripMm": 32.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 155.0
@@ -536,6 +606,10 @@
         193.0,
         37.0
       ],
+      "box": [
+        53.5,
+        0.0
+      ],
       "rises": [
         0.0,
         37.0
@@ -544,6 +618,7 @@
       "gripMm": 32.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 420.0
@@ -569,6 +644,10 @@
         216.5,
         111.0
       ],
+      "box": [
+        11.2,
+        3.5
+      ],
       "rises": [
         0.0,
         34.6
@@ -577,6 +656,7 @@
       "gripMm": 22.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 375.0
@@ -602,6 +682,10 @@
         167.8,
         59.5
       ],
+      "box": [
+        -22.6,
+        0.0
+      ],
       "rises": [
         0.0,
         20.0
@@ -610,6 +694,7 @@
       "gripMm": 44.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 605.0
@@ -635,6 +720,10 @@
         190.0,
         32.0
       ],
+      "box": [
+        53.0,
+        0.0
+      ],
       "rises": [
         0.0,
         32.0
@@ -643,6 +732,7 @@
       "gripMm": 28.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 245.0
@@ -668,6 +758,10 @@
         170.9,
         18.0
       ],
+      "box": [
+        6.5,
+        0.0
+      ],
       "rises": [
         0.0,
         22.5
@@ -676,6 +770,7 @@
       "gripMm": 18.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 315.0
@@ -701,6 +796,10 @@
         64.0,
         38.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         17.5
@@ -709,6 +808,7 @@
       "gripMm": 36.0,
       "gripHow": "down",
       "gripZ": 35,
+      "gripAbove": null,
       "wanted": true,
       "graspable": true,
       "slideTo": 280.0
@@ -734,6 +834,10 @@
         70.0,
         70.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         59.0
@@ -742,6 +846,7 @@
       "gripMm": 66.0,
       "gripHow": "down",
       "gripZ": 70,
+      "gripAbove": null,
       "wanted": false,
       "graspable": false,
       "slideTo": null
@@ -767,6 +872,10 @@
         58.0,
         58.0
       ],
+      "box": [
+        0.0,
+        0.0
+      ],
       "rises": [
         0.0,
         148.0
@@ -775,6 +884,7 @@
       "gripMm": 24.0,
       "gripHow": "level",
       "gripZ": 130,
+      "gripAbove": 130.0,
       "wanted": true,
       "graspable": true,
       "slideTo": 175.0

@@ -98,6 +98,32 @@ function settle(w: World, seconds = 1.5): void {
   }
 }
 
+/**
+ * Stand the **whole world** back where the scene was generated with it, and still it.
+ *
+ * Every move used to be measured in whatever world the move before it left behind. A failed
+ * put-down ends in `park`, which opens the jaws wherever the hand happens to be, so a thing
+ * would be left in the middle of the bench - and every later grip was then refused for running
+ * into it, correctly, in a scene that was wrecked. The tail of this report meant nothing.
+ *
+ * One move per row, each from the world as laid out. The free joint's seven numbers are where a
+ * thing is and which way round; the six after them are how fast it is going, and a thing put
+ * back while still moving carries on from where it was dropped.
+ */
+function putBack(w: World): void {
+  const J = w.mj.mjtObj.mjOBJ_JOINT.value;
+  const laid = w.model.key_qpos as Float64Array;
+  for (const t of THINGS) {
+    const joint = w.mj.mj_name2id(w.model, J, t.id);
+    if (joint < 0) continue;
+    const adr = (w.model.jnt_qposadr as Int32Array)[joint];
+    const dof = (w.model.jnt_dofadr as Int32Array)[joint];
+    for (let k = 0; k < 7; k++) w.data.qpos[adr + k] = laid[adr + k];
+    for (let k = 0; k < 6; k++) w.data.qvel[dof + k] = 0;
+  }
+  w.mj.mj_forward(w.model, w.data);
+}
+
 function offMm(w: World, id: string, place: Place): number {
   const at = w.rig.state(id).atMm;
   return Math.hypot(at[0] - place.xMm, at[1] - place.yMm);
@@ -110,6 +136,10 @@ test('the body: picking up, carrying, putting down, and refusing', async () => {
   say('');
 
   const w = await build();
+  // Let the world come to rest before anything is measured. A scene that has just been reset
+  // has everything exactly where the generator put it, which is not quite where the physics
+  // will hold it, and the first grip of the run was being compared against the former.
+  settle(w, 1);
   // ONLY=jar1,tin2 runs a few of them, for when something is being chased down.
   const only = (process.env.ONLY ?? '').split(',').filter(Boolean);
   const graspable = THINGS.filter((t) => t.graspable && (!only.length || only.includes(t.id)));
@@ -129,6 +159,9 @@ test('the body: picking up, carrying, putting down, and refusing', async () => {
       off = offMm(w, t.id, back);
     }
     await run(w, w.rig.park());
+    // One move per row: the world goes back as it was laid out before the next thing is tried.
+    putBack(w);
+    settle(w, 0.5);
     const line =
       `  ${t.id.padEnd(13)} ${t.gripHow.padEnd(6)} ${(took.ok ? 'yes' : 'no ').padEnd(5)} ` +
       `${(put.ok ? 'yes' : 'no ').padEnd(5)} ${Number.isNaN(off) ? '  -  ' : `${off.toFixed(0).padStart(3)}mm`} ` +
