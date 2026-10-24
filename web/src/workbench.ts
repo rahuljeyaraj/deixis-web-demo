@@ -208,9 +208,11 @@ function owners(mj: Mujoco, model: MjModel): (geom: number) => string | null {
 /**
  * The field of patches, as one instanced mesh: cheap to draw however many there are.
  *
- * Drawn without asking the depth buffer, like the laser spot, and for the same reason - a patch
- * lying on a board is in the same plane as the board - but **behind** the spot, so pointing at a
- * place still shows where the spot is.
+ * **Asked of the depth buffer**, unlike the laser spot. The spot is put where a ray from the
+ * camera first meets the world, so by construction there is nothing in front of it; a patch is
+ * put where the arm could put something down, and the arm is very often in front of it. Drawn
+ * without the depth test they lie over the arm, which reads as a stripe of paint on the robot.
+ * They are lifted a millimetre off the board instead, which is enough and does not shimmer.
  */
 function makePatches(): THREE.InstancedMesh {
   const mesh = new THREE.InstancedMesh(
@@ -220,7 +222,6 @@ function makePatches(): THREE.InstancedMesh {
       transparent: true,
       opacity: 0.42,
       depthWrite: false,
-      depthTest: false,
       side: THREE.DoubleSide,
     }),
     MOST_PATCHES,
