@@ -15,6 +15,34 @@
         <span id="banner-text"></span>
         <button id="banner-key" type="button" class="link">Add your own Nebius key to use Nemotron</button>
       </div>
+      <h1 class="page-title">deixis</h1>
+      <p id="phone-line" class="phone" hidden>This demo needs a laptop or desktop browser.</p>
+      <!-- What this project is, what it needs, and what is switched off here: at the very top,
+           because it is the first thing anybody should read (rahul, 27 Oct). -->
+      <blockquote class="scope">
+        <p>
+          <b>Telling a robot where.</b> Point at a block and say <q>put that here</q>. deixis works
+          out which block <i>that</i> means and which spot <i>here</i> means, and hands the arm the
+          millimetres &mdash; no names, no coordinates.
+        </p>
+        <p>
+          <b>Three things have to work for that sentence:</b> something to <b>see</b> the table and
+          find what is on it, something to work out <b>which</b> thing and <b>which</b> place were
+          meant, and a body that can <b>move</b>. deixis is the middle one. We wrote each robot&rsquo;s
+          own code as well, but that part is different for every robot &mdash; deixis is the piece all
+          three of our demos share.
+        </p>
+        <p>
+          <b>In this demo the seeing is switched off.</b> Every object and every position in this
+          virtual world is already known, so no AI model works out what is on the table or where it
+          is. The body is an off-the-shelf SO-101 arm.
+        </p>
+        <p>
+          <b>The seeing runs for real in our other two demos</b> &mdash; a pen plotter and a floor
+          vacuum, each with a camera and NVIDIA Cosmos finding things in the room, and deixis still
+          saying where.
+        </p>
+      </blockquote>
       <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). Two lines: one
            move, then a whole job in one sentence - which is the thing to try (rahul, 11 Oct).
            Every one of these was checked against the real Nemotron on 11 Oct. -->
@@ -43,37 +71,13 @@
       <!-- Nemotron's plan (advanced-commands-plan.md 5.2), while a plan of several steps
            is previewed or runs. One step says itself, out loud. -->
       <div id="plan-strip" role="status" aria-live="polite" hidden></div>
-      <div id="stage" class="starting">
+      <div id="stage">
         <!-- The robot's speech bubble, over the scene: no empty space while it is quiet (rahul, 5 Oct). -->
         <div id="bubble" aria-live="polite"></div>
         <canvas id="scene"></canvas>
-        <canvas id="hand"></canvas>
-        <div id="cam-box" aria-label="Your camera">
-          <video id="cam" muted playsinline></video>
-          <canvas id="cam-dots"></canvas>
-          <!-- "Show your hand": the coach line about the camera, inside the camera. -->
-          <span id="cam-coach" role="status" hidden></span>
-          <span id="cam-label">made-up hand</span>
-        </div>
-        <button id="camera-btn" type="button">Use my camera</button>
         <!-- The coach line (items 2, 7, 13, 19): what to do next, in the scene. -->
         <div id="coach" role="status" aria-live="polite" hidden></div>
-        <div id="status">Loading the arm…</div>
-
-        <!-- The start card (plan 5.1): the first 10 seconds. -->
-        <section id="start" aria-labelledby="start-title">
-          <div class="card">
-            <h1 id="start-title" class="page-title">deixis</h1>
-            <p class="lead">Pick a block, then a spot, and say <q>put that … here</q>.</p>
-            <p id="phone-line" class="phone" hidden>This demo needs a laptop or desktop browser.</p>
-            <div class="choices">
-              <button id="start-camera" class="big primary" type="button" disabled>Use my finger <small>(camera and mic)</small></button>
-              <button id="start-mouse" class="big" type="button" disabled>Use my mouse <small>(mic only)</small></button>
-            </div>
-            <p id="start-loading" class="loading">Loading the arm…</p>
-            <p class="small">Your video stays in your browser. Only your fingertip’s position and your voice are sent. <a href="#models" id="start-models">What runs this demo</a></p>
-          </div>
-        </section>
+        <div id="status">Loading the arm&hellip;</div>
       </div>
 
       <div id="controls">
@@ -108,7 +112,7 @@
         <p class="wiring-key">
           One row for every message, in the order it happened.
           <b data-lane="you">Amber</b> is you,
-          <b data-lane="parakeet">blue</b> the two small models we run ourselves,
+          <b data-lane="parakeet">blue</b> Parakeet turning your voice into words,
           <b data-lane="nemotron">red</b> Nemotron deciding what to do,
           <b data-lane="core">green</b> the deixis core measuring where, and
           <b data-lane="arm">purple</b> the arm. Press <span class="key-json">JSON</span> on a row
@@ -157,9 +161,8 @@
         <details id="privacy">
           <summary>Privacy</summary>
           <ul>
-            <li>Your camera video never leaves your browser. The hand tracking runs here; only the fingertip’s points on the table are sent.</li>
             <li>Your voice is sent once per command, turned into words in memory, then dropped. It is never saved.</li>
-            <li>The server writes one line per command to its log (the words, what the robot did, the tokens it used) and one per step (the guess shown, yes, done). No audio, no video, no address.</li>
+            <li>The server writes one line per command to its log (the words, what the robot did, the tokens it used) and one per step (the guess shown, yes, done). No audio, no address.</li>
             <li>To share the free AI commands fairly, the server counts today’s commands per visitor, by a random cookie and a scrambled form of your address. The counts stay in memory and are never logged.</li>
             <li>If you add your own Nebius key, it is sent with each command only to call Nebius. It is never saved or logged.</li>
           </ul>

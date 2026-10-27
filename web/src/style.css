@@ -32,65 +32,14 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 a { color: var(--blue); }
 #stage { position: relative; width: 100%; max-width: max(560px, calc((100vh - 300px) * 16 / 9));
   margin: 0 auto; aspect-ratio: 16 / 9; background: var(--stage); border-radius: 12px; overflow: hidden; }
-#scene, #hand { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#hand { pointer-events: none; }
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
-/* Your camera: a small mirrored window in a corner, with the same pink dot (rahul, 5 Oct).
-   The dashed frame is the part of the camera that covers the table. */
-#cam-box { position: absolute; top: 12px; right: 12px; z-index: 3; width: 24%;
-  aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #2a2f3a;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); border: 2px solid rgb(255 255 255 / 0.9);
-  display: none; pointer-events: none; }
-#stage.camera-on #cam-box { display: block; }
-#cam, #cam-dots { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#cam { object-fit: cover; transform: scaleX(-1); }
-#cam-label { position: absolute; left: 6px; bottom: 4px; font-size: 11px;
-  color: rgb(255 255 255 / 0.75); display: none; }
-/* When the camera is the problem, the line goes inside the camera window, small: that is
-   where the person is already looking (rahul, 11 Oct). */
-#cam-coach { position: absolute; top: 4px; left: 4px; right: 4px; padding: 3px 5px;
-  border-radius: 7px; background: rgb(26 26 26 / 0.84); color: white; font-size: 11px;
-  font-weight: 700; line-height: 1.25; text-align: center; }
-#cam-coach[hidden] { display: none; }
-#cam-box.synthetic #cam-label { display: block; }
-
-#camera-btn { position: absolute; top: 12px; right: 12px; z-index: 3; padding: 8px 14px;
-  border: 0; border-radius: 999px; background: var(--ink); color: white; font: inherit;
-  font-size: 15px; cursor: pointer; }
-#camera-btn:disabled { opacity: 0.6; cursor: default; }
-#stage.camera-on #camera-btn, #stage.starting #camera-btn { display: none; }
 #status { position: absolute; left: 12px; bottom: 10px; z-index: 3; padding: 4px 10px;
   border-radius: 8px; background: rgb(255 255 255 / 0.85); color: var(--muted); font-size: 14px;
   max-width: calc(100% - 24px); }
-#stage.starting #status { display: none; }
 
-/* The start card (plan 5.1), over the live scene. */
-#start { position: absolute; inset: 0; z-index: 5; display: none; place-items: center;
-  background: rgb(223 229 238 / 0.55); backdrop-filter: blur(3px); }
-#stage.starting #start { display: grid; }
-#start .card { width: min(560px, 90%); padding: 30px 36px 22px; border-radius: 18px;
-  background: white; box-shadow: 0 10px 40px rgb(0 0 0 / 0.16); text-align: center; }
-#start h1 { margin: 0 0 18px; font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
-  text-transform: uppercase; color: var(--muted); }
-#start .lead { margin: 0 0 26px; font-size: 26px; line-height: 1.25; font-weight: 700; text-wrap: balance; }
-#start .ask { margin: 0 0 12px; font-size: 16px; color: var(--muted); }
-#start q, #chips q { quotes: "“" "”"; }
-#start .choices { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-button.big { min-width: 170px; padding: 13px 22px; border-radius: 12px; border: 2px solid #9aa3b2;
-  background: white; color: var(--ink); font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; }
-button.big small { font-weight: 400; opacity: 0.8; }
-button.big.primary { border-color: var(--blue); background: var(--blue); color: white; }
-button.big:disabled { opacity: 0.5; cursor: default; }
-#start .loading { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
-#start .loading:empty { display: none; }
-#start .small { margin-top: 22px; text-wrap: balance; }
-#start .small a { white-space: nowrap; }
+#chips q { quotes: "“" "”"; }
 .small { margin: 6px 0 0; font-size: 13.5px; color: var(--muted); }
-/* While the start card shows, only the scene and the footer: no buttons or panels yet. */
-#stage.starting ~ #controls, #app:has(#stage.starting) #wiring,
-#app:has(#stage.starting) #chips, #app:has(#stage.starting) #plan-strip,
-#app:has(#stage.starting) #see-inside { display: none; }
-
 /* Push-to-talk (plan 5.2), below the scene. While listening it glows with your voice. */
 #controls { display: flex; gap: 10px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 #talk-btn { --level: 0; padding: 12px 28px; border: 0; border-radius: 10px; background: var(--blue);
@@ -199,7 +148,7 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
   text-align: center; font-size: 12px; font-weight: 700; line-height: 1.2; color: var(--page); }
 .wiring-lane small { display: block; font-size: 9.5px; font-weight: 400; color: var(--muted); }
 .wiring-lane[data-lane="you"] { color: var(--you); }
-.wiring-lane[data-lane="mediapipe"], .wiring-lane[data-lane="parakeet"] { color: var(--local); }
+.wiring-lane[data-lane="parakeet"] { color: var(--local); }
 .wiring-lane[data-lane="nemotron"] { color: var(--nemotron); }
 .wiring-lane[data-lane="core"] { color: var(--core); }
 .wiring-lane[data-lane="arm"] { color: var(--arm); }
@@ -217,7 +166,7 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 .wiring-row::before { grid-column: 1; counter-increment: msg; content: counter(msg);
   text-align: right; font-size: 11px; font-variant-numeric: tabular-nums; color: #aeb6c2; }
 .wiring-row[data-from="you"] { color: var(--you); }
-.wiring-row[data-from="mediapipe"], .wiring-row[data-from="parakeet"] { color: var(--local); }
+.wiring-row[data-from="parakeet"] { color: var(--local); }
 .wiring-row[data-from="nemotron"] { color: var(--nemotron); }
 .wiring-row[data-from="core"] { color: var(--core); }
 .wiring-row[data-from="arm"] { color: var(--arm); }
@@ -225,7 +174,7 @@ button.link { margin-left: auto; padding: 4px 6px; border: 0; background: none; 
 .wiring-rail { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px solid #e4e8ef; }
 /* Each rail in a pale shade of its part's colour, so a column belongs to the name above it. */
 .wiring-rail[data-lane="you"] { border-left-color: #ebd09b; }
-.wiring-rail[data-lane="mediapipe"], .wiring-rail[data-lane="parakeet"] { border-left-color: #b3d2f2; }
+.wiring-rail[data-lane="parakeet"] { border-left-color: #b3d2f2; }
 .wiring-rail[data-lane="nemotron"] { border-left-color: #efb6b6; }
 .wiring-rail[data-lane="core"] { border-left-color: #a8d9c0; }
 .wiring-rail[data-lane="arm"] { border-left-color: #d2bbe4; }
@@ -293,6 +242,15 @@ details { border: 1px solid var(--line); border-radius: 12px; background: white;
 details > summary { padding: 9px 14px; cursor: pointer; font-size: 15px; color: var(--ink); }
 details[open] > summary { border-bottom: 1px solid var(--line); }
 
+/* What this project is, and what is switched off in this demo (rahul, 27 Oct): above
+   everything else, so it is read before the arm is looked at. */
+blockquote.scope { margin: 0 0 12px; padding: 14px 20px;
+  background: #fffdf7; border-left: 4px solid var(--accent); border-radius: 0 6px 6px 0;
+  font-size: 15px; line-height: 1.5; }
+blockquote.scope p { margin: 0 0 8px; }
+blockquote.scope p:last-child { margin: 0; }
+blockquote.scope b { font-weight: 600; }
+
 /* Try saying (plan 5.2): a chip only shows the words; it doesn't run them. */
 #chips { display: flex; flex-direction: column; gap: 5px; align-items: center;
   margin-bottom: 10px; }
@@ -348,7 +306,10 @@ footer details .off { color: #b45309; font-weight: 600; }
 #coach[hidden] { display: none; }
 #coach button { margin-left: 10px; padding: 5px 12px; border: 0; border-radius: 8px; background: var(--accent);
   color: var(--edge); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
-#start .phone { margin: -12px 0 18px; padding: 8px 12px; border-radius: 10px; background: #fff4dc;
+/* The page's name and the phone line, which used to sit on the start card. */
+.page-title { margin: 0 0 10px; font-size: 15px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--muted); }
+.phone { margin: 0 0 10px; padding: 8px 12px; border-radius: 10px; background: #fff4dc;
   color: #6b3d00; font-weight: 600; }
-#start .phone[hidden] { display: none; }
+.phone[hidden] { display: none; }
 #own-key[hidden] { display: none; }

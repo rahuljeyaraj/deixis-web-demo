@@ -13,14 +13,6 @@ def models_in_use(nemotron_model: str, off: str | None = None) -> list[dict[str,
     (simple mode, plan 8.1), else None."""
     return [
         {
-            "id": "mediapipe",
-            "role": "Hand tracking",
-            "name": "MediaPipe Hand Landmarker",
-            "by": "Google",
-            "where": "in your browser; your video never leaves it",
-            "url": "https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker",
-        },
-        {
             "id": "parakeet",
             "role": "Speech to words, with the time of each word",
             "name": "NVIDIA Parakeet TDT 0.6B v2",

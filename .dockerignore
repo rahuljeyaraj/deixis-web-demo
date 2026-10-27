@@ -15,7 +15,6 @@ tests
 web/node_modules
 web/dist
 web/public/so101.pack
-web/public/mediapipe
 web/public/models
 web/test-results
 web/playwright-report

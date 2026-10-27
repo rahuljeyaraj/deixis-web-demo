@@ -1,14 +1,12 @@
 /**
- * The finger as a pointer (plan W4): the pointing pose against Python's own answers, the active
- * box, the sample buffer, and the raycast against the 4-corner homography on the table.
+ * The mouse as a pointer: the sample buffer, and the raycast against the 4-corner homography
+ * on the table. (The pointing pose and the camera's active box went with the camera, 27 Oct.)
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, test } from 'vitest';
-import { type ActiveBox, DEFAULT_BOX, boxRect, onCanvas, toCanvas } from '../src/hand/cursor';
-import { DEFAULT_POSE, type PoseParams, classifyPointing } from '../src/hand/pose';
 import { SampleBuffer } from '../src/hand/samples';
 import { Arm, type BlockId } from '../src/sim/arm';
 import { solveLinear } from '../src/sim/ik';
@@ -16,72 +14,6 @@ import { pointAt } from '../src/sim/pick';
 import { TableView } from '../src/sim/render';
 import { AREA_MM, BLOCK_MM, tableToWorld, worldToTable } from '../src/sim/table';
 import { nodeScene } from './scene';
-
-interface Case {
-  name: string;
-  landmarks: number[][];
-  params: Partial<PoseParams> | null;
-  pointing: boolean;
-  fingers: Record<string, { reach: number; bend_deg: number; extended: boolean; curled: boolean }>;
-}
-
-const CASES: Case[] = JSON.parse(
-  fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'pointing-cases.json'), 'utf8'),
-).cases;
-
-describe('pointing pose (port of deixis-doodle classify_pointing)', () => {
-  test('the fixture has the Python cases', () => {
-    expect(CASES.length).toBe(27);
-    expect(CASES.filter((c) => c.pointing).length).toBe(20);
-  });
-
-  test.each(CASES.map((c) => [c.name, c] as const))('%s', (_name, c) => {
-    const res = classifyPointing(c.landmarks, { ...DEFAULT_POSE, ...(c.params ?? {}) });
-    expect(res.pointing).toBe(c.pointing);
-    for (const [f, want] of Object.entries(c.fingers)) {
-      const got = res.fingers[f as keyof typeof res.fingers];
-      expect(got.reach).toBeCloseTo(want.reach, 9);
-      expect(got.bend_deg).toBeCloseTo(want.bend_deg, 7);
-      expect(got.extended).toBe(want.extended);
-      expect(got.curled).toBe(want.curled);
-    }
-  });
-});
-
-describe('active box', () => {
-  const cam = 16 / 9;
-  const canvas = 16 / 9;
-
-  test('the camera centre is the canvas centre', () => {
-    expect(toCanvas(0.5, 0.5, DEFAULT_BOX, cam, canvas)).toEqual([0.5, 0.5]);
-  });
-
-  test('mirrored: a hand on the image left (your right) is on the canvas right', () => {
-    const [u] = toCanvas(0.3, 0.5, DEFAULT_BOX, cam, canvas);
-    expect(u).toBeGreaterThan(0.5);
-  });
-
-  test('the box edges are the canvas edges; outside is off the canvas', () => {
-    const r = boxRect(DEFAULT_BOX, cam, canvas);
-    expect(toCanvas(r.x + r.w, r.y, DEFAULT_BOX, cam, canvas)).toEqual([0, 0]);
-    const [u, v] = toCanvas(r.x, r.y + r.h, DEFAULT_BOX, cam, canvas);
-    expect(u).toBeCloseTo(1, 12);
-    expect(v).toBeCloseTo(1, 12);
-    expect(onCanvas(toCanvas(0.05, 0.5, DEFAULT_BOX, cam, canvas))).toBe(false);
-  });
-
-  test('a 4:3 camera on a 16:9 canvas: the same hand move gives the same screen move', () => {
-    const box: ActiveBox = { width: 0.7, cx: 0.5, cy: 0.5 };
-    const camAspect = 4 / 3;
-    const [w, h] = [640, 480]; // camera pixels
-    const [cw, ch] = [1600, 900]; // canvas pixels
-    const step = 20; // camera pixels
-    const [u0, v0] = toCanvas(0.5, 0.5, box, camAspect, cw / ch);
-    const [u1] = toCanvas(0.5 + step / w, 0.5, box, camAspect, cw / ch);
-    const [, v1] = toCanvas(0.5, 0.5 + step / h, box, camAspect, cw / ch);
-    expect(Math.abs(u1 - u0) * cw).toBeCloseTo(Math.abs(v1 - v0) * ch, 9);
-  });
-});
 
 describe('sample buffer', () => {
   test('keeps 20 s, in order, and finds a window', () => {

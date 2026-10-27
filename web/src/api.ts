@@ -170,7 +170,7 @@ export async function sendCommand(
 
 /** One line of "What runs this demo" (plan 8.4), as the server lists it. */
 export interface ModelLine {
-  /** mediapipe, parakeet, nemotron, deixis, mujoco, voice */
+  /** parakeet, nemotron, deixis, mujoco, voice */
   id: string;
   role: string;
   name: string;

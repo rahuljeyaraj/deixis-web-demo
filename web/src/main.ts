@@ -29,16 +29,11 @@ import {
   sendReplan,
   sendStep,
 } from './api';
-import { AUDIO_CONSTRAINTS, MicCapture } from './audio/capture';
+import { MicCapture } from './audio/capture';
 import type { Clip } from './audio/clip';
 import { PushToTalk } from './audio/talk';
 import { Flow, type FlowServer, type Plan } from './flow/flow';
-import { fromCanvas } from './hand/cursor';
 import { MousePointer } from './hand/mouse';
-import { CameraInset, HandOverlay } from './hand/overlay';
-import { FingerPointer } from './hand/pointer';
-import { syntheticFrame } from './hand/synthetic';
-import { HandTracker, VIDEO_CONSTRAINTS } from './hand/tracker';
 import { Arm, BLOCK_IDS, type BlockId } from './sim/arm';
 import { fetchPack, loadScene, mujoco } from './sim/mujoco';
 import { type Hit, pointAt } from './sim/pick';
@@ -80,32 +75,19 @@ async function start(): Promise<void> {
   const status = document.getElementById('status')!;
   const stage = document.getElementById('stage')!;
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
-  const handCanvas = document.getElementById('hand') as HTMLCanvasElement;
-  const video = document.getElementById('cam') as HTMLVideoElement;
-  const camBox = document.getElementById('cam-box')!;
-  const camDots = document.getElementById('cam-dots') as HTMLCanvasElement;
-  const cameraBtn = document.getElementById('camera-btn') as HTMLButtonElement;
   const talkBtn = document.getElementById('talk-btn') as HTMLButtonElement;
   const goBtn = document.getElementById('go-btn') as HTMLButtonElement;
   const bubble = document.getElementById('bubble')!;
-  const startLoading = document.getElementById('start-loading')!;
   const now = () => performance.now() / 1000;
   const say = (text: string) => {
     status.textContent = text;
-    if (stage.classList.contains('starting')) startLoading.textContent = text;
   };
   const params = new URLSearchParams(location.search);
-  /** `?hands=demo`: a made-up hand points instead of the camera. */
-  const synthetic = params.get('hands') === 'demo';
   // `?quiet`: the robot writes but does not speak (screenshots, the film, a quiet room).
   if (params.has('quiet')) setMuted(true);
-  if (synthetic || params.get('start') === 'skip') stage.classList.remove('starting');
-  // The hand tracker downloads while the start card shows, so "Use my finger" starts at once.
-  if (!synthetic) void HandTracker.preload().catch((e) => console.warn('hand tracker preload:', e));
   document.getElementById('phone-line')!.hidden = !onPhone();
   const coach = new Coach();
   const coachEl = document.getElementById('coach')!;
-  const camCoach = document.getElementById('cam-coach')!;
   let coachShown = '';
   const keys = new KeyPanel(document.getElementById('models-list')!);
   showInfo(keys, (ok) => coach.server(ok));
@@ -128,15 +110,7 @@ async function start(): Promise<void> {
   };
   reset();
 
-  const overlay = new HandOverlay(handCanvas);
-  const pointer = new FingerPointer(view, overlay, blockOfGeom);
-  const inset = new CameraInset(camDots);
-  const fit = () => {
-    view.resize(canvas.clientWidth, canvas.clientHeight);
-    overlay.resize();
-    inset.resize();
-  };
-  new ResizeObserver(() => inset.resize()).observe(camDots);
+  const fit = () => view.resize(canvas.clientWidth, canvas.clientHeight);
   new ResizeObserver(fit).observe(canvas);
   fit();
 
@@ -317,47 +291,15 @@ async function start(): Promise<void> {
     const r = canvas.getBoundingClientRect();
     return pointAt(view, (e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, blockOfGeom);
   };
-  // The finger (plan W4). (Keys for development: L records the hand, [ and ] set the gain.)
-  const fingerHelp = 'Point with one finger: the amber dot follows it.';
-  let tracker: HandTracker | null = null;
-  /** The camera, from the stream of the one prompt (or asked for alone: "Try again"). */
-  const startCamera = async (given?: MediaStream): Promise<string> => {
-    try {
-      tracker = await HandTracker.start(video, given);
-      tracker.onFrame = (f) => {
-        coach.hand(f.hands.length > 0, f.t);
-        pointer.onFrame(f);
-      };
-      camBox.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
-      pointer.inset = inset;
-      stage.classList.add('camera-on');
-      coach.clear();
-      coach.started('finger', now());
-      return fingerHelp;
-    } catch (e) {
-      console.error(e);
-      given?.getVideoTracks().forEach((t) => t.stop());
-      cameraFailed(e);
-      return COACH.noCamera;
-    }
-  };
-  /** Item 7: one plain line, and "Try the camera again"; the mouse points meanwhile. */
-  const cameraFailed = (e: unknown) => {
-    coach.started('mouse', now());
-    coach.tell(COACH.noCamera, now(), 'retry-camera');
-    cameraBtn.textContent = 'Try the camera again';
-    sendEvent({ kind: 'camera_error', why: e instanceof Error ? e.name : String(e) });
-  };
-
-  // The mouse as the pointer while the camera is off (plan 5.3): sampled like a fingertip
-  // (always, so the 2.5 s before the speech are there too), and each click a hold.
+  // The mouse is the pointer (plan 5.3): sampled like a fingertip (always, so the 2.5 s
+  // before the speech are there too), and each click a hold.
   const mouse = new MousePointer((u, v) => pointAt(view, u, v, blockOfGeom));
   canvas.addEventListener('pointermove', (e) => {
     const r = canvas.getBoundingClientRect();
     mouse.move((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
   });
   canvas.addEventListener('pointerleave', () => mouse.leave());
-  setInterval(() => tracker || mouse.sample(now()), 1000 / 30);
+  setInterval(() => mouse.sample(now()), 1000 / 30);
   canvas.addEventListener('click', async (e) => {
     const hit = hitOf(e);
     if (!hit) return;
@@ -473,7 +415,7 @@ async function start(): Promise<void> {
           // already starts 0.5 s early and ends 0.4 s late.
           const from = clip.t0 - 2;
           const to = clip.t0 + clip.duration + 0.4;
-          const pointing = tracker || synthetic ? pointer.samples : mouse.samples;
+          const pointing = mouse.samples;
           const meta = {
             audio_t0: clip.t0,
             t: now(),
@@ -501,64 +443,10 @@ async function start(): Promise<void> {
   talkBtn.addEventListener('pointercancel', () => talk.release(now()));
   talkBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  /** "Use my finger": one browser prompt for the camera and the microphone together (item
-   * 6). If that fails: the microphone alone (the mouse points), and "Try the camera again". */
-  const useCamera = async () => {
-    cameraBtn.disabled = true;
-    sendEvent({ kind: 'start', via: 'finger' });
-    say('Starting the camera and the microphone…');
-    let both: MediaStream | null = null;
-    if (!mic) {
-      try {
-        both = await navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS, audio: AUDIO_CONSTRAINTS });
-      } catch (e) {
-        console.error(e);
-        cameraFailed(e);
-        const voice = await startMic(); // the microphone alone, so the mouse can be used
-        cameraBtn.disabled = false;
-        say(`${COACH.noCamera} ${mic ? '' : voice}`.trim());
-        return;
-      }
-    }
-    const [cam, voice] = await Promise.all([
-      startCamera(both ? new MediaStream(both.getVideoTracks()) : undefined),
-      mic ? Promise.resolve('') : startMic(both ? new MediaStream(both.getAudioTracks()) : undefined),
-    ]);
-    if (!tracker) cameraBtn.disabled = false;
-    say(`${cam} ${voice}`.trim());
-  };
-  const useMouse = async () => {
-    sendEvent({ kind: 'start', via: 'mouse' });
-    coach.started('mouse', now());
-    say('Starting the microphone…');
-    const voice = await startMic();
-    say(mic ? 'Point with the mouse (a click counts too), hold Talk or the space bar, and say “put that here”.' : voice);
-  };
-  coachEl.addEventListener('click', (e) => {
-    if ((e.target as HTMLElement).dataset.action === 'retry-camera') {
-      coach.clear();
-      void useCamera();
-    }
-  });
-  cameraBtn.addEventListener('click', () => void useCamera());
-
-  // The start card (plan 5.1): the two ways in, and the models list.
-  const startCameraBtn = document.getElementById('start-camera') as HTMLButtonElement;
-  const startMouseBtn = document.getElementById('start-mouse') as HTMLButtonElement;
-  const begin = (how: () => Promise<void>) => () => {
-    stage.classList.remove('starting');
-    void how();
-  };
-  startCameraBtn.addEventListener('click', begin(useCamera));
-  startMouseBtn.addEventListener('click', begin(useMouse));
-  if (synthetic) {
-    // No video: the small window shows the made-up hand itself, labelled.
-    inset.drawHand = true;
-    pointer.inset = inset;
-    camBox.classList.add('synthetic');
-    stage.classList.add('camera-on');
-    startSyntheticHand(view, arm, pointer);
-  }
+  // Mouse only (rahul, 27 Oct): no start card and no camera, so the page is ready as soon
+  // as the arm is, and the first Talk press is what asks for the microphone.
+  sendEvent({ kind: 'start', via: 'mouse' });
+  coach.started(now());
 
   // The buttons (plan 5.2): Go (same as yes), Undo, Reset blocks, Stop (also Esc).
   const stopAll = () => {
@@ -586,7 +474,6 @@ async function start(): Promise<void> {
     if (e.code === 'Space' && !typing(e)) talk.release(now());
   });
   window.addEventListener('keydown', (e) => {
-    if (stage.classList.contains('starting')) return; // the start card's buttons first
     if (e.key === 'Escape') return stopAll(); // Stop works even while typing
     if (e.code === 'Space' && !typing(e)) {
       e.preventDefault(); // no page scroll, no "click" on a focused button
@@ -599,43 +486,18 @@ async function start(): Promise<void> {
       void flow.go();
     }
     if (e.key === 'r') newBlocks();
-    if (e.key === '[' || e.key === ']') {
-      const w = pointer.box.width + (e.key === '[' ? -0.05 : 0.05);
-      pointer.box.width = Math.min(1, Math.max(0.3, Math.round(w * 100) / 100));
-      say(`Hand gain: the middle ${Math.round(pointer.box.width * 100)} % of the camera fills the scene.`);
-    }
-    if (e.key === 'l') {
-      if (pointer.recorder.recording) {
-        say(`Saved ${pointer.recorder.stopAndSave()} hand frames (landmarks only, no video).`);
-      } else {
-        pointer.recorder.start(pointer.box, canvas.clientWidth / canvas.clientHeight);
-        say('Recording your hand (landmarks only, no video). Press L again to save.');
-      }
-    }
   });
 
   /** The look check holds the hover outline still (`__sim.markBlock`). */
   let marked = false;
   const drawCoach = (t: number) => {
-    const line = stage.classList.contains('starting') ? null : coach.line(t);
-    const key = line ? `${line.text}|${line.action ?? ''}|${line.at ?? ''}` : '';
+    const line = coach.line(t);
+    const key = line ? line.text : '';
     if (key === coachShown) return;
     coachShown = key;
-    // A line about the camera goes inside the camera window, not across the scene.
-    const inCamera = line?.at === 'camera';
-    camCoach.hidden = !inCamera;
-    camCoach.textContent = inCamera ? line!.text : '';
-    coachEl.hidden = !line || inCamera;
+    coachEl.hidden = !line;
     coachEl.replaceChildren();
-    if (!line || inCamera) return;
-    coachEl.append(line.text);
-    if (line.action === 'retry-camera') {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.action = 'retry-camera';
-      b.textContent = 'Try the camera again';
-      coachEl.append(b);
-    }
+    if (line) coachEl.append(line.text);
   };
 
   // Physics in real time: 5 ms steps, as many as the frame took (at most 0.1 s' worth).
@@ -655,7 +517,7 @@ async function start(): Promise<void> {
     talk.tick(now / 1000);
     if (talk.listening && mic) talkBtn.style.setProperty('--level', Math.min(1, mic.level * 8).toFixed(2));
     // What the dot (or the mouse) is on: a thin amber outline (item 3).
-    const hit = tracker || synthetic ? pointer.hit : mouse.hit;
+    const hit = mouse.hit;
     const on = hit?.block ?? null;
     if (!marked) view.hover(on ? arm.blocks.get(on)!.geom : null);
     coach.hover(on !== null);
@@ -666,26 +528,18 @@ async function start(): Promise<void> {
   };
   requestAnimationFrame(loop);
   say('Point at a block, hold Talk (or the space bar) and say “put that here”.');
-  startLoading.textContent = '';
-  startCameraBtn.disabled = false;
-  startMouseBtn.disabled = false;
   Object.assign(window, {
     __sim: {
-      mj, model, data, view, arm, pointer, mouse, talk, flow, coach, now,
-      tracker: () => tracker,
+      mj, model, data, view, arm, mouse, talk, flow, coach, now,
       mic: () => mic,
       /** For the look check: draw a plan strip without the model (scripts/plan-shots.mjs). */
       plan: (plan: Plan | null) => drawPlan(planStrip, plan),
       lastClip: () => lastClip,
       lastReply: () => lastReply,
       startMic,
-      /** For the look check (M34): the dot, the hover outline and the guess on one block. */
+      /** For the look check (M34): the hover outline and the guess on one block. */
       markBlock: (id: BlockId, guess = true) => {
         marked = true;
-        const b = arm.block(id);
-        const [X, Y] = tableToWorld(b.tableMm[0], b.tableMm[1]);
-        const p = view.camera.position.clone().set(X, Y, (b.heightMm + 4) / 1000).project(view.camera);
-        overlay.dotAt((p.x + 1) / 2, (1 - p.y) / 2);
         view.hover(arm.blocks.get(id)!.geom);
         for (const other of BLOCK_IDS) view.glow(arm.blocks.get(other)!.geom, guess && other === id);
       },
@@ -696,12 +550,6 @@ async function start(): Promise<void> {
 /** The page's name, the models list (plan 8.4) and the day's limits (8.1), from the server. */
 function showInfo(keys: KeyPanel, server: (ok: boolean) => void): void {
   const list = document.getElementById('models-list')!;
-  const models = document.getElementById('models') as HTMLDetailsElement;
-  document.getElementById('start-models')!.addEventListener('click', (e) => {
-    e.preventDefault();
-    models.open = true;
-    models.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  });
   getInfo().then(
     (info) => {
       server(true);
@@ -721,60 +569,8 @@ function showInfo(keys: KeyPanel, server: (ok: boolean) => void): void {
   );
 }
 
-/**
- * A made-up pointing hand, looping (`?hands=demo`): to the red block, hold, to an empty spot
- * on the mat, hold, back. It feeds the same pointer as the camera.
- */
-function startSyntheticHand(view: TableView, arm: Arm, pointer: FingerPointer): void {
-  const cam = 1280 / 720;
-  const canvasOf = (x: number, y: number, zMm: number): [number, number] => {
-    const [X, Y] = tableToWorld(x, y);
-    const v = view.camera.position.clone().set(X, Y, zMm / 1000).project(view.camera);
-    return [(v.x + 1) / 2, (1 - v.y) / 2];
-  };
-  const toCam = ([u, v]: [number, number]) => {
-    const c = view.canvas!;
-    return fromCanvas(u, v, pointer.box, cam, c.clientWidth / c.clientHeight);
-  };
-  const emptySpot = (): [number, number] => {
-    const taken = BLOCK_IDS.map((id) => arm.block(id).tableMm);
-    for (let r = REACH_MM.min + 20; r < REACH_MM.max; r += 10) {
-      for (let a = -1.2; a <= 1.2; a += 0.1) {
-        const x = BASE_MM.x + r * Math.sin(a);
-        const y = BASE_MM.y - r * Math.cos(a);
-        if (onMat(x, y) && taken.every(([u, w]) => Math.hypot(u - x, w - y) > 70)) return [x, y];
-      }
-    }
-    return [BASE_MM.x, BASE_MM.y - 200];
-  };
-  const lerp = (a: number[], b: number[], s: number) => {
-    const e = s * s * (3 - 2 * s);
-    return [a[0] + (b[0] - a[0]) * e, a[1] + (b[1] - a[1]) * e] as [number, number];
-  };
-  const t0 = performance.now() / 1000;
-  setInterval(() => {
-    const t = performance.now() / 1000;
-    const red = arm.block('red').tableMm;
-    const spot = emptySpot();
-    const rest = toCam([0.5, 0.8]);
-    const onRed = toCam(canvasOf(red[0], red[1], BLOCK_MM));
-    const onSpot = toCam(canvasOf(spot[0], spot[1], 0));
-    const k = (t - t0) % 6;
-    const jitter = () => (Math.random() - 0.5) * 0.002;
-    let p: [number, number];
-    if (k < 0.8) p = lerp(rest, onRed, k / 0.8);
-    else if (k < 2.2) p = [onRed[0] + jitter(), onRed[1] + jitter()];
-    else if (k < 3.0) p = lerp(onRed, onSpot, (k - 2.2) / 0.8);
-    else if (k < 4.4) p = [onSpot[0] + jitter(), onSpot[1] + jitter()];
-    else if (k < 5.2) p = lerp(onSpot, rest, (k - 4.4) / 0.8);
-    else p = rest;
-    pointer.onFrame(syntheticFrame(t, p[0], p[1]));
-  }, 1000 / 30);
-}
-
 start().catch((e) => {
   const text = `Could not start: ${e instanceof Error ? e.message : e}`;
   document.getElementById('status')!.textContent = text;
-  document.getElementById('start-loading')!.textContent = text; // the start card hides #status
   console.error(e);
 });

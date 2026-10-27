@@ -9,7 +9,7 @@
  * is one colour per part - Nemotron red, the core green, the arm purple, the models on this
  * computer blue, you amber - so a glance says *red decided, green measured*.
  *
- * It is under the scene and the full width of the page. Beside it, seven lanes in a 460 px
+ * It is under the scene and the full width of the page. Beside it, six lanes in a 460 px
  * column put the names on two crushed lines and nobody could read them.
  *
  * Plain words on the row; the real JSON on click. Nothing hidden, nothing shouted.
@@ -29,11 +29,10 @@ export interface Lane {
 
 /**
  * The lanes, left to right, as `server/webdemo/trace.py` names them. Each one says where it
- * runs under its name: three of the seven are on your own computer, and that is the point.
+ * runs under its name: three of the six are on your own computer, and that is the point.
  */
 export const LANES: Lane[] = [
   { id: 'you', name: 'You', runs: 'at the table', does: 'you point, and you speak' },
-  { id: 'mediapipe', name: 'MediaPipe', runs: 'your browser', does: 'where your fingertip is' },
   { id: 'parakeet', name: 'Parakeet', runs: 'our server', does: 'your words, with their times' },
   { id: 'page', name: 'The page', runs: 'your browser', does: 'the robot side: it runs the plan' },
   { id: 'nemotron', name: 'Nemotron', runs: 'Nebius', does: 'Nebius Token Factory: what to do' },

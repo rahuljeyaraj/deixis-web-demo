@@ -19,7 +19,6 @@ of others under their own licences.
 |---|---|---|---|
 | [MuJoCo](https://mujoco.org) and its WebAssembly bindings `@mujoco/mujoco` | Google DeepMind | Apache-2.0 | the browser |
 | [three.js](https://threejs.org) | three.js authors | MIT | the browser |
-| [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) (Hand Landmarker) | Google | Apache-2.0 | the browser |
 | [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) | NVIDIA | CC-BY-4.0 | the server (downloaded at build, not in this repo) |
 | [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) and its int8 Parakeet export | k2-fsa | Apache-2.0 | the server |
 | NVIDIA Nemotron 3.5 Lightning, on [Nebius Token Factory](https://nebius.com/services/token-factory/nemotron) | NVIDIA, Nebius | NVIDIA open model licence | a hosted API |
