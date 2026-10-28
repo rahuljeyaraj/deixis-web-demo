@@ -15,6 +15,32 @@
         <span id="banner-text"></span>
         <button id="banner-key" type="button" class="link">Add your own Nebius key to use Nemotron</button>
       </div>
+      <!-- What this project is, what it needs, and what is switched off here: at the very top,
+           because it is the first thing anybody should read (rahul, 27 Oct). -->
+      <blockquote class="scope">
+        <p>
+          <b>Telling a robot where.</b> Point at a block and say <q>put that here</q>. deixis works
+          out which block <i>that</i> means and which spot <i>here</i> means, and hands the arm the
+          millimetres &mdash; no names, no coordinates.
+        </p>
+        <p>
+          <b>Three things have to work for that sentence:</b> something to <b>see</b> the table and
+          find what is on it, something to work out <b>which</b> thing and <b>which</b> place were
+          meant, and a body that can <b>move</b>. deixis is the middle one. We wrote each robot&rsquo;s
+          own code as well, but that part is different for every robot &mdash; deixis is the piece all
+          three of our demos share.
+        </p>
+        <p>
+          <b>In this demo the seeing is switched off.</b> Every object and every position in this
+          virtual world is already known, so no AI model works out what is on the table or where it
+          is. The body is an off-the-shelf SO-101 arm.
+        </p>
+        <p>
+          <b>The seeing runs for real in our other two demos</b> &mdash; a pen plotter and a floor
+          vacuum, each with a camera and NVIDIA Cosmos finding things in the room, and deixis still
+          saying where.
+        </p>
+      </blockquote>
       <!-- Try saying (plan 5.2), on top so it is seen first (rahul, 5 Oct). Two lines: one
            move, then a whole job in one sentence - which is the thing to try (rahul, 11 Oct).
            Every one of these was checked against the real Nemotron on 11 Oct. -->
