@@ -26,7 +26,7 @@ of others under their own licences.
 | [deixis](https://github.com/rahuljeyaraj/deixis) | Rahul Jeyaraj | MIT | the server, over MCP |
 | [FastAPI](https://fastapi.tiangolo.com), uvicorn, pydantic, the MCP Python SDK | their authors | MIT or BSD | the server |
 
-Parakeet is credited on the page itself, in "What runs this demo" (plan section 8.4).
+Parakeet is credited on the page itself, in "What runs this demo".
 
 ## Read, not copied
 

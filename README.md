@@ -15,13 +15,16 @@ short_description: Point at a block and say "put that here"
 Point at a block and say "put that here": a virtual SO-101 robot arm in your browser, told
 *where* by your finger and your voice, through the [`deixis`](https://github.com/rahuljeyaraj/deixis) core.
 
-**Status (11 Oct 2026):** working. The arm runs in the browser (MuJoCo WebAssembly and
-three.js), your fingertip and your voice say where, and the `deixis` core answers over MCP.
-One sentence can be a plan of up to four steps ("stack them all up", "swap the red and the
-blue"): Nemotron decides *what*, the core decides *where*, and the core measures the table
+Point with a fingertip in front of the webcam (or with the mouse) and say what to do. The
+arm runs in the browser (MuJoCo WebAssembly and three.js), and the `deixis` core answers over
+MCP. One sentence can be a plan of up to four steps ("stack them all up", "swap the red and
+the blue"): Nemotron decides *what*, the core decides *where*, and the core measures the table
 again between steps. A panel under the scene shows what each part said to the next, live.
 What the demo can't do is in [LIMITATIONS.md](LIMITATIONS.md); third-party licences are in
 [NOTICE.md](NOTICE.md).
+
+Entry for the Nebius x NVIDIA Global AI Hackathon, Physical AI track. To get the core, the
+robots and this demo in one clone, use [deixis-robots](https://github.com/rahuljeyaraj/deixis-robots).
 
 ## Run it on your computer
 
@@ -30,6 +33,7 @@ this folder (`../deixis`).
 
 ```powershell
 uv sync                          # the server (Python 3.11)
+uv run python scripts/fetch_models.py   # Parakeet, speech to words (about 630 MB)
 uv run webdemo                   # the server on http://127.0.0.1:8000
 cd web
 npm install
@@ -54,5 +58,16 @@ real key and asserts that **every** command came back from Nemotron. Nothing els
 server can answer one: there is no word-matching fallback (`tests/wordrules.py` is a test
 double, and the server cannot reach it).
 
-The block at the top of this file (between the `---` lines) holds the Hugging Face Space
-settings (plan W14).
+## Host it
+
+`Dockerfile` builds the page, the server, the core and Parakeet into one image, and
+`deploy/` runs it behind Caddy on a rented server (`bash deploy/run.sh <https-name>`). The
+Nebius key is never in the image.
+
+The block at the top of this file (between the `---` lines) holds the settings for a Hugging
+Face Space.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Others' work used here, with its licences:
+[NOTICE.md](NOTICE.md).
