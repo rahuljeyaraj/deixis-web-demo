@@ -35,7 +35,8 @@ COPY scripts/fetch_models.py scripts/
 # deixis is already installed above; the project's own sources point it at ../deixis
 RUN pip install -e . --no-deps \
  && pip install "fastapi>=0.115" "uvicorn>=0.30" "python-multipart>=0.0.9" \
-      "pydantic-settings>=2.3" "numpy>=1.26" "openai>=1.40" "sherpa-onnx>=1.12" "onnxruntime>=1.18"
+      "pydantic-settings>=2.3" "numpy>=1.26" "openai==3.24.0" "httpx==0.28.1" \
+      "sherpa-onnx>=1.12" "onnxruntime>=1.18"
 # Parakeet (about 630 MB), downloaded here, on the server
 RUN python scripts/fetch_models.py --dir /app/.cache/models
 COPY --from=page /web/dist /app/web/dist
