@@ -502,7 +502,8 @@ async function start(): Promise<void> {
   talkBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
   /** "Use my finger": one browser prompt for the camera and the microphone together (item
-   * 6). If that fails: the microphone alone (the mouse points), and "Try the camera again". */
+   * 6). If that fails, each is asked for alone, so a computer with no microphone still gets
+   * its camera (rahul, 28 Oct); a camera that fails then says "Try the camera again". */
   const useCamera = async () => {
     cameraBtn.disabled = true;
     sendEvent({ kind: 'start', via: 'finger' });
@@ -513,10 +514,9 @@ async function start(): Promise<void> {
         both = await navigator.mediaDevices.getUserMedia({ video: VIDEO_CONSTRAINTS, audio: AUDIO_CONSTRAINTS });
       } catch (e) {
         console.error(e);
-        cameraFailed(e);
-        const voice = await startMic(); // the microphone alone, so the mouse can be used
-        cameraBtn.disabled = false;
-        say(`${COACH.noCamera} ${mic ? '' : voice}`.trim());
+        const [cam, voice] = await Promise.all([startCamera(), startMic()]);
+        if (!tracker) cameraBtn.disabled = false;
+        say(`${cam} ${voice}`.trim());
         return;
       }
     }
