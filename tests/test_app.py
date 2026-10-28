@@ -29,7 +29,7 @@ def test_info_has_the_profile_and_every_model(api):
     assert body["profile"]["area_mm"] == [0, -40, 500, 290]
     assert set(body["profile"]["actions"]) >= {"move", "home", "adjust", "confirm", "cancel"}
     names = " ".join(m["name"] for m in body["models"])
-    for model in ["Parakeet", "Nemotron 3.5 Lightning", "deixis", "MuJoCo"]:
+    for model in ["MediaPipe", "Parakeet", "Nemotron 3.5 Lightning", "deixis", "MuJoCo"]:
         assert model in names
     assert all(m["url"].startswith("https://") for m in body["models"])
     assert "Cosmos" not in names  # not used here, and the page says so

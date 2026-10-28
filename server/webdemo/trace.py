@@ -2,7 +2,7 @@
 to the next, in order, so the page can draw it live.
 
 A judge can otherwise finish the whole demo without ever seeing the word "Nemotron". One row
-per message between two lanes - you, Parakeet, the page, Nemotron, the deixis core,
+per message between two lanes - you, MediaPipe, Parakeet, the page, Nemotron, the deixis core,
 the arm - with plain words on the row and the real JSON behind it (`detail`). The rows the
 server can know are built here; the page adds its own as the arm moves (`web/src/ui/wiring.ts`).
 
@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 #: The lanes, left to right, as the panel draws them.
-LANES = ("you", "parakeet", "page", "nemotron", "core", "arm")
+LANES = ("you", "mediapipe", "parakeet", "page", "nemotron", "core", "arm")
 
 #: Row kinds that are not a message from one lane to another.
 #: - "step": a marker between the steps of one plan.
@@ -161,14 +161,14 @@ def measured(result: dict[str, Any]) -> str:
 
 
 def pointing_row(samples: int, holds: int, typed: bool) -> Row | None:
-    """Where the mouse was while you spoke, and the clicks."""
+    """You pointed (the camera), or you clicked (the mouse)."""
     if samples:
-        held = f", {holds} of them clicks" if holds else ""
-        return Row("you", "page", f"you pointed: {samples} mouse positions{held}")
+        held = f", {holds} of them still" if holds else ""
+        return Row("you", "mediapipe", f"you pointed: {samples} fingertip positions{held}")
     if holds:
         clicks = "click" if holds == 1 else "clicks"
         return Row("you", "page", f"you pointed: {holds} mouse {clicks}")
-    return None if typed else Row("you", "page", "you did not point")
+    return None if typed else Row("you", "mediapipe", "you did not point")
 
 
 def heard_rows(words: Sequence[dict[str, Any]], typed: bool, audio_s: float | None,

@@ -118,22 +118,22 @@ describe('the line under the panel', () => {
 
 describe('the live wiring panel (advanced-commands-plan.md 5.1)', () => {
   test('the lanes are the ones the server names, left to right', () => {
-    expect(LANES.map((l) => l.id)).toEqual(['you', 'parakeet', 'page', 'nemotron', 'core', 'arm']);
+    expect(LANES.map((l) => l.id)).toEqual(['you', 'mediapipe', 'parakeet', 'page', 'nemotron', 'core', 'arm']);
     // Every lane says where it runs, under its name, short enough for one lane's width.
     expect(LANES.map((l) => l.runs)).toEqual([
-      'at the table', 'our server', 'your browser', 'Nebius', 'over MCP', 'MuJoCo',
+      'at the table', 'your browser', 'our server', 'your browser', 'Nebius', 'over MCP', 'MuJoCo',
     ]);
     for (const lane of LANES) expect(lane.runs.length).toBeLessThanOrEqual(13);
-    expect(laneOf('nemotron')).toBe(3);
-    expect(laneOf('core')).toBe(4);
+    expect(laneOf('nemotron')).toBe(4);
+    expect(laneOf('core')).toBe(5);
     // Nemotron's lane sits between the page's and the core's, as the learn diagrams have it.
-    expect(lanePercent(0)).toBeCloseTo(100 / 12);
-    expect(lanePercent(5)).toBeCloseTo(1100 / 12);
+    expect(lanePercent(0)).toBeCloseTo(100 / 14);
+    expect(lanePercent(6)).toBeCloseTo(1300 / 14);
   });
 
   test('a row knows which way its arrow points, and what it cost', () => {
     const asked = rowShape({ from: 'page', to: 'nemotron', say: 'your words + the table', detail: { a: 1 } });
-    expect([asked.left, asked.right, asked.rightwards, asked.single]).toEqual([2, 3, true, false]);
+    expect([asked.left, asked.right, asked.rightwards, asked.single]).toEqual([3, 4, true, false]);
     expect(asked.opens).toBe(true);
     const back = rowShape({ from: 'nemotron', to: 'page', say: 'a plan: 3 tool calls', ms: 613 });
     expect([back.rightwards, back.time]).toEqual([false, '0.61 s']);

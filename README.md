@@ -13,11 +13,10 @@ short_description: Point at a block and say "put that here"
 # deixis web demo
 
 Point at a block and say "put that here": a virtual SO-101 robot arm in your browser, told
-*where* by your mouse and your voice, through the [`deixis`](https://github.com/rahuljeyaraj/deixis) core.
+*where* by your finger and your voice, through the [`deixis`](https://github.com/rahuljeyaraj/deixis) core.
 
-**Status (27 Oct 2026):** working. The arm runs in the browser (MuJoCo WebAssembly and
-three.js), the mouse and your voice say where, and the `deixis` core answers over MCP. The
-camera and the hand tracking were taken out on 27 Oct: the mouse is the only pointer.
+**Status (11 Oct 2026):** working. The arm runs in the browser (MuJoCo WebAssembly and
+three.js), your fingertip and your voice say where, and the `deixis` core answers over MCP.
 One sentence can be a plan of up to four steps ("stack them all up", "swap the red and the
 blue"): Nemotron decides *what*, the core decides *where*, and the core measures the table
 again between steps. A panel under the scene shows what each part said to the next, live.

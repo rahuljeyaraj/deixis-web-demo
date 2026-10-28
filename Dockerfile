@@ -14,7 +14,7 @@ WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY web/ ./
-# prebuild packs the arm model
+# prebuild packs the arm model and fetches MediaPipe's runtime and the hand model
 RUN npm run build
 
 # ---- the server

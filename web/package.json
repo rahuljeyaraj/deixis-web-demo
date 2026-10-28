@@ -10,10 +10,11 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "predev": "node scripts/pack-model.mjs",
-    "prebuild": "node scripts/pack-model.mjs"
+    "predev": "node scripts/pack-model.mjs && node scripts/fetch-assets.mjs",
+    "prebuild": "node scripts/pack-model.mjs && node scripts/fetch-assets.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@mujoco/mujoco": "^3.14.0",
     "three": "^0.186.1"
   },
